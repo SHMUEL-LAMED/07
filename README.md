@@ -4,8 +4,9 @@
 רץ כ-Cloudflare Worker (עם KV, Workers AI ו-cron של כל דקה).
 
 ## מבנה
-- `src/worker.js` – כל קוד השרת.
-- `wrangler.toml` – הגדרות ה-Worker (KV, AI, cron).
+- `src/worker.js` – קוד השרת (שלוחות ימות, העוזר, בדיקת הודעות, צינתוקים, cron).
+- `src/dash.js` + `src/dash.html` – דף הניהול בכתובת `/admin` (כניסה בסיסמה `ADMIN_PASS`, פעולות מהדפדפן, זמן אמת, ארכיון, סטטיסטיקה).
+- `wrangler.toml` – הגדרות ה-Worker (KV, AI, cron, טעינת ה-html כטקסט).
 - `.dev.vars.example` – רשימת הסודות והמשתנים שצריך להגדיר. **אין בריפו שום מפתח.**
 - `docs/configuration.md` – פירוט הסודות, המשתנים וה-bindings.
 - `CLAUDE.md` – הנחיות עבודה ל-Claude Code.

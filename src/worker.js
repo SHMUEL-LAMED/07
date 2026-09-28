@@ -1,4 +1,5 @@
 // שרת ה-AI של הקו: בדיקת הקלטות, צינתוקים והתראות אישיות למי שמתקשר חזרה
+import { adminApp } from "./dash.js"; // דף הניהול (כניסה בסיסמה, API ל-JSON)
 const YM = "https://www.call2all.co.il/ym/api/";
 const QUEUES = { important: "/AIQueue", general: "/AIQueueGeneral" };
 const IMPORTANT = "/1/1", ALL = "/1/2";
@@ -542,56 +543,7 @@ async function maybeWeekly(env) {
   try { await weeklySummary(env); } catch (e) { await log(env, "שגיאה בסיכום השבועי: " + e.message); }
 }
 
-// ---------- לוח בקרה למנהל (דף אינטרנט) ----------
-const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-async function dashboard(env) {
-  const nm = names(env);
-  const online = await onlineNow(env).then(x => x.calls).catch(() => []);
-  const [members, general, admins, rsvp, logTxt, jobs, counts, allCount] = await Promise.all([
-    ym(env, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: "members" }).then(r => r.enteres || []).catch(() => []),
-    listPhones(env, "general").catch(() => []),
-    listPhones(env, "admins").then(l => l.includes(OWNER) ? l : [...l, OWNER]).catch(() => [OWNER]),
-    rsvpLoad(env).catch(() => ({})),
-    ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).then(r => r.contents || "").catch(() => ""),
-    kvGet(env, "scheduled", []),
-    Promise.all([...PENDING_ORDER, "join"].map(k => pendingFiles(env, REVIEW[k].folder).then(f => f.length).catch(() => 0))),
-    nextFileNum(env, ALL).catch(() => 0),
-  ]);
-  const mstat = Object.fromEntries(members.map(e => [e.phone, e.active]));
-  const phones = [...new Set([...Object.keys(nm), ...members.map(e => e.phone)])].sort((a, b) => (nm[a] || "תתת").localeCompare(nm[b] || "תתת", "he"));
-  const active = members.filter(e => e.active).length;
-  const pendTotal = counts.slice(0, 5).reduce((a, b) => a + b, 0);
-  const rs = Object.entries(rsvp).sort((a, b) => (a[1].ts > b[1].ts ? 1 : -1));
-  const tile = (n, l, warn) => `<div class="tile${warn ? " warn" : ""}"><b>${n}</b><span>${l}</span></div>`;
-  const rows = phones.map(p => {
-    const st = mstat[p] === true ? '<span class="ok">פעיל</span>' : mstat[p] === false ? '<span class="bad">חסם צינתוקים</span>' : '<span class="bad">לא ברשימה</span>';
-    return `<tr><td>${esc(nm[p] || "ללא שם")}${admins.includes(p) ? ' <span class="tag">מנהל</span>' : ""}</td><td dir="ltr">${p}</td><td>${st}</td><td>${general.includes(p) ? "כן" : ""}</td><td>${rsvp[p] ? "✓" : ""}</td></tr>`;
-  }).join("");
-  const pend = [...PENDING_ORDER, "join"].map((k, i) => `<tr><td>${esc(REVIEW[k].name)}</td><td>${k === "join" ? "7 ← 0" : "7 ← 4 ← " + (i + 1)}</td><td class="${counts[i] ? "bad" : ""}">${counts[i]}</td></tr>`).join("");
-  const logs = logTxt.split("\n").filter(Boolean).slice(0, 60).map(l => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(l); return m ? `<li><time>${esc(m[1])}</time>${esc(m[2]).slice(0, 400)}</li>` : `<li>${esc(l).slice(0, 400)}</li>`; }).join("");
-  const sched = jobs.map(j => `<li>${esc(j.at)}: ${j.type === "shoeva" ? "הודעה חשובה על שמחת בית השואבה" : j.type === "post" ? (j.important ? "הודעה חשובה: " : "הודעה רגילה: ") + esc(j.text) : j.type === "remind" ? "תזכורת ל" + esc(nm[j.phone] || j.phone) + ": " + esc(j.text) : esc(j.type)} ${j.done ? '<span class="ok">נשלח ' + esc(j.done.slice(11, 16)) + "</span>" : '<span class="tag">ממתין</span>'}</li>`).join("") || "<li>אין</li>";
-  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>לוח בקרה - קו הקבוצה</title>
-<style>:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2230;--mut:#6b7280;--line:#e5e7eb;--acc:#2f5bd3;--ok:#127a3e;--bad:#b42318}
-@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b1f29;--ink:#e8eaf0;--mut:#9aa3b2;--line:#2a3040;--acc:#7b9cff;--ok:#4ade80;--bad:#f87171}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-main{max-width:980px;margin:auto;padding:16px}h1{font-size:22px;margin:4px 0 2px}.sub{color:var(--mut);font-size:13px;margin-bottom:14px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}.tile b{display:block;font-size:26px}.tile span{color:var(--mut);font-size:13px}.tile.warn b{color:var(--bad)}
-section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;overflow-x:auto}h2{font-size:17px;margin:0 0 10px}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}td:first-child{white-space:normal;min-width:120px}th{color:var(--mut);font-weight:600}
-.ok{color:var(--ok)}.bad{color:var(--bad);font-weight:600}.tag{font-size:11px;background:var(--acc);color:#fff;border-radius:6px;padding:1px 6px}
-ul{margin:0;padding:0 18px 0 0}li{margin-bottom:6px}time{color:var(--mut);font-size:12px;margin-left:8px;white-space:nowrap}ol{margin:0}
-.r{display:flex;gap:8px;align-items:center}button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 12px}</style></head><body><main>
-<div class="r" style="justify-content:space-between"><h1>לוח בקרה: קו הקבוצה</h1><button onclick="location.reload()">רענון</button></div>
-<div class="sub">מעודכן ל-${esc(nowIL().slice(0, 16))} · 073-351-2880</div>
-<div class="tiles">${tile(active, "חברים פעילים בצינתוקים")}${tile(phones.length, "חברים ברשימה")}${tile(pendTotal, "הודעות ממתינות לאישור", pendTotal > 0)}${tile(counts[5], "בקשות הצטרפות", counts[5] > 0)}${tile(rs.length, "נרשמו לשמחת בית השואבה")}${tile(allCount, "הודעות בקו מאז ומעולם")}</div>
-<section><h2>מי בקו עכשיו: ${online.length}</h2>${online.length ? "<ul>" + online.map(c => `<li>${esc(nm[c.p] || c.p)} <time>${esc(c.w)}</time></li>`).join("") + "</ul>" : "אף אחד לא מחובר כרגע"}</section>
-<section><h2>ממתין לטיפול</h2><table><tr><th>רשימה</th><th>שלוחה</th><th>כמות</th></tr>${pend}</table></section>
-<section><h2>שמחת בית השואבה: ${rs.length} נרשמים</h2><ol>${rs.map(([p, x]) => `<li>${esc(x.n)} <time>${esc(x.ts.slice(5, 16))}</time></li>`).join("") || "אף אחד עוד לא נרשם"}</ol></section>
-<section><h2>הודעות מתוזמנות</h2><ul>${sched}</ul></section>
-<section><h2>חברי הקבוצה</h2><table><tr><th>שם</th><th>טלפון</th><th>צינתוקים</th><th>גם רגילות</th><th>שמחה</th></tr>${rows}</table></section>
-<section><h2>יומן השרת (60 האחרונים)</h2><ul>${logs}</ul></section>
-</main></body></html>`;
-}
+// דף הניהול (לוח הבקרה למנהל) נמצא ב-src/dash.js ו-src/dash.html, בכתובת /admin
 
 // ---------- תגובה עוקצנית של העוזר למקליטים מסוימים (רשימה ב-KV בשם retort) ----------
 // תגובה עוקצנית לחבר שברשימת "retort": ההודעה נכנסת לתור, והתגובה נכתבת בריצה הקבועה (עם זמן מלא, גם כשגוגל עמוס)
@@ -806,13 +758,14 @@ function callWhere(c) {
 }
 async function onlineNow(env) {
   const r = await ym(env, "GetIncomingCalls");
-  const calls = (r.calls || []).map(c => ({ p: callPhone(c), w: callWhere(c) })).filter(c => c.p);
+  // id נשמר כדי שאפשר יהיה לנתק את השיחה מדף הניהול (CallAction)
+  const calls = (r.calls || []).map(c => ({ p: callPhone(c), w: callWhere(c), id: String(c?.id ?? c?.ID ?? c?.callId ?? c?.CallId ?? "") })).filter(c => c.p);
   const conf = [];
   for (const room of Object.values(r.confCalls || {})) {
     const list = Array.isArray(room) ? room : (room?.participants || room?.calls || room?.members || room?.users || []);
     for (const c of (Array.isArray(list) ? list : Object.values(list))) { const p = callPhone(c); if (p) conf.push(p); }
   }
-  for (const p of conf) { const x = calls.find(c => c.p === p); if (x) x.w = "בחדר הוועידה"; else calls.push({ p, w: "בחדר הוועידה" }); }
+  for (const p of conf) { const x = calls.find(c => c.p === p); if (x) x.w = "בחדר הוועידה"; else calls.push({ p, w: "בחדר הוועידה", id: "" }); }
   if ((r.callsCount || calls.length) && env.KV && !(await env.KV.get("incall_sample"))) await env.KV.put("incall_sample", JSON.stringify(r).slice(0, 4000), { expirationTtl: 7 * 86400 });
   return { calls, raw: r };
 }
@@ -2030,9 +1983,9 @@ async function findImportantCopy(env, id) {
   const same = (b.files || []).filter(x => /^\d+\.wav$/.test(x.name) && x.size === f.size);
   return { exists: true, imp: same.length ? same[same.length - 1].name : null };
 }
-async function doAdmin(env, a, admin) {
+async function doAdmin(env, a, admin, via = "העוזר") {
   const nm = names(env), who = p => nm[p] || p, id = String(a.id || "").replace(/\D/g, "");
-  const tag = `(מנהל ${who(admin)} דרך העוזר)`;
+  const tag = `(מנהל ${who(admin)} דרך ${via})`;
   switch (a.type) {
     case "delete": {
       const f = await findImportantCopy(env, id); if (!f.exists) return "לא מצאתי את ההודעה הזו בקו";
@@ -2176,6 +2129,60 @@ async function pendingMenu(env, u, ctx) {
   const intro = total ? `הודעות ממתינות לאישור. בסך הכול ${total === 1 ? "הודעה אחת ממתינה" : total + " הודעות ממתינות"}.` : "אין כרגע הודעות שממתינות לאישור.";
   return `read=${await sayC(env, ctx, intro + " " + parts.join(". ") + ". לחזרה לתפריט הניהול הקישו אפס")}=P,no,1,1,10,No,no,no,,0.1.2.3.4.5`;
 }
+// ביצוע פעולה על הודעה ממתינה (1 = חשובה, 2 = רגילה, 3 = מחיקה; בבקשות הצטרפות 1 = אישור, 3 = מחיקה).
+// משמש גם את השלוחה הקולית וגם את דף הניהול. מחזיר את הודעת התוצאה למנהל
+async function applyReview(env, ctx, kind, f, act, admin, via = "") {
+  const cfg = REVIEW[kind], adm = admin + via;
+  const jmap = kind === "join" ? await kvGet(env, "joinmap", {}) : {};
+  const phoneOf = x => x.phone || jmap[x.name] || "";
+  const who = x => { const p = phoneOf(x), nm = names(env)[p]; return nm || (p ? "מספר " + digitsSay(p) : "מספר לא ידוע"); };
+  const del = async x => { await ym(env, "FileAction", { action: "delete", what: "ivr2:" + cfg.folder + "/" + x.name }); };
+  const ring = type => ctx.waitUntil((async () => { used = 0; await notify(env, type); await processFlags(env); })().catch(e => log(env, "שגיאה בצינתוק: " + e.message)));
+  if (kind === "join") {
+    if (act === "1") {
+      const p = phoneOf(f);
+      if (!/^0\d{8,9}$/.test(p)) { await del(f); return "לא ידוע מאיזה מספר הבקשה, ולכן היא נמחקה"; }
+      used = 0; const r = await approveJoin(env, p, f.name, admin);
+      return `הבקשה אושרה. ${r.name} ${r.isNew ? "נוסף לרשימות של הקו, ו" : ""}יצטרף לקבוצה אוטומטית בפעם הבאה שהוא יתקשר`;
+    }
+    if (act === "3") { await del(f); await log(env, `מנהל ${adm} מחק בקשת הצטרפות של ${phoneOf(f)}`); return "הבקשה נמחקה"; }
+    return "";
+  }
+  if (kind === "demoted") {
+    const map = await kvGet(env, "demap", {});
+    if (act === "1") {
+      await move(env, cfg.folder + "/" + f.name, IMPORTANT);
+      delete map[f.name]; await env.KV.put("demap", JSON.stringify(map));
+      ring("promoted");
+      await log(env, `מנהל ${adm} העביר לחשובות את ההודעה של ${who(f)}`);
+      return "ההודעה הועברה להודעות החשובות ונשלח צינתוק לחברים";
+    }
+    if (act === "2") { await del(f); delete map[f.name]; await env.KV.put("demap", JSON.stringify(map)); return "ההודעה נשארת בהודעות הרגילות"; }
+    if (act === "3") {
+      let copy = map[f.name];
+      if (!copy) { const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + ALL });
+        const c = (d.files || []).filter(x => /^\d+\.wav$/.test(x.name) && x.phone === f.phone && x.size === f.size).sort((a, b) => parseInt(b.name) - parseInt(a.name))[0]; copy = c && c.name; }
+      if (copy) await ym(env, "FileAction", { action: "delete", what: "ivr2:" + ALL + "/" + copy });
+      await del(f); delete map[f.name]; await env.KV.put("demap", JSON.stringify(map));
+      if (copy) { const a = await kvGet(env, "archive", {}); if (a[copy]) { delete a[copy]; await env.KV.put("archive", JSON.stringify(a)); } }
+      await log(env, `מנהל ${adm} מחק מהקו את ההודעה של ${who(f)}${copy ? " (" + copy + " בכל ההודעות)" : ""}`);
+      return copy ? "ההודעה נמחקה מהקו לגמרי" : "ההודעה נמחקה מהרשימה הזו אבל לא מצאתי אותה בכל ההודעות";
+    }
+    return "";
+  }
+  if (act === "1") {
+    await move(env, cfg.folder + "/" + f.name, IMPORTANT); ring("important");
+    await log(env, `מנהל ${adm} אישר כהודעה חשובה את ההודעה של ${who(f)} (${cfg.name})`);
+    return "ההודעה פורסמה כהודעה חשובה ונשלח צינתוק לחברים";
+  }
+  if (act === "2") {
+    await move(env, cfg.folder + "/" + f.name, ALL); ring("regular");
+    await log(env, `מנהל ${adm} אישר כהודעה רגילה את ההודעה של ${who(f)} (${cfg.name})`);
+    return "ההודעה פורסמה כהודעה רגילה";
+  }
+  if (act === "3") { await del(f); await log(env, `מנהל ${adm} מחק את ההודעה של ${who(f)} (${cfg.name})`); return "ההודעה נמחקה"; }
+  return "";
+}
 async function reviewPending(env, u, ctx, kind) {
   const cfg = REVIEW[kind], back = kind === "join" ? "/7" : "/7/4";
   const q = Object.fromEntries(u.searchParams), admin = q.ApiPhone || "";
@@ -2192,50 +2199,7 @@ async function reviewPending(env, u, ctx, kind) {
     else if (act === "4") { cur = f; msg = kind === "join" ? `בקשה ממספר ${digitsSay(phoneOf(f))}. ${sayDate(f.date || f.mtime)}` : `ההודעה של ${who(f)}${names(env)[phoneOf(f)] ? " ממספר " + digitsSay(phoneOf(f)) : ""}. ${sayDate(f.date || f.mtime)}`; }
     else if (act === "0") { cur = f; replay = true; }
     else if (act === "5") { after = num; msg = ""; }
-    else if (kind === "join") {
-      if (act === "1") {
-        const p = phoneOf(f);
-        if (!/^0\d{8,9}$/.test(p)) { await del(f); msg = "לא ידוע מאיזה מספר הבקשה, ולכן היא נמחקה"; }
-        else { used = 0; const r = await approveJoin(env, p, f.name, admin);
-          msg = `הבקשה אושרה. ${r.name} ${r.isNew ? "נוסף לרשימות של הקו, ו" : ""}יצטרף לקבוצה אוטומטית בפעם הבאה שהוא יתקשר`; }
-      } else if (act === "3") { await del(f); await log(env, `מנהל ${admin} מחק בקשת הצטרפות של ${phoneOf(f)}`); msg = "הבקשה נמחקה"; }
-    } else if (kind === "demoted") {
-      const map = await kvGet(env, "demap", {});
-      if (act === "1") {
-        await move(env, cfg.folder + "/" + f.name, IMPORTANT);
-        delete map[f.name]; await env.KV.put("demap", JSON.stringify(map));
-        ctx.waitUntil((async () => { used = 0; await notify(env, "promoted"); await processFlags(env); })().catch(e => log(env, "שגיאה בצינתוק: " + e.message)));
-        await log(env, `מנהל ${admin} העביר לחשובות את ההודעה של ${who(f)}`);
-        msg = "ההודעה הועברה להודעות החשובות ונשלח צינתוק לחברים";
-      } else if (act === "2") {
-        await del(f); delete map[f.name]; await env.KV.put("demap", JSON.stringify(map));
-        msg = "ההודעה נשארת בהודעות הרגילות";
-      } else if (act === "3") {
-        let copy = map[f.name];
-        if (!copy) { const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + ALL });
-          const c = (d.files || []).filter(x => /^\d+\.wav$/.test(x.name) && x.phone === f.phone && x.size === f.size).sort((a, b) => parseInt(b.name) - parseInt(a.name))[0]; copy = c && c.name; }
-        if (copy) await ym(env, "FileAction", { action: "delete", what: "ivr2:" + ALL + "/" + copy });
-        await del(f); delete map[f.name]; await env.KV.put("demap", JSON.stringify(map));
-        if (copy) { const a = await kvGet(env, "archive", {}); if (a[copy]) { delete a[copy]; await env.KV.put("archive", JSON.stringify(a)); } }
-        await log(env, `מנהל ${admin} מחק מהקו את ההודעה של ${who(f)}${copy ? " (" + copy + " בכל ההודעות)" : ""}`);
-        msg = copy ? "ההודעה נמחקה מהקו לגמרי" : "ההודעה נמחקה מהרשימה הזו אבל לא מצאתי אותה בכל ההודעות";
-      }
-    } else {
-      if (act === "1") {
-        await move(env, cfg.folder + "/" + f.name, IMPORTANT);
-        ctx.waitUntil((async () => { used = 0; await notify(env, "important"); await processFlags(env); })().catch(e => log(env, "שגיאה בצינתוק: " + e.message)));
-        await log(env, `מנהל ${admin} אישר כהודעה חשובה את ההודעה של ${who(f)} (${cfg.name})`);
-        msg = "ההודעה פורסמה כהודעה חשובה ונשלח צינתוק לחברים";
-      } else if (act === "2") {
-        await move(env, cfg.folder + "/" + f.name, ALL);
-        ctx.waitUntil((async () => { used = 0; await notify(env, "regular"); await processFlags(env); })().catch(e => log(env, "שגיאה בצינתוק: " + e.message)));
-        await log(env, `מנהל ${admin} אישר כהודעה רגילה את ההודעה של ${who(f)} (${cfg.name})`);
-        msg = "ההודעה פורסמה כהודעה רגילה";
-      } else if (act === "3") {
-        await del(f); await log(env, `מנהל ${admin} מחק את ההודעה של ${who(f)} (${cfg.name})`);
-        msg = "ההודעה נמחקה";
-      }
-    }
+    else msg = await applyReview(env, ctx, kind, f, act, admin);
     if (!cur) files = await pendingFiles(env, cfg.folder);
   }
   let next = cur || (after ? files.find(x => parseInt(x.name) > parseInt(after)) : files[0]);
@@ -2366,6 +2330,8 @@ async function rsvpCount(env, ctx) {
   return `id_list_message=${parts.join(".")}&go_to_folder=/9`;
 }
 const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+// מה שדף הניהול (src/dash.js) צריך מהקוד הזה
+const DASH = { ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE };
 export default {
   async scheduled(event, env, ctx) { NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
   async fetch(req, env, ctx) {
@@ -2374,6 +2340,9 @@ export default {
     const param = n => { const m = new RegExp("[?&/]" + n + "=([^&?/]*)").exec(raw); return m ? m[1] : ""; };
     const parts = u.pathname.split("/").filter(Boolean);
     const key = parts[2] || param("key");
+    // דף הניהול: כניסה בסיסמה (cookie), בלי RUN_KEY בכתובת. הכתובת הישנה /dash מפנה אליו
+    if (parts[0] === "admin") return adminApp(req, env, ctx, u, parts.slice(1), DASH);
+    if (parts[0] === "dash") return Response.redirect(new URL("/admin", u).href, 302);
     if (key !== env.RUN_KEY) return new Response("ok");
     // כשהמתקשר מנתק, ימות קוראים שוב לאותה כתובת עם אותם נתונים. מתעלמים, כדי שלא יתבצע אותו דבר פעמיים
     if (u.searchParams.get("hangup") === "yes") return reply("");
@@ -2387,7 +2356,6 @@ export default {
     if (parts[0] === "pending") { try { return reply(await pendingMenu(env, u, ctx)); } catch (e) { return reply("go_to_folder=/7"); } }
     if (parts[0] === "review") { const kind = REVIEW[parts[1]] ? parts[1] : "demoted"; try { return reply(await reviewPending(env, u, ctx, kind)); } catch (e) { await log(env, "שגיאה באישור הודעות: " + (e.stack || e.message)).catch(() => {}); return reply(u.searchParams.get("debug") ? String(e.stack || e) : "id_list_message=t-הייתה תקלה נסו שוב&go_to_folder=/7"); } }
     if (parts[0] === "weekly") { aiTrace = []; try { return Response.json({ ...(await weeklySummary(env, u.searchParams.get("go") !== "1")), trace: aiTrace }); } catch (e) { return Response.json({ error: String(e.message), trace: aiTrace }); } }
-    if (parts[0] === "dash") { try { return new Response(await dashboard(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }); } catch (e) { return new Response("שגיאה: " + e.message, { status: 500 }); } }
     if (parts[0] === "retortdry") { aiTrace = []; try { return Response.json({ reply: await maybeRetort(env, u.searchParams.get("p") || "", { snark: true, transcript: u.searchParams.get("t") || "" }, true), trace: aiTrace }); } catch (e) { return Response.json({ error: e.message, trace: aiTrace }); } }
     if (parts[0] === "ad") { try { return reply(await personalAd(env, u, ctx)); } catch (e) { return reply("go_to_folder=/Main2"); } }
     if (parts[0] === "speakel") { aiTrace = []; const t0 = Date.now(); const pcm = await elevenTTS(env, u.searchParams.get("t") || "", 12000, u.searchParams.get("v") || undefined); let r = null; if (pcm) { const name = "a" + Date.now().toString(36); await ymUpload(env, `${VOICE_DIR}/${name}.wav`, pcmToWav(pcm)); r = `f-${VOICE_DIR}/${name}`; } return Response.json({ r, ms: Date.now() - t0, trace: aiTrace }); }

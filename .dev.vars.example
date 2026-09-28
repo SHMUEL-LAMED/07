@@ -1,6 +1,7 @@
 # סודות – להגדיר עם: npx wrangler secret put <NAME>
 YM_TOKEN=
 RUN_KEY=
+ADMIN_PASS=   # סיסמת דף הניהול (/admin). בלי הסוד הזה הדף נעול
 GEMINI_KEY=
 GEMINI_KEYS=
 GROQ_KEY=

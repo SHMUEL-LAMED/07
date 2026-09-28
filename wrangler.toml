@@ -4,6 +4,12 @@ compatibility_date = "2025-09-01"
 # משתנים שהוגדרו בלוח הבקרה של Cloudflare (למשל NAMES, GROQ_MODELS) לא נמחקים בפריסה
 keep_vars = true
 
+# דף הניהול (src/dash.html) נטען לקוד כטקסט
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
 [triggers]
 crons = ["*/1 * * * *"]
 
