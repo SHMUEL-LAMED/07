@@ -1,0 +1,64 @@
+# פריסה ידנית של השרת ל-Cloudflare דרך GitHub Actions (בלי טוקן בסביבת Claude Code).
+# הפעלה: Actions ← "פריסה ל-Cloudflare" ← Run workflow ← לבחור ענף ולכתוב deploy באישור.
+# סודות בריפו (Settings ← Secrets and variables ← Actions ← New repository secret):
+#   CLOUDFLARE_API_TOKEN  – טוקן עם הרשאת Workers Scripts:Edit (התבנית "Edit Cloudflare Workers")
+#   CLOUDFLARE_ACCOUNT_ID – מזהה החשבון (מופיע בכתובת של לוח הבקרה של Cloudflare, אחרי dash.cloudflare.com/)
+name: פריסה ל-Cloudflare
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'לכתוב deploy כדי לאשר פריסה לקו החי'
+        required: true
+        default: ''
+permissions:
+  contents: read
+concurrency: deploy-yemot-ai
+jobs:
+  deploy:
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: בדיקת תחביר ובנייה יבשה
+        run: |
+          node --check src/worker.js
+          node --check src/dash.js
+          npx --yes wrangler@4 deploy --dry-run --outdir /tmp/build
+      - name: אימות מול Cloudflare
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "חסר הסוד CLOUDFLARE_API_TOKEN בריפו"; exit 1; }
+          npx --yes wrangler@4 whoami
+      - name: גיבוי הגרסה החיה לפני הדריסה
+        run: |
+          if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yemot-ai/content/v2" \
+              -o /tmp/live-worker-before.bin && echo "נשמר גיבוי של הגרסה החיה ($(wc -c < /tmp/live-worker-before.bin) בתים)"
+          else
+            echo "אין CLOUDFLARE_ACCOUNT_ID – מדלגים על הגיבוי. Cloudflare שומר גרסאות קודמות (wrangler rollback)"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-worker-before-deploy
+          path: /tmp/live-worker-before.bin
+          if-no-files-found: ignore
+      - name: פריסה
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee /tmp/deploy.log
+      - name: בדיקה שהשרת עונה
+        run: |
+          URL=$(grep -o 'https://[^ ]*\.workers\.dev' /tmp/deploy.log | head -1)
+          echo "URL=$URL"
+          [ -n "$URL" ] || { echo "לא נמצאה כתובת בפלט הפריסה"; exit 0; }
+          echo "/ → $(curl -s -w ' %{http_code}' "$URL/")   (צפוי: ok 200)"
+          echo "/admin → $(curl -s -o /dev/null -w '%{http_code}' "$URL/admin")   (503 = להגדיר ADMIN_PASS, 200 = דף כניסה)"
+          echo "/dash → $(curl -s -o /dev/null -w '%{http_code}' "$URL/dash/x/abc")   (302 = מפנה ל-/admin)"
