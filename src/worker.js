@@ -787,14 +787,17 @@ async function cleanVoice(env) {
 
 // ---------- מי בקו עכשיו (שלוחה 5-5) ----------
 const WHERE = [["/8", "מדבר עם העוזר החכם"], ["/3", "בחדר הוועידה"], ["/1", "שומע הודעות"], ["/2", "מקליט הודעה"], ["/9", "בשמחת בית השואבה"], ["/0", "באזור האישי"], ["/7", "בניהול"], ["/5", "במידע על הקבוצה"], ["/4", "בניהול הצינתוקים"]];
+const LINE_PHONE = "0733512880";
+// כל מספרי הטלפון שבתוך טקסט (ימות מחזירה למשל "0554004249 זיהוי 0554004249 "), בלי המספר של הקו עצמו
+const phonesIn = t => [...String(t ?? "").matchAll(/(?:^|\D)(0\d{8,9})(?!\d)/g)].map(m => m[1]).filter(p => p !== LINE_PHONE);
 function callPhone(c) {
-  // ימות מחזירה לפעמים "0554004249 זיהוי 0554004249" – לוקחים את המספר הראשון מתוך הטקסט
-  for (const k of ["phone", "callerIdNum", "CallerIdNum", "callerId", "CallerID", "ani", "from", "Phone"]) { const m = typeof c?.[k] === "string" && /(?:^|\D)(0\d{8,9})(?!\d)/.exec(c[k].trim()); if (m && m[1] !== "0733512880") return m[1]; }
-  for (const v of Object.values(c || {})) if (typeof v === "string" && /^0\d{8,9}$/.test(v) && v !== "0733512880") return v;
+  // קודם השדות המוכרים של המתקשר, ואחר כך כל שדה טקסט אחר (חוץ ממיקום, שמות וזמנים)
+  for (const k of ["phone", "callerIdNum", "CallerIdNum", "callerId", "CallerID", "ani", "from", "Phone"]) { const [p] = phonesIn(c?.[k]); if (p) return p; }
+  for (const [k, v] of Object.entries(c || {})) if (typeof v === "string" && !/path|folder|ext|location|name|time|id/i.test(k)) { const [p] = phonesIn(v); if (p) return p; }
   return "";
 }
 function callWhere(c) {
-  const raw = String(c?.path || c?.folder || c?.extension || c?.ext || c?.currentPath || c?.location || "").replace(/^ivr2:/, "").trim();
+  const raw = String(c?.path || c?.Path || c?.folder || c?.extension || c?.ext || c?.currentPath || c?.location || "").replace(/^ivr2:/, "").trim();
   // פורמט חדש של ימות: "2 הקלטת הודעה", "שלוחה 1/2 כל ההודעות קובץ 1251", "שלוחה ראשית"
   const m = /^(?:שלוחה\s*)?\/?(\d+(?:\/\d+)*)/.exec(raw);
   const p = m ? "/" + m[1] : (raw.startsWith("/") ? raw : "/" + raw);
