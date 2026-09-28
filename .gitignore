@@ -1,7 +1,16 @@
 node_modules/
 .wrangler/
+.env
+.env.*
+!.env.example
 .dev.vars
-*.env
+.dev.vars.*
+!.dev.vars.example
+worker-live.js
+worker-response.bin
+exports/
+recordings/
+transcripts/
 *.wav
 *.mp3
 *.tgz
