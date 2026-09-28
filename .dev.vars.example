@@ -1,0 +1,12 @@
+# סודות – להגדיר עם: npx wrangler secret put <NAME>
+YM_TOKEN=
+RUN_KEY=
+GEMINI_KEY=
+GEMINI_KEYS=
+GROQ_KEY=
+AAI_KEY=
+ELEVEN_KEY=
+PROVIDERS=
+# משתנים רגילים שמוגדרים בלוח הבקרה
+GROQ_MODELS=
+NAMES=

@@ -1,0 +1,17 @@
+name = "yemot-ai"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "4660b48693df4471b93f67e4307ca10a"
+
+[ai]
+binding = "AI"
+
+# משתנים רגילים (לערכים האמיתיים – בלוח הבקרה של Cloudflare, לא כאן)
+[vars]
+TEST_MODE = "0"
