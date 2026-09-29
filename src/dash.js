@@ -759,7 +759,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     case "convstats": {
       const conv = await D.kvGet(env, "convlog", []), per = {}, byHour = Array(24).fill(0), words = {}, byDay = {};
       for (const c of conv) { per[c.p] = (per[c.p] || 0) + 1; const h = +String(c.d || "").slice(11, 13); if (h >= 0 && h < 24) byHour[h]++; const d = String(c.d || "").slice(0, 10); if (d) byDay[d] = (byDay[d] || 0) + 1;
-        for (const w of String(c.q || "").replace(/[^֐-׿a-zA-Z0-9 ]/g, " ").split(/\s+/)) { const x = w.replace(/^[ושמלבכה]/, "").trim(); if (x.length >= 3 && !HE_STOP.has(w) && !HE_STOP.has(x)) words[x] = (words[x] || 0) + 1; } }
+        for (const w of String(c.q || "").replace(/[^֐-׿a-zA-Z0-9 ]/g, " ").split(/\s+/)) { const x = w.trim(); if (x.length >= 3 && !/^\d+$/.test(x) && !HE_STOP.has(x)) words[x] = (words[x] || 0) + 1; } }
       return json({ total: conv.length, per: Object.entries(per).map(([p, n]) => ({ p, n: who(p), c: n })).sort((a, b) => b.c - a.c).slice(0, 20), byHour, words: Object.entries(words).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([w, n]) => ({ w, n })),
         byDay: Object.entries(byDay).sort().slice(-30).map(([d, n]) => ({ d, n })), first: conv.length ? conv[0].d : "", conv: conv.slice(-500).reverse().map(e => ({ d: e.d, p: e.p, n: who(e.p), q: e.q, a: e.a })) });
     }
@@ -769,11 +769,12 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         if (body.op === "dropbg") { const qq = await D.kvGet(env, "bgjobs", []), i = +body.i; if (!(i >= 0 && i < qq.length)) return json({ error: "לא נמצא" }, 404); qq.splice(i, 1); await env.KV.put("bgjobs", JSON.stringify(qq)); return ok({ n: qq.length }); }
         return json({ error: "פעולה לא מוכרת" }, 400);
       }
-      const [logR, bg, pc, aai, cron, weekly, deferred, errCount, retortq, holy, sample] = await Promise.all([D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "bgjobs", []), D.kvGet(env, "postcheck", {}), D.kvGet(env, "aai_pending", []),
-        env.KV.get("cronlock"), env.KV.get("weeklyDone"), D.kvGet(env, "deferred_tz", []), D.pendingFiles(env, D.REVIEW.error.folder).then(f => f.length).catch(() => 0), D.kvGet(env, "retortq", []), D.isHoly(env).catch(() => null), env.KV.get("incall_sample")]);
+      const [logR, bg, pc, aai, cron, weekly, deferred, errCount, retortq, holy, sample, jobs] = await Promise.all([D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "bgjobs", []), D.kvGet(env, "postcheck", {}), D.kvGet(env, "aai_pending", []),
+        env.KV.get("cronlock"), env.KV.get("weeklyDone"), D.kvGet(env, "deferred_tz", []), D.pendingFiles(env, D.REVIEW.error.folder).then(f => f.length).catch(() => 0), D.kvGet(env, "retortq", []), D.isHoly(env).catch(() => null), env.KV.get("incall_sample"), D.kvGet(env, "scheduled", [])]);
       const lines = ((logR && logR.contents) || "").split("\n").filter(l => /שגיאה|error|נכשל|לא הצליח|תקלה/i.test(l)).slice(0, 80).map(l => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(l); return m ? { t: m[1], m: m[2] } : { t: "", m: l }; });
       const bgs = bg.map((s, i) => ({ i, k: s.k, what: s.k === "tts" ? `${s.path}/${s.name}: ${String(s.text || "").slice(0, 60)}` : s.k === "bc" ? "הודעה אישית ל" + who(s.p) : s.k === "ini" ? "ini " + s.path : s.k === "fa" ? `${s.action} ${s.what}` : s.k === "log" ? String(s.line || "").slice(0, 60) : s.k, tries: s.tries || 0 }));
-      return json({ now: D.nowIL(), errors: lines, bg: bgs, postcheck: Object.keys(pc).length, aai: Array.isArray(aai) ? aai.length : Object.keys(aai || {}).length, lastCron: cron ? D.ilAt(+cron) : "", cronAgo: cron ? Math.round((now - +cron) / 1000) : null, weeklyDone: weekly || "", deferred: deferred.length, pendingError: errCount, retortq: retortq.length, holy, hasSample: !!sample, testMode: env.TEST_MODE === "1" });
+      const lastJob = jobs.map(j => String(j.done || "")).filter(Boolean).sort().pop() || "";
+      return json({ now: D.nowIL(), lastJob, errors: lines, bg: bgs, postcheck: Object.keys(pc).length, aai: Array.isArray(aai) ? aai.length : Object.keys(aai || {}).length, lastCron: cron ? D.ilAt(+cron) : "", cronAgo: cron ? Math.round((now - +cron) / 1000) : null, weeklyDone: weekly || "", deferred: deferred.length, pendingError: errCount, retortq: retortq.length, holy, hasSample: !!sample, testMode: env.TEST_MODE === "1" });
     }
     case "heard": { // מי שמע כל אחת מההודעות החשובות האחרונות (לפי כניסה לשלוחה 1/1 אחרי שההודעה עלתה)
       if (req.method === "POST") {

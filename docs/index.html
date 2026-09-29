@@ -155,6 +155,7 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .delta{font-size:12px;font-weight:600;margin-inline-start:6px}.delta.up{color:var(--goodt)}.delta.down{color:var(--bad)}
 .tl{display:grid;gap:2px}.tl .r{display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px;align-items:baseline}.tl .r:last-child{border-bottom:0}
 .words{display:flex;flex-wrap:wrap;gap:6px}.words span{padding:3px 10px;border-radius:999px;background:var(--accbg);color:var(--acc2);font-weight:600}
+span.num{white-space:nowrap}.tile.sm b{font-size:19px;line-height:1.35}body:has(.modal:not([hidden])),body:has(.mon:not([hidden])){overflow:hidden}
 .kbd{font:12px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--bg)}
 body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color:var(--warnt);text-align:center;font-weight:600;padding:6px;font-size:13px}
 /* מסך בקרה */
@@ -166,9 +167,9 @@ body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color
 .mon ul{list-style:none;margin:0;padding:0}.mon li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)}.mon li small{color:#9aa3b5;display:block;font-size:14px}
 .mon .btn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
 /* עוזר AI */
-.aifab{position:fixed;bottom:20px;inset-inline-start:20px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--hero);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 24px rgba(47,95,209,.45)}
+.aifab{position:fixed;bottom:20px;left:20px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--hero);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 24px rgba(47,95,209,.45)}
 .aifab:hover{transform:scale(1.05)}
-.aip{position:fixed;bottom:88px;inset-inline-start:20px;z-index:31;width:min(430px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh2);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;animation:up .25s}
+.aip{position:fixed;bottom:88px;left:20px;z-index:31;width:min(430px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh2);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;animation:up .25s}
 .aip[hidden]{display:none}.aip .ah{background:var(--hero);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}.aip .ah b{font-size:16px}.aip .ah .btn{margin-inline-start:auto}
 .aip .al{overflow:auto;padding:14px;display:grid;gap:10px;align-content:start}
 .bub{padding:9px 13px;border-radius:14px;font-size:14.5px;white-space:pre-wrap;max-width:92%}.bub.me{background:var(--acc);color:#fff;justify-self:end;border-end-end-radius:4px}.bub.ai{background:var(--bg);justify-self:start;border-end-start-radius:4px}
@@ -178,7 +179,7 @@ body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color
 .aip form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}.aip form input{flex:1}
 .aisug{display:flex;flex-wrap:wrap;gap:6px}.aisug button{font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer}
 .typing{display:inline-flex;gap:4px}.typing i{width:6px;height:6px;border-radius:50%;background:var(--mut);animation:blink 1s infinite}.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
-@media(max-width:600px){.hsearch{order:9;flex:1 1 100%}.aifab{bottom:14px;inset-inline-start:14px}.aip{inset-inline:8px;width:auto;bottom:80px}.mon{padding:14px;font-size:16px}.mon .big{font-size:48px}}
+@media(max-width:600px){.hsearch{order:9;flex:1 1 100%}.aifab{bottom:14px;left:14px;width:50px;height:50px}.aip{left:8px;right:8px;width:auto;bottom:74px}.mon{padding:14px;font-size:16px}.mon .big{font-size:48px}}
 @media print{.aifab,.aip,.batch,.hsearch{display:none!important}}
 
 body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]),body.ro .aifab{display:none!important}
@@ -189,7 +190,7 @@ body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-f
   <div class="bar">
     <div><h1>ניהול קו הקבוצה</h1><div class="sub" id="clock">073-351-2880</div></div>
     <div class="grow"></div>
-    <div class="hsearch"><input id="gs" type="search" placeholder="חיפוש חברים, הודעות, תמלולים…  ( / )" autocomplete="off" aria-label="חיפוש"><div class="sres" id="gsr" hidden></div></div>
+    <div class="hsearch"><input id="gs" type="search" placeholder="חיפוש חברים, הודעות, תמלולים" autocomplete="off" aria-label="חיפוש"><div class="sres" id="gsr" hidden></div></div>
     <div class="badges"><span class="badge live" id="b-online">…</span><span class="badge" id="b-pend">…</span></div>
     <button class="btn icon" id="theme" title="מצב בהיר/כהה" aria-label="מצב בהיר/כהה">◐</button>
     <button class="btn icon" data-x="mon" title="מסך בקרה (M)" aria-label="מסך בקרה">🖥</button>
@@ -412,12 +413,7 @@ RENDER.members = d => {
 // ---------- תזמונים ----------
 RENDER.sched = d => {
   const minAt = d.now.slice(0, 16).replace(" ", "T");
-  return `<div class="cols">
-    <div class="card"><h2>הודעה מתוזמנת חדשה</h2><form class="form" data-form="schedule"><div class="row"><input type="datetime-local" name="at" min="${minAt}" required></div><textarea name="text" placeholder="נוסח ההודעה (העוזר יקריא אותה בקולו לקו)" required maxlength="1500"></textarea><label class="chk"><input type="checkbox" name="important"> הודעה חשובה (עם צינתוק לכל החברים)</label><div><button class="btn p">תזמון</button></div></form></div>
-    <div class="card"><h2>הרשמה לאירוע <small>שלוחה 9</small></h2><div><b>${esc(d.event.title)}</b> <span class="mut">${esc(d.event.desc || "")}</span></div><div class="mut small" style="margin-bottom:8px">נרשמו ${d.rsvp.length} · לא נרשמו ${d.notReg.length}</div>
-      <details><summary class="mut small" style="cursor:pointer">הנרשמים והחסרים</summary><div class="cols" style="margin-top:8px"><div><b class="small">נרשמו</b><ol style="margin:4px 0;padding-inline-start:18px">${d.rsvp.map(r => `<li>${esc(r.n)} <span class="mut small">${esc(fmtD(r.ts))}</span></li>`).join("") || '<li class="mut">אף אחד עוד לא</li>'}</ol></div><div><b class="small">לא נרשמו</b><div class="chips" style="margin-top:4px">${d.notReg.map(r => `<span class="chip">${esc(r.n)}</span>`).join("") || '<span class="mut small">כולם נרשמו 🎉</span>'}</div></div></div></details>
-      <form class="form" data-form="event" style="margin-top:10px"><div class="row"><input name="title" placeholder="אירוע חדש: שם" required><input name="desc" placeholder="מתי ואיפה"></div><div><button class="btn">פתיחת הרשמה חדשה</button></div></form></div>
-  </div>
+  return `
   <div class="card"><h2>כל התזמונים <small>${d.jobs.filter(j => !j.done).length} ממתינים</small></h2>${d.jobs.length ? `<div class="wrap"><table class="tbl"><tr><th>זמן</th><th>מה</th><th>מי קבע</th><th>מצב</th><th></th></tr>${d.jobs.map(j => `<tr><td class="num small">${esc(j.at)}</td><td>${esc(jobText(j))}</td><td class="small mut">${esc(j.byName || "")}</td><td>${j.done ? `<span class="pill ok">נשלח ${esc(fmtD(j.done))}</span>` : '<span class="pill">ממתין</span>'}</td><td>${j.done ? "" : `<button class="btn s d" data-act="unsched" data-id="${esc(j.id || "")}" data-at="${esc(j.at)}" data-text="${esc(j.text || "")}" data-type="${esc(j.type)}">ביטול</button>`}</td></tr>`).join("")}</table></div>` : empty("אין תזמונים")}</div>`;
 };
 
@@ -436,7 +432,6 @@ RENDER.bot = d => {
     ${conv.length ? `<div class="conv">${conv.slice(0, 80).map(c => `<div><div class="m">${esc(fmtD(c.d))} · ${esc(c.n)}</div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a)}</div></div>`).join("")}</div>` : empty("אין שיחות")}</div>
   <div class="cols">
     <div class="card"><h2>היסטוריית פעולות <small>אפשר לבטל רק את האחרונה</small></h2>${d.undo.length ? `<ul class="list">${d.undo.map((u, i) => `<li><span class="mut small num">${esc(fmtD(u.d))}</span><span class="grow">${esc(u.desc)}</span>${i === 0 ? actBtn({ type: "undo" }, "↶ ביטול", "d") : ""}</li>`).join("")}</ul>` : empty("אין פעולות")}</div>
-    <div class="card"><h2>רשימות מיוחדות</h2><div class="small mut">תגובה עוקצנית (retort)</div><div class="chips" style="margin-bottom:8px">${d.retort.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="small mut">פיקוח מוגבר (strict) – כל הודעה מחכה לאישור</div><div class="chips">${d.strict.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="mut small" style="margin-top:8px">הרשימות האלה נערכות דרך KV בלבד.</div></div>
   </div>`;
 };
 
@@ -587,7 +582,7 @@ RENDER.msgs = d => {
       <select data-filter="msgOnly"><option value="">הכול</option><option value="imp" ${only === "imp" ? "selected" : ""}>רק חשובות</option><option value="notr" ${only === "notr" ? "selected" : ""}>בלי תמלול</option><option value="note" ${only === "note" ? "selected" : ""}>עם הערה</option></select>
       ${d.list.length < d.total ? `<button class="btn s" data-act="more">טעינת ${Math.min(d.total, 1000)} האחרונות</button>` : ""}
       <span class="right row">${dlBtn("export_transcripts", "⬇ ייצוא תמלולים (CSV)")}<button class="btn s w-only" data-go="studio">🎙 הקלטה והעלאה</button></span></div></div>
-    ${shown.length ? shown.map(m => { const path = "/1/2/" + m.id + ".wav", note = notes[m.id]; return `<div class="msg"><div class="head"><input type="checkbox" class="sel w-only" data-sel="${m.id}" ${state.sel.has(m.id) ? "checked" : ""} aria-label="בחירה"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${who(m.n, m.p)}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
+    ${shown.length ? shown.map(m => { const path = "/1/2/" + m.id + ".wav", note = notes[m.id]; return `<div class="msg"><div class="head"><input type="checkbox" class="sel w-only" data-sel="${m.id}" ${state.sel.has(m.id) ? "checked" : ""} aria-label="בחירה"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${m.p || m.n ? who(m.n, m.p) : '<b class="mut">הודעה מהמערכת</b>'}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
       <div class="row"><button class="btn s" data-act="play" data-p="${esc(path)}">▶ השמעה</button><button class="btn s" data-x="dl" data-n="download?p=${esc(encodeURIComponent(path))}">⬇</button>${m.imp ? actBtn({ type: "move", id: m.id, to: "regular" }, "הוצאה מהחשובות") : actBtn({ type: "move", id: m.id, to: "important" }, "העברה לחשובות + צינתוק")}${actBtn({ type: "delete", id: m.id }, "מחיקה", "d")}
         <button class="btn s w-only" data-x="note" data-kind="msg" data-key="${m.id}">📝 הערה</button><button class="btn s w-only" data-x="fixtr" data-id="${m.id}">✎ תמלול</button>${m.p ? `<button class="btn s" data-x="card" data-p="${esc(m.p)}">👤</button>` : ""}</div>
       ${note ? `<div class="note">📝 ${esc(note.t)} <span class="small">(${esc(fmtD(note.d))})</span></div>` : ""}
@@ -630,7 +625,7 @@ function memberHtml(d) {
     <button class="btn s" data-x="m-list" data-list="strict" data-p="${d.p}" data-on="${d.strict ? 0 : 1}">${d.strict ? "הסרה מפיקוח מוגבר" : "פיקוח מוגבר"}</button>
     ${d.person ? `<button class="btn s" data-x="m-code" data-p="${d.p}" data-c="${esc(d.person.c)}">קוד אישי</button>` : ""}
     <button class="btn s" data-x="m-rsvp" data-p="${d.p}" data-on="${d.rsvp ? 0 : 1}">${d.rsvp ? "הסרה מהאירוע" : "רישום לאירוע"}</button></div></div>
-  <div class="tiles">${tile(d.msgTotal, "הודעות בארכיון")}${tile(d.callsMonth, "שיחות החודש")}${tile(d.conv.length, "שיחות עם העוזר")}${tile(d.pm.length, "בתיבה האישית")}${tile(d.last ? fmtD(d.last) : "—", "כניסה אחרונה")}</div>
+  <div class="tiles">${tile(d.msgTotal, "הודעות בארכיון")}${tile(d.callsMonth, "שיחות החודש")}${tile(d.conv.length, "שיחות עם העוזר")}${tile(d.pm.length, "בתיבה האישית")}${tile(d.last ? fmtD(d.last) : "—", "כניסה אחרונה", "sm")}</div>
   <div class="cols">
     <div class="card w-only"><h2>הודעה אישית קולית</h2><form class="form" data-xf="m-pm" data-p="${d.p}"><textarea name="text" placeholder="מה להגיד ל${esc(d.n || "חבר")}? העוזר יקריא בקולו ויניח בתיבה האישית" required maxlength="800"></textarea><div class="row"><button class="btn">🔊 יצירת קול ושמיעה</button><span class="grow"></span></div><div class="mpv"></div></form>
       <h3>הקלטה שלך לתיבה שלו</h3>${recorderHtml("pm", d.p)}</div>
@@ -742,6 +737,7 @@ RENDER.event = d => `<div class="cols two">
   <div class="card"><h2>🎉 ${esc(d.event.title)} <small>שלוחה 9</small></h2><div class="mut">${esc(d.event.desc || "")}</div>
     <div class="tiles" style="margin-top:10px">${tile(d.rsvp.length, "נרשמו", "good")}${tile(d.notReg.length, "עוד לא נרשמו", d.notReg.length ? "warn" : "")}</div>
     <div class="row" style="margin-top:10px">${dlBtn("rsvp_csv", "⬇ רשימת הנרשמים (CSV)")}${d.notReg.length ? '<button class="btn s w-only" data-x="ev-tzmiss">📣 צינתוק למי שלא נרשם</button>' : ""}</div>
+    <form class="form w-only" data-form="event" style="margin-top:12px"><div class="small mut">אירוע חדש (הרשימה הנוכחית נשמרת בצד)</div><div class="row"><input name="title" placeholder="שם האירוע" required><input name="desc" placeholder="מתי ואיפה"></div><div><button class="btn s">פתיחת הרשמה חדשה</button></div></form>
     <form class="form w-only" data-xf="ev-edit" style="margin-top:12px"><div class="small mut">עריכת פרטי האירוע (הנרשמים נשארים)</div><div class="row"><input name="title" value="${esc(d.event.title)}" required><input name="desc" value="${esc(d.event.desc || "")}" placeholder="מתי ואיפה"></div><div><button class="btn s">שמירה</button></div></form></div>
   <div class="card"><h2>הנרשמים <small>${d.rsvp.length}</small></h2>${d.rsvp.length ? `<ol style="margin:0;padding-inline-start:20px">${d.rsvp.map(r => `<li style="margin-bottom:4px">${esc(r.n)} <span class="mut small">${esc(fmtD(r.ts))}</span> <button class="btn s d w-only" data-x="ev-rsvp" data-op="rsvp_remove" data-p="${esc(r.p)}">הסרה</button></li>`).join("")}</ol>` : empty("אף אחד עוד לא נרשם")}
     <h3>עוד לא נרשמו</h3>${d.notReg.length ? `<div class="chips">${d.notReg.map(r => `<span class="chip">${esc(r.n)} <button class="btn s w-only" data-x="ev-rsvp" data-op="rsvp_add" data-p="${esc(r.p)}" data-name="${esc(r.n)}" style="padding:0 6px">+ רישום</button></span>`).join("")}</div>` : empty("כולם נרשמו 🎉")}</div></div>`;
@@ -786,9 +782,9 @@ RENDER.live = d => {
 
 // ---------- מערכת ----------
 RENDER.system = d => {
-  const h = d.h, ago = h.cronAgo === null ? "לא ידוע" : h.cronAgo < 120 ? "לפני " + h.cronAgo + " שניות" : "לפני " + Math.round(h.cronAgo / 60) + " דקות";
+  const h = d.h, cronV = h.cronAgo !== null ? "רצה עכשיו" : h.lastJob ? fmtD(h.lastJob) : "—";
   const np = notifPref();
-  return `<div class="tiles">${tile(ago, "הריצה הקבועה (cron)", h.cronAgo !== null && h.cronAgo < 300 ? "good" : "warn")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
+  return `<div class="tiles">${tile(cronV, h.cronAgo !== null ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", "sm good")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
   <div class="cols">
     <div class="card"><h2>🔔 התראות בדפדפן</h2><div class="mut small">התראה כשמגיעה הודעה שממתינה לאישור, בקשת הצטרפות, הודעה חדשה בקו או כשמישהו נכנס לקו – גם כשהלשונית ברקע.</div>
       <form class="form" data-xf="notif" style="margin-top:8px">${[["pend", "הודעות לאישור ובקשות הצטרפות"], ["msg", "הודעה חדשה בקו"], ["online", "מישהו נכנס לקו"]].map(([k, l]) => `<label class="chk"><input type="checkbox" name="${k}" ${np[k] ? "checked" : ""}> ${l}</label>`).join("")}
@@ -799,7 +795,7 @@ RENDER.system = d => {
       <form class="row" data-xf="share" style="margin-top:8px"><select name="days"><option value="1">יום</option><option value="7" selected>שבוע</option><option value="30">חודש</option></select><button class="btn s">יצירת קישור</button></form><div id="shareout"></div></div>
   </div>
   <div class="cols two"><div class="card"><h2>⚙️ תור משימות רקע <small>${h.bg.length}</small>${h.bg.length ? '<button class="btn s d right w-only" data-x="bgclear">ניקוי התור</button>' : ""}</h2>${h.bg.length ? `<ul class="list">${h.bg.slice(0, 50).map(s => `<li><span class="pill">${esc(s.k)}</span><span class="grow small">${esc(s.what)}</span>${s.tries ? `<span class="pill warn">ניסיון ${s.tries}</span>` : ""}<button class="btn s d w-only" data-x="bgdrop" data-i="${s.i}">✕</button></li>`).join("")}</ul>` : empty("התור ריק")}
-    <div class="mut small" style="margin-top:6px">הריצה האחרונה: ${esc(h.lastCron || "—")} · בדיקות מאוחרות: ${h.postcheck} · תמלולים בהמתנה: ${h.aai} · תגובות בתור: ${h.retortq} · סיכום שבועי אחרון: ${esc(h.weeklyDone || "—")}</div></div>
+    <div class="mut small" style="margin-top:6px">בדיקות מאוחרות: ${h.postcheck} · תמלולים בהמתנה: ${h.aai} · תגובות בתור: ${h.retortq} · סיכום שבועי אחרון: ${esc(h.weeklyDone || "—")}</div></div>
     <div class="card"><h2>🧯 שגיאות אחרונות ביומן <small>${h.errors.length}</small></h2>${h.errors.length ? `<ul class="list log">${h.errors.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("")}</ul>` : empty("אין שגיאות 👍")}</div></div>
   <div class="card"><h2>📢 פרסומות אישיות <small>${d.ads.ads.length} חברים</small></h2>${d.ads.ads.length ? `<ul class="list">${d.ads.ads.map(a => `<li><button class="btn s" data-x="card" data-p="${esc(a.p)}">${esc(a.n)}</button><span class="grow small">${a.list.map(esc).join(" · ")}</span></li>`).join("")}</ul>` : empty("אין")}<div class="mut small">עריכה מתוך כרטיס החבר.</div></div>
   <div class="card"><h2>⌨️ קיצורי מקלדת</h2><div class="small">${[["Alt+1…9", "מעבר בין לשוניות"], ["/ או Ctrl+K", "חיפוש"], ["A", "עוזר AI"], ["M", "מסך בקרה"], ["R", "רענון"], ["Esc", "סגירה"]].map(([k, l]) => `<span class="kbd">${k}</span> ${l}`).join(" &nbsp;·&nbsp; ")}</div>
