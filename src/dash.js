@@ -22,6 +22,19 @@ const cookie = (req, name) => { const m = new RegExp("(?:^|;\\s*)" + name + "=([
 const setCookie = tok => `${COOKIE}=${tok}; Path=/admin; Max-Age=${tok ? TTL_DAYS * 86400 : 0}; HttpOnly; Secure; SameSite=Lax`;
 const html = (body, status = 200, headers = {}) => new Response(body, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", ...headers } });
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+const GH_ORIGIN = "https://shmuel-lamed.github.io";
+const corsOrigin = req => req.headers.get("Origin") === GH_ORIGIN ? GH_ORIGIN : "";
+function withCors(resp, req) {
+  const origin = corsOrigin(req);
+  if (!origin) return resp;
+  const h = new Headers(resp.headers);
+  h.set("Access-Control-Allow-Origin", origin);
+  h.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  h.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With");
+  h.set("Access-Control-Max-Age", "86400");
+  h.set("Vary", "Origin");
+  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
+}
 const redirect = (to, headers = {}) => new Response(null, { status: 303, headers: { Location: to, ...headers } });
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -42,6 +55,27 @@ export async function adminApp(req, env, ctx, u, parts, D) {
   const sub = parts[0] || "";
   if (!env.ADMIN_PASS) return html(setupPage, 503);
   const ip = req.headers.get("CF-Connecting-IP") || "?";
+  // GitHub Pages frontend: exact-origin CORS + short-lived signed session token.
+  if (sub === "api" && req.method === "OPTIONS") {
+    if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
+    return withCors(new Response(null, { status: 204 }), req);
+  }
+  if (sub === "api" && parts[1] === "session") {
+    const origin = req.headers.get("Origin") || "";
+    if (origin && origin !== GH_ORIGIN) return json({ error: "מקור לא מורשה" }, 403);
+    if (req.method !== "POST") return withCors(json({ error: "שיטה לא מורשית" }, 405), req);
+    const f = await fails(env, ip);
+    if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
+    const body = await req.json().catch(() => ({}));
+    const pass = String(body.password || "");
+    if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
+      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      await D.log(env, `ניסיון כניסה שגוי לדף הניהול מ-GitHub Pages (${ip})`).catch(() => {});
+      return withCors(json({ error: "סיסמה שגויה" }, 401), req);
+    }
+    if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
+    return withCors(json({ token: await newToken(env) }), req);
+  }
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
     const f = await fails(env, ip);
@@ -57,14 +91,19 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
   }
   if (sub === "logout") return redirect("/admin", { "Set-Cookie": setCookie("") });
-  const authed = await validToken(env, cookie(req, COOKIE));
-  if (!authed) return sub === "api" ? json({ error: "לא מחובר" }, 401) : html(loginPage());
+  const m = /^Bearer\\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
+  const queryToken = sub === "api" && parts[1] === "audio" ? String(u.searchParams.get("token") || "") : "";
+  const token = cookie(req, COOKIE) || (m && m[1]) || queryToken;
+  const authed = await validToken(env, token);
+  if (!authed) return sub === "api" ? withCors(json({ error: "לא מחובר" }, 401), req) : html(loginPage());
   if (sub === "api") {
-    // הגנה מפני בקשות מאתר זר: כותרת שרק הדף שלנו שולח, ובדיקת המקור שהדפדפן מצרף
-    if (req.method === "POST" && req.headers.get("X-Requested-With") !== "dash") return json({ error: "בקשה לא תקינה" }, 400);
-    const site = req.headers.get("Sec-Fetch-Site"); if (site && site !== "same-origin" && site !== "none") return json({ error: "בקשה לא תקינה" }, 403);
-    try { return await api(req, env, ctx, u, parts[1] || "", D); }
-    catch (e) { return json({ error: String(e.message || e) }, 500); }
+    // אותו-origin כרגיל, או GitHub Pages המדויק בלבד.
+    if (req.method === "POST" && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "בקשה לא תקינה" }, 400), req);
+    const origin = req.headers.get("Origin") || "", gh = origin === GH_ORIGIN;
+    const site = req.headers.get("Sec-Fetch-Site");
+    if (site && site !== "same-origin" && site !== "none" && !gh) return withCors(json({ error: "בקשה לא תקינה" }, 403), req);
+    try { return withCors(await api(req, env, ctx, u, parts[1] || "", D), req); }
+    catch (e) { return withCors(json({ error: String(e.message || e) }, 500), req); }
   }
   if (sub) return redirect("/admin");
   return html(PAGE);
