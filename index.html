@@ -112,7 +112,6 @@ function hideLogin() { $("#login-layer").hidden = true; $("#login-err").textCont
 async function createSession(password) {
   const r = await fetch(API_BASE + "session", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Requested-With": "dash" },
     body: JSON.stringify({ password })
   });
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
@@ -122,9 +121,9 @@ async function createSession(password) {
 }
 async function api(name, body) {
   if (!adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
-  const headers = { "X-Requested-With": "dash", "Authorization": "Bearer " + adminToken };
-  if (body) headers["Content-Type"] = "application/json";
-  const r = await fetch(API_BASE + name, body ? { method: "POST", headers, body: JSON.stringify(body) } : { headers });
+  const sep = name.includes("?") ? "&" : "?";
+  const url = API_BASE + name + sep + "token=" + encodeURIComponent(adminToken);
+  const r = await fetch(url, body ? { method: "POST", body: JSON.stringify(body) } : undefined);
   if (r.status === 401) {
     adminToken = ""; sessionStorage.removeItem("adminToken"); showLogin("החיבור פג. יש להיכנס שוב.");
     throw new Error("החיבור פג");
