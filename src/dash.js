@@ -426,8 +426,11 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         rules: rules.map((r, i) => ({ n: i + 1, r })), muted: Object.entries(watch).filter(([, w]) => w && w.hold && (!w.until || w.until > now)).map(([p]) => nm[p] || p), blocked,
         lastUndo: undo.length ? undo[undo.length - 1].desc : "", recentMessages: recent,
         recentLog: ((logR && logR.contents) || "").split("\n").filter(Boolean).slice(0, 25) };
+      // אותו ידע שיש לעוזר בקו: ההודעות והתמלולים הרלוונטיים לשאלה, והמידע שהעוזר מקבל כשמנהל מתקשר
+      const line = await D.loadLine(env).catch(() => null);
+      const [lineCtx, adminCtx] = line ? [D.retrieveContext(line, ask, nm, 14000), await D.adminText(env, line).catch(() => "")] : ["", ""];
       let r;
-      try { r = await D.aiText(env, { system: DASH_AI_SYSTEM, contents: [...hist, { role: "user", parts: [{ text: "מצב הקו:\n" + JSON.stringify(ctxData).slice(0, 24000) + "\n\nבקשת המנהל: " + ask }] }], deadline: 26000, timeout: 20000 }); }
+      try { r = await D.aiText(env, { system: DASH_AI_SYSTEM + (lineCtx ? "\n\nההודעות בקו (אותו ידע שיש לעוזר הקולי):\n" + lineCtx : "") + (adminCtx ? "\n\nמידע לניהול:\n" + adminCtx : ""), contents: [...hist, { role: "user", parts: [{ text: "מצב הקו:\n" + JSON.stringify(ctxData).slice(0, 20000) + "\n\nבקשת המנהל: " + ask }] }], deadline: 26000, timeout: 20000 }); }
       catch (e) { return json({ error: "העוזר לא זמין כרגע: " + String(e.message || e).slice(0, 200) }, 503); }
       const raw = Array.isArray(r && r.actions) ? r.actions : [], actions = raw.map(x => aiCheck(x, D, nm)).filter(Boolean).slice(0, 12);
       const answer = String((r && (r.answer || r.text)) || "").trim().slice(0, 3000) || (actions.length ? "הנה מה שאני מציע לבצע:" : "לא הבנתי, אפשר לנסח אחרת?");
