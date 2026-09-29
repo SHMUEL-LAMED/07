@@ -38,8 +38,10 @@ Deno.serve(async (req: Request) => {
 
   const headers = new Headers();
   if (token) headers.set("authorization", "Bearer " + token);
-  const ip = req.headers.get("x-forwarded-for");
-  if (ip) headers.set("x-forwarded-for", ip);
+  // הכתובת האמיתית של הדפדפן (הראשונה ב-x-forwarded-for). ה-Worker סומך עליה רק עם הסוד המשותף BRIDGE_KEY
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  const bridgeKey = Deno.env.get("BRIDGE_KEY") || "";
+  if (ip && bridgeKey) { headers.set("x-client-ip", ip); headers.set("x-bridge-key", bridgeKey); }
   const range = req.headers.get("range");
   if (range) headers.set("range", range);
   let body: Uint8Array | undefined;

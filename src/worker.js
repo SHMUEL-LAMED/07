@@ -494,7 +494,11 @@ async function runScheduled(env) {
       }
       if (j.type === "post") { // הודעה מתוזמנת שמנהל קבע דרך העוזר
         await postVoice(env, j.important ? [IMPORTANT, ALL] : [ALL], j.text);
-        used = 0; await notify(env, j.important ? "important" : "regular").catch(() => {}); await processFlags(env).catch(() => {});
+        // postVoice כבר העלה גם לכל ההודעות, ולכן בחשובה לא קוראים ל-notify("important") (הוא היה מעתיק אותה לשם שוב)
+        used = 0;
+        if (j.important) { await tzintuk(env, "members").catch(() => {}); await addFlags(env, await membersFor(env, "members"), "NImportant").catch(() => {}); }
+        else await notify(env, "regular").catch(() => {});
+        await processFlags(env).catch(() => {});
         await log(env, `יצאה ההודעה המתוזמנת (${j.important ? "חשובה" : "רגילה"}): ${j.text}`);
       }
       if (j.type === "remind") { // תזכורת אישית: מחכה בתיבה האישית של החבר
@@ -522,8 +526,9 @@ async function runScheduled(env) {
   if (again.length) {
     const all = await kvGet(env, "scheduled", []);
     for (const j of again) {
-      const next = new Date(j.at.replace(" ", "T") + ":00Z"); next.setUTCDate(next.getUTCDate() + (j.every === "week" ? 7 : 1));
-      const at = next.toISOString().slice(0, 16).replace("T", " ");
+      const next = new Date(j.at.replace(" ", "T") + ":00Z"), step = j.every === "week" ? 7 : 1, nowAt = nowIL().slice(0, 16);
+      let at;
+      do { next.setUTCDate(next.getUTCDate() + step); at = next.toISOString().slice(0, 16).replace("T", " "); } while (at <= nowAt);
       if (!j.until || at <= j.until) all.push({ ...j, id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at, done: undefined });
     }
     await env.KV.put("scheduled", JSON.stringify(all));
