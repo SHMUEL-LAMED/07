@@ -91,7 +91,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
   }
   if (sub === "logout") return redirect("/admin", { "Set-Cookie": setCookie("") });
-  const m = /^Bearer\\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
+  const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
   const queryToken = sub === "api" && parts[1] === "audio" ? String(u.searchParams.get("token") || "") : "";
   const token = cookie(req, COOKIE) || (m && m[1]) || queryToken;
   const authed = await validToken(env, token);
