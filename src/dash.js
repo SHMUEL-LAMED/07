@@ -59,7 +59,10 @@ async function fails(env, ip) { try { return (await env.KV.get(failKey(ip), "jso
 export async function adminApp(req, env, ctx, u, parts, D) {
   const sub = parts[0] || "";
   if (!env.ADMIN_PASS) return html(setupPage, 503);
-  const ip = req.headers.get("CF-Connecting-IP") || "?";
+  // דרך הגשר ב-Supabase כל הבקשות מגיעות מאותה כתובת. אם הוגדר הסוד BRIDGE_KEY (גם כאן וגם בגשר),
+  // מגבלת ניסיונות הכניסה נספרת לפי הכתובת האמיתית של הדפדפן שהגשר מעביר
+  const viaBridge = !!env.BRIDGE_KEY && same(req.headers.get("x-bridge-key") || "", env.BRIDGE_KEY);
+  const ip = viaBridge ? "b:" + String(req.headers.get("x-client-ip") || "?").slice(0, 64) : req.headers.get("CF-Connecting-IP") || "?";
   // GitHub Pages frontend: exact-origin CORS + short-lived signed session token.
   if (sub === "api" && req.method === "OPTIONS") {
     if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
@@ -128,7 +131,7 @@ async function callLog(env, D, months = 1, keys = null) {
     const [dd, mm, yy] = d.EnterDate.split("/"), day = `${yy}-${mm}-${dd}`, t = `${day} ${d.EnterTime || ""}`;
     if (!last[d.Phone] || last[d.Phone] < t) last[d.Phone] = t;
     if (d.Folder === "1/1") imp11.push({ p: d.Phone, t });
-    ents.push({ p: d.Phone, t, f: d.Folder || "", x: d.ExitTime || "" });
+    ents.push({ p: d.Phone, t, f: d.Folder || "", x: d.ExitTime || "", id: d.CallId || t + d.Phone });
     const id = d.CallId || t + d.Phone;
     let c = calls.get(id);
     if (!c) { c = { p: d.Phone, day, h: +(d.EnterTime || "0").slice(0, 2) || 0, folders: new Set() }; calls.set(id, c); }
@@ -407,24 +410,23 @@ function aiCheck(x, D, nm) { // מחזיר פעולה נקייה, או null אם
   }
   return null;
 }
+const POST_ONLY = new Set(["share", "transcript", "pm_delete", "tts", "send_pm", "tz_phones", "members_import", "lists", "codes", "batch", "upload", "restore", "purge", "zip", "schedule2", "deferred", "event", "restore_backup", "ai"]);
 async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, now) {
   const q = k => String(u.searchParams.get(k) || "");
+  if (POST_ONLY.has(name) && req.method !== "POST") return json({ error: "שיטה לא מורשית" }, 405);
   const ok = (extra = {}) => json({ ok: true, ...extra });
   switch (name) {
     case "ai": {
       const ask = String(body.q || "").trim().slice(0, 1500); if (!ask) return json({ error: "מה לעשות?" }, 400);
       const hist = (Array.isArray(body.history) ? body.history : []).slice(-8).map(h => ({ role: h.role === "model" ? "model" : "user", parts: [{ text: String(h.text || "").slice(0, 1500) }] }));
-      const [counts, joins, jobs, ev, rsvp, rules, online, holy, ar, logR, watch, blocked, undo] = await Promise.all([
-        Promise.all(D.PENDING_ORDER.map(k => D.pendingFiles(env, D.REVIEW[k].folder).then(f => f.length).catch(() => 0))), D.pendingFiles(env, D.REVIEW.join.folder).then(f => f.length).catch(() => 0),
-        D.kvGet(env, "scheduled", []), D.curEvent(env), D.rsvpLoad(env).catch(() => ({})), D.kvGet(env, "rules", []), D.onlineNow(env).then(x => x.calls).catch(() => []), D.isHoly(env).catch(() => false),
-        D.kvGet(env, "archive", {}), D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "watch", {}), D.kvGet(env, "blocked", []), D.kvGet(env, "undo", [])]);
+      // הממתינות, האירוע, המושתקים והתזמונים מגיעים מ-adminText (אותו מידע שהעוזר בקו מקבל, עם מטמון), כדי לא לפנות לימות פעמיים
+      const [jobs, rules, online, holy, ar, logR, blocked] = await Promise.all([
+        D.kvGet(env, "scheduled", []), D.kvGet(env, "rules", []), D.onlineNow(env).then(x => x.calls).catch(() => []), D.isHoly(env).catch(() => false),
+        D.kvGet(env, "archive", {}), D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "blocked", [])]);
       const recent = Object.entries(ar).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).slice(0, 25).map(([k, a]) => ({ id: k.replace(".wav", ""), d: a.d, n: a.n || nm[a.p] || "", t: String(a.t || "").slice(0, 220) }));
       const ctxData = { now: D.nowIL(), holy, members: Object.entries(nm).map(([p, n]) => ({ n, p })), online: online.map(c => ({ n: nm[c.p] || "", p: c.p, w: c.w })),
-        pending: D.PENDING_ORDER.map((k, i) => ({ list: D.REVIEW[k].name, n: counts[i] })), joins,
         scheduled: jobs.filter(j => !j.done).map(j => ({ id: j.id, at: j.at, type: j.type, text: String(j.text || "").slice(0, 120), phone: j.phone || "", every: j.every || "" })),
-        event: { title: ev.title, desc: ev.desc, registered: Object.values(rsvp).map(x => x.n), notRegistered: Object.keys(nm).filter(p => !rsvp[p]).map(p => nm[p]) },
-        rules: rules.map((r, i) => ({ n: i + 1, r })), muted: Object.entries(watch).filter(([, w]) => w && w.hold && (!w.until || w.until > now)).map(([p]) => nm[p] || p), blocked,
-        lastUndo: undo.length ? undo[undo.length - 1].desc : "", recentMessages: recent,
+        rules: rules.map((r, i) => ({ n: i + 1, r })), blocked: blocked.map(p => nm[p] || p), recentMessages: recent,
         recentLog: ((logR && logR.contents) || "").split("\n").filter(Boolean).slice(0, 25) };
       // אותו ידע שיש לעוזר בקו: ההודעות והתמלולים הרלוונטיים לשאלה, והמידע שהעוזר מקבל כשמנהל מתקשר
       const line = await D.loadLine(env).catch(() => null);
@@ -439,6 +441,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     }
     case "whoami": return json({ ro: !!auth.ro, exp: auth.exp || 0, owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
     case "share": { // קישור לצפייה בלבד (7 ימים כברירת מחדל): מותר לראות הכול, אסור לבצע שום פעולה
+      if (auth.ro || req.method !== "POST") return json({ error: "רק מנהל מחובר יכול ליצור קישור" }, 403);
       const days = Math.max(1, Math.min(90, +body.days || 7)), token = await newToken(env, true, days);
       await D.log(env, `מנהל ${who(admin)} יצר מ${VIA} קישור לצפייה בלבד ל-${days} ימים`);
       return json({ token, days });
@@ -479,7 +482,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         muted: w && w.hold && (!w.until || w.until > now) ? (w.until ? D.ilAt(w.until).slice(0, 16) : "ללא הגבלה") : "", blocked: blocked.includes(p), retort: retort.includes(p), strict: strict.includes(p),
         rsvp: rsvp[p] || null, approved: approved[p] || null, ads: ads[p] || [], note: (notes.member || {})[p] || null,
         msgs: msgs.slice(0, 100), msgTotal: msgs.length, conv: conv.filter(c => c.p === p).slice(-60).reverse(), profile: profiles[p] || null, memory: mem, talk: ((facts || {}).talk || {})[p] || "",
-        calls, callsMonth: lg.per[p] || 0, last: lg.last[p] || "", pm: pmFiles(pmDir), pmOld: pmFiles(pmOld).slice(-20), now: D.nowIL(),
+        calls, callsMonth: new Set(lg.ents.filter(e => e.p === p && e.t.startsWith(D.nowIL().slice(0, 7))).map(e => e.id)).size, last: lg.last[p] || "", pm: pmFiles(pmDir), pmOld: pmFiles(pmOld).slice(-20), now: D.nowIL(),
       });
     }
     case "pm_delete": { // מחיקת הודעה מהתיבה האישית של חבר
@@ -529,7 +532,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       return csvResp(rows, `members-${D.nowIL().slice(0, 10)}.csv`);
     }
     case "members_import": { // שורות {p, n}: חדש – מצטרף (כמו הוספה ידנית), קיים עם שם אחר – שינוי שם
-      const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, 300).map(r => ({ p: String(r.p || "").replace(/\D/g, ""), n: String(r.n || "").trim().slice(0, 40) })).filter(r => isPhone(r.p) && r.n);
+      const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, 8).map(r => ({ p: String(r.p || "").replace(/\D/g, ""), n: String(r.n || "").trim().slice(0, 40) })).filter(r => isPhone(r.p) && r.n);
       if (!rows.length) return json({ error: "לא נמצאו שורות תקינות (מספר טלפון ושם)" }, 400);
       const people = await D.peopleList(env), res = { added: [], renamed: [], same: [], errors: [] };
       for (const r of rows) {
@@ -540,7 +543,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
           else res.same.push(r);
         } catch (e) { res.errors.push({ ...r, e: e.message }); }
       }
-      await D.log(env, `ייבוא חברים מ${VIA}: ${res.added.length} נוספו, ${res.renamed.length} שונה שמם, ${res.same.length} ללא שינוי (מנהל ${who(admin)})`);
+      await D.log(env, `ייבוא חברים מ${VIA}: ${res.added.length} נוספו, ${res.renamed.length} שונה שמם, ${res.same.length} ללא שינוי (מנהל ${who(admin)})`).catch(() => {});
       return ok(res);
     }
     case "lists": { // רשימות retort / strict (משפיעות על התנהגות העוזר כלפי אותו חבר)
@@ -574,9 +577,10 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
 
     // ---------- הודעות ----------
     case "batch": {
-      const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(x => String(x).replace(/\D/g, "")).filter(Boolean))].slice(0, 100), op = String(body.op || "");
+      // כל פעולה עולה כ-8 פניות לימות, ולבקשה אחת מותרות 50 – לכן עד 5 בכל בקשה (הדף שולח במנות)
+      const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(x => String(x).replace(/\D/g, "")).filter(Boolean))], op = String(body.op || "");
       if (!ids.length || !["delete", "important", "regular"].includes(op)) return json({ error: "בקשה לא תקינה" }, 400);
-      if (op === "important" && ids.length > 5) return json({ error: "העברה לחשובות שולחת צינתוק לכולם – עד 5 הודעות בבת אחת" }, 400);
+      if (ids.length > 5) return json({ error: "עד 5 הודעות בכל בקשה" }, 400);
       const results = [];
       for (const id of ids) { try { results.push({ id, r: await D.doAdmin(env, op === "delete" ? { type: "delete", id } : { type: "move", id, to: op }, admin, VIA) }); } catch (e) { results.push({ id, error: e.message }); } }
       return ok({ results });
@@ -589,13 +593,15 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       if (kind === "regular" || kind === "important") {
         const num = String(await D.nextFileNum(env, D.ALL)).padStart(3, "0"); await D.ymUpload(env, `${D.ALL}/${num}.wav`, bytes);
         const ops = [{ mv: [`${D.ALL}/${num}.wav`, `/DeletedByAdmin/up-${num}.wav`] }];
-        if (kind === "important") { const n2 = String(await D.nextFileNum(env, D.IMPORTANT)).padStart(3, "0"); await D.ymUpload(env, `${D.IMPORTANT}/${n2}.wav`, bytes); ops.push({ mv: [`${D.IMPORTANT}/${n2}.wav`, `/DeletedByAdmin/upi-${n2}.wav`] }); }
         const from = String(body.phone || "").replace(/\D/g, ""), ar = await D.kvGet(env, "archive", {});
         ar[num + ".wav"] = { p: isPhone(from) ? from : "", n: nm[from] || "", d: D.nowIL().replace(/^(\d{4})-(\d{2})-(\d{2}) /, "$3/$2/$1 "), t: note, s: note ? "g" : "a", up: true }; await env.KV.put("archive", JSON.stringify(ar));
         await D.pushUndo(env, `העלאת הודעה ${num} מהדפדפן`, ops);
-        ctx.waitUntil(D.notify(env, kind === "important" ? "important" : "regular").then(() => D.processFlags(env)).catch(() => {}));
-        await D.log(env, `מנהל ${who(admin)} העלה מ${VIA} הקלטה כהודעה ${kind === "important" ? "חשובה (עם צינתוק)" : "רגילה"} מספר ${num}`);
-        return ok({ id: num });
+        // חשובה: אותו מסלול כמו "העברה לחשובות" (העתקה לחשובות, צינתוק לכולם, undo). רגילה: צינתוק לרשימת הרגילות
+        let msg = "";
+        if (kind === "important") msg = await D.doAdmin(env, { type: "move", id: num, to: "important" }, admin, VIA);
+        else ctx.waitUntil(D.notify(env, "regular").then(() => D.processFlags(env)).catch(() => {}));
+        await D.log(env, `מנהל ${who(admin)} העלה מ${VIA} הקלטה כהודעה ${kind === "important" ? "חשובה" : "רגילה"} מספר ${num}`);
+        return ok({ id: num, msg });
       }
       if (kind === "entry") {
         const bk = `/OldEntry/${Date.now().toString(36)}.wav`;
@@ -630,9 +636,9 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     }
     case "purge": {
       const names = body.all ? ((await D.ym(env, "GetIVR2Dir", { path: "ivr2:/DeletedByAdmin" }).catch(() => ({}))).files || []).map(f => f.name).filter(n => /\.wav$/.test(n)) : [String(body.name || "")].filter(n => /^[\w-]+\.wav$/.test(n));
-      let n = 0; for (const f of names.slice(0, 300)) { await D.ym(env, "FileAction", { action: "delete", what: "ivr2:/DeletedByAdmin/" + f }).then(r => { if (r && r.responseStatus === "OK") n++; }).catch(() => {}); }
-      await D.log(env, `מנהל ${who(admin)} מחק לצמיתות מ${VIA} ${n} הקלטות מסל המחזור`);
-      return ok({ n });
+      let n = 0; for (const f of names.slice(0, 40)) { await D.ym(env, "FileAction", { action: "delete", what: "ivr2:/DeletedByAdmin/" + f }).then(r => { if (r && r.responseStatus === "OK") n++; }).catch(() => {}); }
+      await D.log(env, `מנהל ${who(admin)} מחק לצמיתות מ${VIA} ${n} הקלטות מסל המחזור`).catch(() => {});
+      return ok({ n, left: Math.max(0, names.length - 40) });
     }
     case "download": {
       const p = q("p"); if (!audioPathOk(D, p)) return json({ error: "נתיב לא מורשה" }, 400);
@@ -640,7 +646,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       return fileResp(bytes, p.slice(1).replace(/\//g, "_"), "audio/wav");
     }
     case "zip": { // עד 60 הקלטות בקובץ אחד (בלי דחיסה)
-      const paths = [...new Set((Array.isArray(body.paths) ? body.paths : []).map(String).filter(p => audioPathOk(D, p)))].slice(0, 60);
+      const paths = [...new Set((Array.isArray(body.paths) ? body.paths : []).map(String).filter(p => audioPathOk(D, p)))].slice(0, 40);
       if (!paths.length) return json({ error: "לא נבחרו הקלטות" }, 400);
       const files = [];
       for (const p of paths) { try { const b = await D.ym(env, "DownloadFile", { path: "ivr2:" + p }); if (b && b.length > 100 && b[0] !== 0x7b) files.push({ name: p.slice(1).replace(/\//g, "_"), bytes: b }); } catch {} }
@@ -736,8 +742,8 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       return json({ now: D.nowIL(), online: online.map(c => ({ ...c, n: nm[c.p] || "" })), pending: counts.reduce((a, b) => a + b, 0), joins, lastMsg: Math.max(0, last - 1) });
     }
     case "calls": { // ציר זמן של שיחות ביום מסוים
-      const day = /^\d{4}-\d{2}-\d{2}$/.test(q("day")) ? q("day") : D.nowIL().slice(0, 10), cur = D.nowIL().slice(0, 7);
-      const months = day.slice(0, 7) === cur ? 1 : 2, lg = await callLog(env, D, months).catch(() => ({ ents: [] }));
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(q("day")) ? q("day") : D.nowIL().slice(0, 10);
+      const lg = await callLog(env, D, 1, [day.slice(0, 7)]).catch(() => ({ ents: [] }));
       const ents = lg.ents.filter(e => e.t.startsWith(day)).sort((a, b) => (a.t < b.t ? -1 : 1)).map(e => ({ p: e.p, n: nm[e.p] || "", t: e.t.slice(11, 16), x: e.x.slice(0, 5), f: e.f, l: speakerFolder(D, e.f) }));
       return json({ day, ents, callers: new Set(ents.map(e => e.p)).size });
     }
@@ -765,14 +771,15 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     }
     case "health": {
       if (req.method === "POST") {
-        if (body.op === "clearbg") { const n = (await D.kvGet(env, "bgjobs", [])).length; await env.KV.put("bgjobs", "[]"); await D.log(env, `מנהל ${who(admin)} ניקה מ${VIA} את תור משימות הרקע (${n})`); return ok({ n }); }
-        if (body.op === "dropbg") { const qq = await D.kvGet(env, "bgjobs", []), i = +body.i; if (!(i >= 0 && i < qq.length)) return json({ error: "לא נמצא" }, 404); qq.splice(i, 1); await env.KV.put("bgjobs", JSON.stringify(qq)); return ok({ n: qq.length }); }
+        if (await env.KV.get("bglock")) return json({ error: "המשימות רצות ממש עכשיו. נסו שוב בעוד דקה" }, 409);
+        if (body.op === "clearbg") { const n = (await D.kvGet(env, "bgjobs", [])).length; await env.KV.put("bgjobs", "[]"); await D.log(env, `מנהל ${who(admin)} ניקה מ${VIA} את תור משימות הרקע (${n})`).catch(() => {}); return ok({ n }); }
+        if (body.op === "dropbg") { const qq = await D.kvGet(env, "bgjobs", []), i = qq.findIndex(s => JSON.stringify(s) === String(body.f || "")); if (i < 0) return json({ error: "המשימה כבר לא בתור" }, 404); qq.splice(i, 1); await env.KV.put("bgjobs", JSON.stringify(qq)); return ok({ n: qq.length }); }
         return json({ error: "פעולה לא מוכרת" }, 400);
       }
       const [logR, bg, pc, aai, cron, weekly, deferred, errCount, retortq, holy, sample, jobs] = await Promise.all([D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "bgjobs", []), D.kvGet(env, "postcheck", {}), D.kvGet(env, "aai_pending", []),
         env.KV.get("cronlock"), env.KV.get("weeklyDone"), D.kvGet(env, "deferred_tz", []), D.pendingFiles(env, D.REVIEW.error.folder).then(f => f.length).catch(() => 0), D.kvGet(env, "retortq", []), D.isHoly(env).catch(() => null), env.KV.get("incall_sample"), D.kvGet(env, "scheduled", [])]);
       const lines = ((logR && logR.contents) || "").split("\n").filter(l => /שגיאה|error|נכשל|לא הצליח|תקלה/i.test(l)).slice(0, 80).map(l => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(l); return m ? { t: m[1], m: m[2] } : { t: "", m: l }; });
-      const bgs = bg.map((s, i) => ({ i, k: s.k, what: s.k === "tts" ? `${s.path}/${s.name}: ${String(s.text || "").slice(0, 60)}` : s.k === "bc" ? "הודעה אישית ל" + who(s.p) : s.k === "ini" ? "ini " + s.path : s.k === "fa" ? `${s.action} ${s.what}` : s.k === "log" ? String(s.line || "").slice(0, 60) : s.k, tries: s.tries || 0 }));
+      const bgs = bg.map((s, i) => ({ i, f: JSON.stringify(s), k: s.k, what: s.k === "tts" ? `${s.path}/${s.name}: ${String(s.text || "").slice(0, 60)}` : s.k === "bc" ? "הודעה אישית ל" + who(s.p) : s.k === "ini" ? "ini " + s.path : s.k === "fa" ? `${s.action} ${s.what}` : s.k === "log" ? String(s.line || "").slice(0, 60) : s.k, tries: s.tries || 0 }));
       const lastJob = jobs.map(j => String(j.done || "")).filter(Boolean).sort().pop() || "";
       return json({ now: D.nowIL(), lastJob, errors: lines, bg: bgs, postcheck: Object.keys(pc).length, aai: Array.isArray(aai) ? aai.length : Object.keys(aai || {}).length, lastCron: cron ? D.ilAt(+cron) : "", cronAgo: cron ? Math.round((now - +cron) / 1000) : null, weeklyDone: weekly || "", deferred: deferred.length, pendingError: errCount, retortq: retortq.length, holy, hasSample: !!sample, testMode: env.TEST_MODE === "1" });
     }

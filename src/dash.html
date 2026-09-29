@@ -182,7 +182,7 @@ body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color
 @media(max-width:600px){.hsearch{order:9;flex:1 1 100%}.aifab{bottom:14px;left:14px;width:50px;height:50px}.aip{left:8px;right:8px;width:auto;bottom:74px}.mon{padding:14px;font-size:16px}.mon .big{font-size:48px}}
 @media print{.aifab,.aip,.batch,.hsearch{display:none!important}}
 
-body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]),body.ro .aifab{display:none!important}
+body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]):not([data-xf=m-note]):not([data-xf=m-ads]),body.ro [data-xf=m-note] button,body.ro [data-xf=m-ads] button,body.ro .aifab{display:none!important}body.ro [data-xf=m-note] textarea,body.ro [data-xf=m-ads] textarea{pointer-events:none}
 </style>
 </head>
 <body>
@@ -325,8 +325,8 @@ async function show(tab, force) {
   const main = $("#main");
   if (state.data[tab] && !force) { render(tab); }
   main.classList.add("busy");
-  try { state.data[tab] = await LOAD[tab](); if (state.data[tab].names) state.names = state.data[tab].names; render(tab); }
-  catch (e) { if (!state.data[tab]) main.innerHTML = `<div class="card"><h2>שגיאה</h2><div class="err">${esc(e.message)}</div><div class="mut small">אפשר לנסות שוב עם כפתור הרענון למעלה</div></div>`; else toast(e.message, true); }
+  try { state.data[tab] = await LOAD[tab](); if (state.data[tab].names) state.names = state.data[tab].names; if (state.tab === tab) render(tab); }
+  catch (e) { if (state.tab !== tab) {} else if (!state.data[tab]) main.innerHTML = `<div class="card"><h2>שגיאה</h2><div class="err">${esc(e.message)}</div><div class="mut small">אפשר לנסות שוב עם כפתור הרענון למעלה</div></div>`; else toast(e.message, true); }
   main.classList.remove("busy");
 }
 function render(tab) { const d = state.data[tab]; if (!d) return; $("#main").innerHTML = RENDER[tab](d); if (tab === "home") { badges(d); } }
@@ -693,7 +693,7 @@ async function doUpload(wrap) {
   const msg = { regular: "להעלות את ההקלטה כהודעה רגילה בקו?", important: "להעלות כהודעה חשובה ולשלוח צינתוק לכל החברים?", entry: "להחליף את ההודעה בכניסה לקו בהקלטה הזו?", pm: `להניח את ההקלטה בתיבה האישית של ${nm(phoneV)}?` }[kind];
   if (kind === "important" ? !confirm2(msg) : !confirm(msg)) return;
   const r = await api("upload", { kind, data: b64(wrap._wav), phone: phoneV, text: ((wrap.querySelector("[name=text]") || {}).value || "").trim() });
-  toast(kind === "regular" || kind === "important" ? `ההקלטה עלתה כהודעה ${r.id}` : kind === "entry" ? "ההודעה בכניסה הוחלפה" : "ההקלטה הונחה בתיבה האישית");
+  toast(kind === "important" ? `ההקלטה עלתה כהודעה ${r.id}. ${r.msg || ""}` : kind === "regular" ? `ההקלטה עלתה כהודעה ${r.id}` : kind === "entry" ? "ההודעה בכניסה הוחלפה" : "ההקלטה הונחה בתיבה האישית");
   wrap._wav = null; wrap.querySelector(".rpv").innerHTML = "";
 }
 
@@ -794,7 +794,7 @@ RENDER.system = d => {
     <div class="card w-only"><h2>🔗 קישור לצפייה בלבד</h2><div class="mut small">למנהל נוסף שרק צריך לראות: הכול גלוי, אבל אי אפשר לבצע שום פעולה. הקישור פג אחרי מספר הימים שנבחר, או כשמשנים את ADMIN_PASS.</div>
       <form class="row" data-xf="share" style="margin-top:8px"><select name="days"><option value="1">יום</option><option value="7" selected>שבוע</option><option value="30">חודש</option></select><button class="btn s">יצירת קישור</button></form><div id="shareout"></div></div>
   </div>
-  <div class="cols two"><div class="card"><h2>⚙️ תור משימות רקע <small>${h.bg.length}</small>${h.bg.length ? '<button class="btn s d right w-only" data-x="bgclear">ניקוי התור</button>' : ""}</h2>${h.bg.length ? `<ul class="list">${h.bg.slice(0, 50).map(s => `<li><span class="pill">${esc(s.k)}</span><span class="grow small">${esc(s.what)}</span>${s.tries ? `<span class="pill warn">ניסיון ${s.tries}</span>` : ""}<button class="btn s d w-only" data-x="bgdrop" data-i="${s.i}">✕</button></li>`).join("")}</ul>` : empty("התור ריק")}
+  <div class="cols two"><div class="card"><h2>⚙️ תור משימות רקע <small>${h.bg.length}</small>${h.bg.length ? '<button class="btn s d right w-only" data-x="bgclear">ניקוי התור</button>' : ""}</h2>${h.bg.length ? `<ul class="list">${h.bg.slice(0, 50).map(s => `<li><span class="pill">${esc(s.k)}</span><span class="grow small">${esc(s.what)}</span>${s.tries ? `<span class="pill warn">ניסיון ${s.tries}</span>` : ""}<button class="btn s d w-only" data-x="bgdrop" data-f="${esc(s.f)}">✕</button></li>`).join("")}</ul>` : empty("התור ריק")}
     <div class="mut small" style="margin-top:6px">בדיקות מאוחרות: ${h.postcheck} · תמלולים בהמתנה: ${h.aai} · תגובות בתור: ${h.retortq} · סיכום שבועי אחרון: ${esc(h.weeklyDone || "—")}</div></div>
     <div class="card"><h2>🧯 שגיאות אחרונות ביומן <small>${h.errors.length}</small></h2>${h.errors.length ? `<ul class="list log">${h.errors.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("")}</ul>` : empty("אין שגיאות 👍")}</div></div>
   <div class="card"><h2>📢 פרסומות אישיות <small>${d.ads.ads.length} חברים</small></h2>${d.ads.ads.length ? `<ul class="list">${d.ads.ads.map(a => `<li><button class="btn s" data-x="card" data-p="${esc(a.p)}">${esc(a.n)}</button><span class="grow small">${a.list.map(esc).join(" · ")}</span></li>`).join("")}</ul>` : empty("אין")}<div class="mut small">עריכה מתוך כרטיס החבר.</div></div>
@@ -824,10 +824,12 @@ const X = {
   batch: async d => {
     const ids = [...state.sel], n = ids.length, msg = { delete: `למחוק ${n} הודעות מהקו? (אפשר לשחזר מסל המחזור)`, important: `להעביר ${n} הודעות לחשובות ולשלוח צינתוק לכולם?`, regular: `להוציא ${n} הודעות מהחשובות?` }[d.op];
     if (d.op === "regular" ? !confirm(msg) : !confirm2(msg)) return;
-    const r = await api("batch", { ids, op: d.op }), bad = r.results.filter(x => x.error);
-    toast(`בוצע על ${r.results.length - bad.length} הודעות${bad.length ? `, ${bad.length} נכשלו` : ""}`, !!bad.length); state.sel.clear(); await after("msgs");
+    const results = [];
+    for (let i = 0; i < ids.length; i += 5) { toast(`מבצע… ${Math.min(i + 5, ids.length)} מתוך ${ids.length}`); results.push(...(await api("batch", { ids: ids.slice(i, i + 5), op: d.op })).results); }
+    const bad = results.filter(x => x.error || /לא מצאתי|לא נמצאת|כבר נמצאת/.test(x.r || ""));
+    toast(`בוצע על ${results.length - bad.length} הודעות${bad.length ? `, ${bad.length} לא בוצעו` : ""}`, !!bad.length); state.sel.clear(); await after("msgs");
   },
-  zipsel: () => apiFile("zip", { paths: [...state.sel].map(id => "/1/2/" + id + ".wav") }, "messages.zip"),
+  zipsel: () => { if (state.sel.size > 40) toast("אפשר להוריד עד 40 הקלטות בקובץ אחד – יורדות 40 הראשונות", true); return apiFile("zip", { paths: [...state.sel].slice(0, 40).map(id => "/1/2/" + id + ".wav") }, "messages.zip"); },
   note: async d => {
     const cur = (state.notes[d.kind] || {})[d.key], t = prompt("הערת מנהל (ריק = מחיקה)", cur ? cur.t : ""); if (t === null) return;
     const r = await api("notes", { kind: d.kind, key: d.key, text: t }); state.notes = r.notes; render(state.tab); toast(t.trim() ? "ההערה נשמרה" : "ההערה נמחקה");
@@ -837,7 +839,12 @@ const X = {
     await api("transcript", { id: d.id, text: t }); if (m) m.t = t.trim(); render(state.tab); toast("התמלול עודכן");
   },
   restore: async d => { if (!confirm(`לשחזר את ${d.name} ל${d.to === "important" ? "חשובות" : "רגילות"}?`)) return; const r = await api("restore", { name: d.name, to: d.to }); toast("שוחזר כהודעה " + r.id); await after("trash"); },
-  purge: async d => { if (d.all ? !confirm2("למחוק לצמיתות את כל ההקלטות בסל המחזור? אי אפשר לבטל") : !confirm(`למחוק לצמיתות את ${d.name}?`)) return; const r = await api("purge", d.all ? { all: true } : { name: d.name }); toast(`נמחקו ${r.n} הקלטות`); await after("trash"); },
+  purge: async d => {
+    if (d.all ? !confirm2("למחוק לצמיתות את כל ההקלטות בסל המחזור? אי אפשר לבטל") : !confirm(`למחוק לצמיתות את ${d.name}?`)) return;
+    let n = 0, r;
+    for (let k = 0; k < 30; k++) { r = await api("purge", d.all ? { all: true } : { name: d.name }); n += r.n; if (!d.all || !r.left || !r.n) break; toast(`נמחקו ${n}, ממשיך…`); }
+    toast(`נמחקו ${n} הקלטות`); await after("trash");
+  },
   // כרטיס חבר
   "m-act": async d => { const a = JSON.parse(d.a); if (!confirm(describe(a))) return; toast((await api("act", { a })).r); openMember(a.phone); },
   "m-rename": async d => { const name = prompt("שם חדש", d.name); if (!name || name.trim() === d.name) return; toast((await api("act", { a: { type: "rename", phone: d.p, name: name.trim() } })).r); openMember(d.p); },
@@ -861,7 +868,7 @@ const X = {
   "weekly-dry": async (d, b) => { b.textContent = "יוצר טיוטה… (עד דקה)"; const r = await api("weekly", { op: "dry" }); toast(r.skipped || "הטיוטה מוכנה"); await after("studio"); },
   // מערכת
   bgclear: async () => { if (!confirm2("לנקות את כל משימות הרקע? (הקלטות שעוד לא נוצרו לא ייווצרו)")) return; const r = await api("health", { op: "clearbg" }); toast(`נוקו ${r.n} משימות`); await after("system"); },
-  bgdrop: async d => { await api("health", { op: "dropbg", i: +d.i }); await after("system"); },
+  bgdrop: async d => { await api("health", { op: "dropbg", f: d.f }); await after("system"); },
   copy: async d => { try { await navigator.clipboard.writeText(d.v); toast("הועתק"); } catch { prompt("העתיקו:", d.v); } },
   ai: () => aiToggle(),
   aisug: d => aiSend(d.q),
@@ -949,7 +956,11 @@ async function importMembers(file) {
   $("#imp-go").onclick = async () => {
     if (!confirm2(`לייבא? ${rows.filter(isNew).length} חברים חדשים יצטרפו לקבוצה`)) return;
     $("#imp-go").disabled = true;
-    try { const r = await api("members_import", { rows, rename: $("#imp-rename").checked }); toast(`נוספו ${r.added.length}, שונו ${r.renamed.length}${r.errors.length ? `, ${r.errors.length} שגיאות` : ""}`, !!r.errors.length); box.hidden = true; await after("members"); }
+    try {
+      const tot = { added: 0, renamed: 0, errors: 0 };
+      for (let i = 0; i < rows.length; i += 8) { toast(`מייבא… ${Math.min(i + 8, rows.length)} מתוך ${rows.length}`); const r = await api("members_import", { rows: rows.slice(i, i + 8), rename: $("#imp-rename").checked }); tot.added += r.added.length; tot.renamed += r.renamed.length; tot.errors += r.errors.length; }
+      toast(`נוספו ${tot.added}, שונו ${tot.renamed}${tot.errors ? `, ${tot.errors} שגיאות` : ""}`, !!tot.errors); box.hidden = true; await after("members");
+    }
     catch (err) { toast(err.message, true); $("#imp-go").disabled = false; }
   };
 }
@@ -958,7 +969,7 @@ async function restoreBackup(file) {
   const keys = data._meta.keys.filter(k => k in data), label = { people: "רשימת החברים", names_over: "השמות", rules: "כללי העוזר", scheduled: "תזמונים", blocked: "חסומים", watch: "השתקות", retort: "רשימת תגובה עוקצנית", strict: "רשימת פיקוח מוגבר", ads: "פרסומות", event: "האירוע", approved: "אישורי הצטרפות", archive: "ארכיון התמלולים", facts: "עובדות", profiles: "פרופילים", dashnotes: "הערות מנהל", joinmap: "בקשות הצטרפות", demap: "מיפוי הודעות" };
   const box = $("#mm"); box.hidden = false;
   box.querySelector(".box").innerHTML = `<div class="mh"><h2>שחזור מגיבוי</h2><span class="mut">מ-${esc(data._meta.at)}</span><button class="btn s xbtn" data-x="close">✕</button></div>
-    <div class="card"><div class="mut small">מה לשחזר? הערכים הנוכחיים יוחלפו בערכים מהגיבוי.</div><div class="picker" style="margin-top:8px">${keys.map(k => `<label><input type="checkbox" name="rk" value="${k}"><span>${esc(label[k] || k)}</span></label>`).join("")}</div>
+    <div class="card"><div class="mut small">מה לשחזר? הערכים הנוכחיים יוחלפו בערכים מהגיבוי.</div><div class="picker" style="margin-top:8px">${keys.map(k => `<label><input type="checkbox" name="rk" value="${esc(k)}"><span>${esc(label[k] || k)}</span></label>`).join("")}</div>
     <div class="row" style="margin-top:8px"><button class="btn p d" id="rs-go">שחזור</button></div></div>`;
   $("#rs-go").onclick = async () => {
     const sel = [...box.querySelectorAll("[name=rk]:checked")].map(x => x.value); if (!sel.length) return toast("לא נבחר כלום", true);
