@@ -55,12 +55,17 @@ const server = http.createServer(async (req, res) => {
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
 
     const headers = new Headers();
-    for (const name of ["authorization", "content-type", "x-requested-with", "accept"]) {
-      const value = req.headers[name];
-      if (value) headers.set(name, Array.isArray(value) ? value.join(",") : value);
+    const token = incoming.searchParams.get("token") || "";
+    incoming.searchParams.delete("token");
+    if (token) headers.set("authorization", "Bearer " + token);
+    if (req.headers.accept) headers.set("accept", Array.isArray(req.headers.accept) ? req.headers.accept.join(",") : req.headers.accept);
+    if (req.method === "POST") {
+      headers.set("content-type", "application/json");
+      headers.set("x-requested-with", "dash");
     }
 
-    const upstream = await fetch(TARGET + incoming.pathname + incoming.search, {
+    const upstreamUrl = TARGET + incoming.pathname + (incoming.searchParams.toString() ? "?" + incoming.searchParams.toString() : "");
+    const upstream = await fetch(upstreamUrl, {
       method: req.method,
       headers,
       body: req.method === "GET" || req.method === "HEAD" ? undefined : body,
