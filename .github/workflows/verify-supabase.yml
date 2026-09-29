@@ -1,0 +1,21 @@
+name: Verify Supabase admin
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Supabase admin bridge
+        run: |
+          set -e
+          BASE="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree"
+          echo "ROOT"
+          curl -fsS -o /tmp/root.html -w "%{http_code}\n" "$BASE/"
+          grep -q "ניהול קו הקבוצה" /tmp/root.html
+          echo "SESSION"
+          curl -sS -o /tmp/session.json -w "%{http_code}\n" -X POST "$BASE/session"             --data '{"password":"__verify_wrong__"}'
+          cat /tmp/session.json
+          echo
