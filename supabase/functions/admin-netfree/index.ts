@@ -7,13 +7,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const TARGET = "https://yemot-ai.smwlyqswkwt232.workers.dev";
 const GH_ORIGIN = "https://shmuel-lamed.github.io";
 const FN = "/admin-netfree";
-const ROUTES = /^\/(session|overview|online|hangup|tzintuk|pending|review|audio|messages|act|members|block|schedule|unsched|assistant|stats|log)$/;
+// כל נתיבי ה-API של דף הניהול: מילה אחת באותיות קטנות (ה-Worker עצמו בודק הרשאה לכל נתיב)
+const ROUTES = /^\/[a-z][a-z0-9_]{1,30}$/;
 
 const cors = () => ({
   "access-control-allow-origin": GH_ORIGIN,
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type, range",
-  "access-control-expose-headers": "content-length, content-range, accept-ranges",
+  "access-control-expose-headers": "content-length, content-range, accept-ranges, content-disposition",
   "access-control-max-age": "86400",
   "vary": "Origin",
 });

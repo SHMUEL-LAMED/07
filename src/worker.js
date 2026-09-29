@@ -503,7 +503,30 @@ async function runScheduled(env) {
         if (pcm) await ymUpload(env, `${folder}/${fname}`, pcmToWav(pcm)); else { await ensureDir(env, folder, false); await ym(env, "UploadTextFile", { what: `ivr2:${folder}/${fname}`, contents: text }); }
         await log(env, `התזכורת של ${names(env)[j.phone] || j.phone} הושארה בתיבה האישית שלו: ${j.text}`);
       }
+      // תזמונים שנקבעים מדף הניהול (src/dash.js): צינתוק, החלפת ההודעה בכניסה, והודעה אישית לחברים נבחרים
+      if (j.type === "tz") {
+        const r = await tzintuk(env, j.list || "members");
+        await log(env, `יצא צינתוק מתוזמן לרשימת ${j.list || "members"}${r && r.deferred ? " (נדחה למוצאי שבת/חג)" : ""}`);
+      }
+      if (j.type === "entry") await doAdmin(env, { type: "entry", text: j.text }, j.by || OWNER, "תזמון מדף הניהול");
+      if (j.type === "pm") {
+        const phones = (j.phones || []).filter(p => /^0\d{8,9}$/.test(p)), pcm = phones.length ? await ttsLong(env, j.text) : null;
+        if (!pcm) throw new Error("הקול של העוזר לא זמין, ההודעה האישית המתוזמנת לא יצאה");
+        const bid = "s" + Date.now().toString(36); await env.KV.put("bc:" + bid, to8k(pcmTrim(pcm)).buffer, { expirationTtl: 3 * 86400 });
+        await bgAdd(env, [...phones.map(p => ({ k: "bc", id: bid, p })), { k: "log", line: `ההודעה האישית המתוזמנת הושארה אצל ${phones.length} חברים: ${j.text}` }]);
+      }
     } catch (e) { await log(env, "שגיאה בהודעה מתוזמנת: " + e.message); }
+  }
+  // משימה חוזרת (every = day / week, אופציונלית until): נקבעת שוב לפעם הבאה
+  const again = due.filter(j => j.every === "day" || j.every === "week");
+  if (again.length) {
+    const all = await kvGet(env, "scheduled", []);
+    for (const j of again) {
+      const next = new Date(j.at.replace(" ", "T") + ":00Z"); next.setUTCDate(next.getUTCDate() + (j.every === "week" ? 7 : 1));
+      const at = next.toISOString().slice(0, 16).replace("T", " ");
+      if (!j.until || at <= j.until) all.push({ ...j, id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at, done: undefined });
+    }
+    await env.KV.put("scheduled", JSON.stringify(all));
   }
 }
 
@@ -2331,7 +2354,9 @@ async function rsvpCount(env, ctx) {
 }
 const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 // מה שדף הניהול (src/dash.js) צריך מהקוד הזה
-const DASH = { ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE };
+const DASH = { ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
+  // לניהול המתקדם בדף הניהול (ספטמבר 2026): העלאות, קול, תזמונים, גיבוי, אירוע
+  ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, event9Menu, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText };
 export default {
   async scheduled(event, env, ctx) { NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
   async fetch(req, env, ctx) {
