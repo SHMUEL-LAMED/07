@@ -1,0 +1,21 @@
+name: Verify Render admin
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Render
+        run: |
+          set -e
+          BASE="https://zero7-admin-netfree.onrender.com"
+          echo "ROOT"
+          curl -fsS -o /tmp/root.html -w "%{http_code}\n" "$BASE/"
+          grep -q "ניהול קו הקבוצה" /tmp/root.html
+          echo "SESSION"
+          curl -sS -o /tmp/session.json -w "%{http_code}\n" -X POST "$BASE/admin/api/session"             -H 'Origin: https://zero7-admin-netfree.onrender.com'             --data '{"password":"__verify_wrong__"}'
+          cat /tmp/session.json
+          echo
