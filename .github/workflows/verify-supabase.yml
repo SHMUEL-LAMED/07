@@ -8,14 +8,18 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Supabase admin bridge
+      - name: Verify Supabase API bridge
         run: |
           set -e
           BASE="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree"
-          echo "ROOT"
-          curl -fsS -o /tmp/root.html -w "%{http_code}\n" "$BASE/"
-          grep -q "ניהול קו הקבוצה" /tmp/root.html
+          echo "OPTIONS"
+          curl -i -sS -X OPTIONS "$BASE/session"             -H 'Origin: https://shmuel-lamed.github.io'             -H 'Access-Control-Request-Method: POST'
+          echo
           echo "SESSION"
-          curl -sS -o /tmp/session.json -w "%{http_code}\n" -X POST "$BASE/session"             --data '{"password":"__verify_wrong__"}'
+          curl -sS -D /tmp/h -o /tmp/session.json -w "%{http_code}\n" -X POST "$BASE/session"             -H 'Origin: https://shmuel-lamed.github.io'             --data '{"password":"__verify_wrong__"}'
+          cat /tmp/h
           cat /tmp/session.json
           echo
+          grep -qi 'access-control-allow-origin: https://shmuel-lamed.github.io' /tmp/h
+          echo "PAGES"
+          curl -fsS https://shmuel-lamed.github.io/07/ | grep -q 'ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/'
