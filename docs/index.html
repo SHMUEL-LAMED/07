@@ -573,7 +573,7 @@ Object.assign(LOAD, {
   event: () => api("schedule"),
   reports: () => Promise.all([api("report?m=" + state.repM), api("convstats"), api("heard")]).then(([r, c, h]) => ({ r, c, h })),
   live: () => Promise.all([api("calls?day=" + state.liveDay), api("online")]).then(([c, o]) => ({ calls: c, online: o.online, now: o.now })),
-  system: () => Promise.all([api("health"), api("ads").catch(() => ({ ads: [], names: state.names })), api("whoami").catch(() => ({ ro: state.ro, exp: 0 }))]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
+  system: () => Promise.all([api("health").catch(e => ({ blocked: e.message, errors: [], bg: [], cronAgo: null, lastJob: "", pendingError: 0, deferred: 0, postcheck: 0, aai: 0, retortq: 0, weeklyDone: "", testMode: false })), api("ads").catch(() => ({ ads: [], names: state.names })), api("whoami").catch(() => ({ ro: state.ro, exp: 0 }))]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
 });
 
 // ---------- הודעות: אצווה, הורדה, הערות, תיקון תמלול ----------
@@ -789,7 +789,7 @@ RENDER.live = d => {
 RENDER.system = d => {
   const h = d.h, cronV = h.cronAgo !== null ? "רצה עכשיו" : h.lastJob ? fmtD(h.lastJob) : "—";
   const np = notifPref();
-  return `<div class="tiles">${tile(cronV, h.cronAgo !== null ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", "sm good")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
+  return `${h.blocked ? '<div class="banner warn">נתוני בריאות המערכת לא הגיעו לדפדפן. הנתונים יצאו מהשרת תקין, ונראה שנטפרי חוסם את התשובה הזו, כנראה בגלל התוכן שלה (שורות מהיומן וטקסטים בתור). שאר הלשונית עובד.</div>' : ""}<div class="tiles">${tile(cronV, h.cronAgo !== null ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", "sm good")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
   <div class="cols">
     <div class="card"><h2>🔔 התראות בדפדפן</h2><div class="mut small">התראה כשמגיעה הודעה שממתינה לאישור, בקשת הצטרפות, הודעה חדשה בקו או כשמישהו נכנס לקו – גם כשהלשונית ברקע.</div>
       <form class="form" data-xf="notif" style="margin-top:8px">${[["pend", "הודעות לאישור ובקשות הצטרפות"], ["msg", "הודעה חדשה בקו"], ["online", "מישהו נכנס לקו"]].map(([k, l]) => `<label class="chk"><input type="checkbox" name="${k}" ${np[k] ? "checked" : ""}> ${l}</label>`).join("")}
