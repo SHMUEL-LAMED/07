@@ -8,7 +8,6 @@ const ADMIN_HTML = readFileSync(new URL("./admin.html", import.meta.url), "utf8"
 const PORT = Number(process.env.PORT || 3000);
 const TARGET = (process.env.TARGET_BASE || "https://yemot-ai.smwlyqswkwt232.workers.dev").replace(/\/$/, "");
 const ALLOWED_ORIGIN = "https://shmuel-lamed.github.io";
-const SELF_ORIGIN = "https://07-admin-bridge-production.up.railway.app";
 
 function corsHeaders(origin) {
   if (origin !== ALLOWED_ORIGIN) return {};
@@ -23,6 +22,7 @@ function corsHeaders(origin) {
 
 const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin || "";
+  const selfOrigin = "https://" + (req.headers.host || "");
 
   if (req.url === "/health") {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
@@ -41,7 +41,7 @@ const server = http.createServer(async (req, res) => {
 
 
   if (req.method === "OPTIONS") {
-    if (origin && origin !== ALLOWED_ORIGIN && origin !== SELF_ORIGIN) {
+    if (origin && origin !== ALLOWED_ORIGIN && origin !== selfOrigin) {
       res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("forbidden");
       return;
@@ -51,7 +51,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (origin && origin !== ALLOWED_ORIGIN && origin !== SELF_ORIGIN) {
+  if (origin && origin !== ALLOWED_ORIGIN && origin !== selfOrigin) {
     res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ error: "מקור לא מורשה" }));
     return;
