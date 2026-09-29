@@ -130,6 +130,58 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .login-box h2{margin:0;font-size:22px;font-weight:800}.login-box p{margin:-6px 0 0;color:var(--mut);font-size:13px}
 .login-box input{padding:12px 14px;font-size:16px}.login-box button{width:100%;padding:11px;font-size:15px}
 .login-err{color:var(--bad);min-height:1.4em;font-size:13px;font-weight:500}
+
+/* ---- ניהול מתקדם ---- */
+.hsearch{position:relative;flex:0 1 260px;min-width:150px}
+.hsearch input{width:100%;background:var(--hero-glass);border-color:var(--hero-line);color:var(--hero-ink);padding:7px 12px;font-size:14px}
+.hsearch input::placeholder{color:var(--hero-mut)}.hsearch input:focus{background:rgba(255,255,255,.2);box-shadow:none;border-color:rgba(255,255,255,.5)}
+.sres{position:absolute;top:calc(100% + 6px);inset-inline:0;min-width:320px;max-height:70vh;overflow:auto;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh2);z-index:20;padding:6px}
+.sres[hidden]{display:none}.sres .g{font-size:11px;color:var(--mut);padding:6px 8px 2px;font-weight:600}
+.sres button{display:block;width:100%;text-align:right;background:none;border:0;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13.5px}.sres button:hover,.sres button.on{background:var(--accbg)}
+.sres small{color:var(--mut);display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(10,14,22,.5);display:grid;place-items:start center;padding:24px 12px;overflow:auto;backdrop-filter:blur(2px)}
+.modal[hidden]{display:none}.modal .box{width:min(980px,100%);background:var(--bg);border-radius:20px;box-shadow:var(--sh2);padding:18px;display:grid;gap:14px;animation:up .25s}
+.modal .mh{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.modal .mh h2{margin:0;font-size:20px}
+.xbtn{margin-inline-start:auto}
+.batch{position:sticky;bottom:12px;z-index:6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:14px;box-shadow:var(--sh2)}
+.batch[hidden]{display:none}.batch .btn{box-shadow:none}
+.msg .sel{width:18px;height:18px;accent-color:var(--acc);margin:0}
+.note{font-size:13px;background:var(--warnbg);color:var(--warnt);border-radius:8px;padding:6px 10px}
+.rec{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.rec .dot{width:12px;height:12px;border-radius:50%;background:var(--bad);animation:blink 1s infinite}.rec .dot[hidden]{display:none}
+@keyframes blink{50%{opacity:.25}}
+.picker{display:flex;flex-wrap:wrap;gap:6px;max-height:190px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.picker label{font-size:13px;display:flex;gap:5px;align-items:center;padding:3px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+.picker input:checked+span{color:var(--acc);font-weight:700}
+.delta{font-size:12px;font-weight:600;margin-inline-start:6px}.delta.up{color:var(--goodt)}.delta.down{color:var(--bad)}
+.tl{display:grid;gap:2px}.tl .r{display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px;align-items:baseline}.tl .r:last-child{border-bottom:0}
+.words{display:flex;flex-wrap:wrap;gap:6px}.words span{padding:3px 10px;border-radius:999px;background:var(--accbg);color:var(--acc2);font-weight:600}
+.kbd{font:12px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--bg)}
+body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color:var(--warnt);text-align:center;font-weight:600;padding:6px;font-size:13px}
+/* מסך בקרה */
+.mon{position:fixed;inset:0;z-index:45;background:#0b1020;color:#fff;display:grid;grid-template-rows:auto 1fr;padding:22px 28px;gap:18px;font-size:18px}
+.mon[hidden]{display:none}.mon .mt{display:flex;align-items:center;gap:16px}.mon .mt h1{margin:0;font-size:28px}.mon .clk{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;margin-inline-start:auto}
+.mon .g{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-content:start}
+.mon .p{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:18px}.mon .p h2{margin:0 0 10px;font-size:18px;color:#9fb5e6;font-weight:600}
+.mon .big{font-size:64px;font-weight:800;line-height:1}.mon .big.bad{color:#ff7a7a}.mon .big.good{color:#6ee7a0}
+.mon ul{list-style:none;margin:0;padding:0}.mon li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)}.mon li small{color:#9aa3b5;display:block;font-size:14px}
+.mon .btn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
+/* עוזר AI */
+.aifab{position:fixed;bottom:20px;inset-inline-start:20px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--hero);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 24px rgba(47,95,209,.45)}
+.aifab:hover{transform:scale(1.05)}
+.aip{position:fixed;bottom:88px;inset-inline-start:20px;z-index:31;width:min(430px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh2);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;animation:up .25s}
+.aip[hidden]{display:none}.aip .ah{background:var(--hero);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}.aip .ah b{font-size:16px}.aip .ah .btn{margin-inline-start:auto}
+.aip .al{overflow:auto;padding:14px;display:grid;gap:10px;align-content:start}
+.bub{padding:9px 13px;border-radius:14px;font-size:14.5px;white-space:pre-wrap;max-width:92%}.bub.me{background:var(--acc);color:#fff;justify-self:end;border-end-end-radius:4px}.bub.ai{background:var(--bg);justify-self:start;border-end-start-radius:4px}
+.bub.err{background:var(--badbg);color:var(--bad)}
+.acard{border:1px solid var(--line);border-radius:12px;padding:9px 11px;display:flex;gap:8px;align-items:center;background:var(--card);font-size:13.5px}.acard .grow{flex:1}
+.acard.done{opacity:.6}.acard.done .btn{display:none}
+.aip form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}.aip form input{flex:1}
+.aisug{display:flex;flex-wrap:wrap;gap:6px}.aisug button{font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer}
+.typing{display:inline-flex;gap:4px}.typing i{width:6px;height:6px;border-radius:50%;background:var(--mut);animation:blink 1s infinite}.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@media(max-width:600px){.hsearch{order:9;flex:1 1 100%}.aifab{bottom:14px;inset-inline-start:14px}.aip{inset-inline:8px;width:auto;bottom:80px}.mon{padding:14px;font-size:16px}.mon .big{font-size:48px}}
+@media print{.aifab,.aip,.batch,.hsearch{display:none!important}}
+
+body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]),body.ro .aifab{display:none!important}
 </style>
 </head>
 <body>
@@ -137,15 +189,22 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
   <div class="bar">
     <div><h1>ניהול קו הקבוצה</h1><div class="sub" id="clock">073-351-2880</div></div>
     <div class="grow"></div>
+    <div class="hsearch"><input id="gs" type="search" placeholder="חיפוש חברים, הודעות, תמלולים…  ( / )" autocomplete="off" aria-label="חיפוש"><div class="sres" id="gsr" hidden></div></div>
     <div class="badges"><span class="badge live" id="b-online">…</span><span class="badge" id="b-pend">…</span></div>
     <button class="btn icon" id="theme" title="מצב בהיר/כהה" aria-label="מצב בהיר/כהה">◐</button>
+    <button class="btn icon" data-x="mon" title="מסך בקרה (M)" aria-label="מסך בקרה">🖥</button>
     <button class="btn icon" id="refresh" title="רענון" aria-label="רענון">↻</button>
     <button class="btn s" id="logout" type="button">יציאה</button>
   </div>
   <nav class="tabs" id="tabs" aria-label="לשוניות"></nav>
+  <div class="ro-banner" id="rob" hidden>מצב צפייה בלבד – אפשר לראות הכול, אי אפשר לבצע פעולות</div>
 </header>
 <main id="main"></main>
 <div id="toast" aria-live="polite"></div>
+<div class="modal" id="mm" hidden><div class="box"></div></div>
+<div class="mon" id="mon" hidden><div class="mt"><h1>קו הקבוצה · 073-351-2880</h1><span class="clk"></span><button class="btn" data-x="monx">✕ יציאה</button></div><div class="g"></div></div>
+<button class="aifab" data-x="ai" title="עוזר AI (A)" aria-label="עוזר AI">✦</button>
+<div class="aip" id="aip" hidden><div class="ah"><b>✦ עוזר הניהול</b><span class="small" style="opacity:.85">מציע – אתם מאשרים</span><button class="btn s" type="button" data-x="ai" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">✕</button></div><div class="al" id="ail"></div><form id="aif"><input id="aiq" placeholder="למשל: תשתיק את משה ליום, או: מי לא שמע את ההודעה החשובה?" autocomplete="off"><button class="btn p">שליחה</button></form></div>
 <div class="login-layer" id="login-layer" hidden>
   <form class="login-box" id="login-form">
     <h2>ניהול קו הקבוצה</h2>
@@ -168,8 +227,18 @@ const KIND_ACTS = { // מקשים כמו בשלוחה 7-4: 1 חשובה, 2 רג�
 };
 
 // ---------- עזרים ----------
-const API_BASE = "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/";
-let adminToken = sessionStorage.getItem("adminToken") || "";
+// ---------- חיבור לשרת ----------
+// אותו קובץ משמש בשני מקומות: ב-Worker (/admin, עם cookie) וב-GitHub Pages (דרך הגשר ב-Supabase, עם אסימון בפרמטר).
+const REMOTE = !location.pathname.startsWith("/admin");
+const API_BASE = REMOTE ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" : "/admin/api/";
+let adminToken = "";
+try { if (REMOTE) adminToken = sessionStorage.getItem("adminToken") || ""; } catch {}
+{ // קישור לצפייה בלבד: .../07/#t=<אסימון>
+  const m = /^#t=([\w.-]+)$/.exec(location.hash);
+  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem("adminToken", adminToken); } catch {} history.replaceState(null, "", location.pathname); state.tab = "home"; }
+}
+const tokq = (sep = "&") => REMOTE && adminToken ? sep + "token=" + encodeURIComponent(adminToken) : "";
+const apiUrl = name => API_BASE + name + tokq(name.includes("?") ? "&" : "?");
 
 function showLogin(msg = "") {
   $("#login-err").textContent = msg;
@@ -178,34 +247,44 @@ function showLogin(msg = "") {
 }
 function hideLogin() { $("#login-layer").hidden = true; $("#login-err").textContent = ""; }
 async function createSession(password) {
-  const r = await fetch(API_BASE + "session", {
-    method: "POST",
-    body: JSON.stringify({ password })
-  });
+  const r = await fetch(API_BASE + "session", { method: "POST", body: JSON.stringify({ password }) });
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
   if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
   adminToken = j.token;
-  sessionStorage.setItem("adminToken", adminToken);
+  try { sessionStorage.setItem("adminToken", adminToken); } catch {}
+}
+function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem("adminToken"); } catch {} showLogin(msg); }
+async function apiRaw(name, body) {
+  if (REMOTE && !adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
+  const opt = body ? { method: "POST", body: JSON.stringify(body) } : {};
+  if (!REMOTE) opt.headers = { "Content-Type": "application/json", "X-Requested-With": "dash" };
+  const r = await fetch(apiUrl(name), opt);
+  if (r.status === 401) {
+    if (!REMOTE) { location.reload(); throw new Error("החיבור פג, נכנסים מחדש"); }
+    dropSession("החיבור פג. יש להיכנס שוב."); throw new Error("החיבור פג");
+  }
+  return r;
 }
 async function api(name, body) {
-  if (!adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
-  const sep = name.includes("?") ? "&" : "?";
-  const url = API_BASE + name + sep + "token=" + encodeURIComponent(adminToken);
-  const r = await fetch(url, body ? { method: "POST", body: JSON.stringify(body) } : undefined);
-  if (r.status === 401) {
-    adminToken = ""; sessionStorage.removeItem("adminToken"); showLogin("החיבור פג. יש להיכנס שוב.");
-    throw new Error("החיבור פג");
-  }
+  const r = await apiRaw(name, body);
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
   if (!r.ok || j.error) throw new Error(j.error || "שגיאה " + r.status);
   return j;
+}
+// הורדת קובץ (CSV, ZIP, הקלטה, גיבוי) דרך fetch, כדי שיעבוד גם דרך הגשר
+async function apiFile(name, body, fallback = "file") {
+  const r = await apiRaw(name, body);
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "שגיאה " + r.status); }
+  const blob = await r.blob(), m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("content-disposition") || "");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = m ? decodeURIComponent(m[1]) : fallback;
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
 }
 function toast(msg, bad) { const d = document.createElement("div"); if (bad) d.className = "bad"; d.textContent = msg; $("#toast").replaceChildren(d); setTimeout(() => d.remove(), bad ? 6000 : 3500); }
 const fmtD = s => { s = String(s || ""); let m = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[1]}/${m[2]} ${m[4]}`; m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[3]}/${m[2]} ${m[4]}`; return s.slice(0, 16); };
 const fmtDur = s => !s ? "" : s >= 60 ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : Math.round(s) + " שנ׳";
 const phone = p => p ? `<span class="num small mut">${esc(p.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3").replace(/^(\d{2})(\d{3})(\d{4})$/, "$1-$2-$3"))}</span>` : "";
 const who = (n, p) => `<b>${esc(n || (p ? "מספר לא מוכר" : "לא ידוע"))}</b> ${phone(p)}`;
-const audio = path => `<audio controls preload="none" src="${API_BASE}audio?p=${encodeURIComponent(path)}&token=${encodeURIComponent(adminToken)}"></audio>`;
+const audio = path => `<audio controls preload="none" src="${API_BASE}audio?p=${encodeURIComponent(path)}${tokq()}"></audio>`;
 const transcript = t => t ? `<div class="tr${t.length > 220 ? " long" : ""}" data-toggle="tr">${esc(t)}</div>` : "";
 const empty = t => `<div class="empty">${esc(t || "אין")}</div>`;
 const tile = (n, l, cls, tab) => `<div class="tile ${cls || ""}" ${tab ? `data-tab="${tab}"` : ""}><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
@@ -281,7 +360,7 @@ RENDER.home = d => {
     </div>
   </div>`;
 };
-const jobText = j => j.type === "post" ? (j.important ? "הודעה חשובה: " : "הודעה רגילה: ") + (j.text || "") : j.type === "remind" ? `תזכורת ל${j.who || j.phone}: ${j.text || ""}` : j.type === "shoeva" ? "הודעה חשובה על שמחת בית השואבה" : j.type;
+const jobText = j => jobText2(j);
 const onlineHtml = list => `<h2>מי בקו עכשיו <small>מתעדכן כל 10 שניות</small><span class="pill ${list.length ? "ok" : ""}">${list.length}</span></h2>` +
   (list.length ? `<ul class="list online">${list.map(c => `<li><div class="grow"><div>${who(c.n, c.p)}</div><div class="w">${esc(c.w)}</div></div>${c.id ? `<button class="btn s d" data-act="hangup" data-id="${esc(c.id)}" data-phone="${esc(c.p)}" data-name="${esc(c.n)}">ניתוק</button>` : ""}</li>`).join("")}</ul>` : empty("אף אחד לא מחובר כרגע"));
 
@@ -464,31 +543,608 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 const themeBtn = $("#theme");
 themeBtn.addEventListener("click", () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("theme", next); } catch {} });
 try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+
+// =====================================================================
+// ניהול מתקדם: לשוניות נוספות, כרטיס חבר, אצווה, הקלטה, שידור, דוחות,
+// בקרה חיה, מערכת, חיפוש, מסך בקרה, התראות, קישור צפייה ועוזר AI
+// =====================================================================
+TABS.splice(0, TABS.length, ["home", "סקירה"], ["pending", "ממתינות"], ["msgs", "הודעות"], ["trash", "סל מחזור"], ["members", "חברים"], ["studio", "שידור"], ["sched", "תזמונים"], ["event", "אירוע"], ["bot", "העוזר"], ["reports", "דוחות"], ["stats", "סטטיסטיקה"], ["live", "בקרה חיה"], ["system", "מערכת"], ["log", "יומן"]);
+$("#tabs").innerHTML = TABS.map(([k, l], i) => `<button data-go="${k}" class="${k === state.tab ? "on" : ""}" ${i < 9 ? `title="Alt+${i + 1}"` : ""}>${l}${k === "pending" ? ' <b id="n-pend"></b>' : ""}</button>`).join("");
+const todayIL = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" }).slice(0, 10);
+Object.assign(state, { sel: new Set(), liveDay: todayIL(), repM: todayIL().slice(0, 7), ro: false, firstSeen: {}, tts: null, wav: null, ai: [], notes: { msg: {}, member: {} } });
+const confirm2 = msg => (prompt(msg + "\n\nזו פעולה רחבה. לאישור כתבו: כן") || "").trim() === "כן";
+const nm = p => state.names[p] || p;
+const b64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const memberOpts = (sel = "") => Object.entries(state.names).sort((a, b) => a[1].localeCompare(b[1], "he")).map(([p, n]) => `<option value="${esc(p)}" ${p === sel ? "selected" : ""}>${esc(n)}</option>`).join("");
+const picker = (name = "rcpt", pre = []) => `<div class="row small" style="margin-bottom:4px"><button type="button" class="btn s" data-x="pick" data-v="1">כולם</button><button type="button" class="btn s" data-x="pick" data-v="0">אף אחד</button></div><div class="picker">${Object.entries(state.names).sort((a, b) => a[1].localeCompare(b[1], "he")).map(([p, n]) => `<label><input type="checkbox" name="${name}" value="${esc(p)}" ${pre.includes(p) ? "checked" : ""}><span>${esc(n)}</span></label>`).join("")}</div>`;
+const dlBtn = (name, label, cls = "") => `<button type="button" class="btn s ${cls}" data-x="dl" data-n="${esc(name)}">${label}</button>`;
+const withNotes = p => Promise.all([p, api("notes").catch(() => ({ notes: { msg: {}, member: {} } }))]).then(([d, n]) => { state.notes = n.notes; return d; });
+const delta = (a, b) => { if (!b) return ""; const d = Math.round(100 * (a - b) / b); return d ? `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%</span>` : ""; };
+const tileD = (n, l, prev) => `<div class="tile"><b>${esc(n)}${delta(+n, +prev)}</b><span>${esc(l)}${prev !== undefined ? ` · קודם: ${esc(prev)}` : ""}</span></div>`;
+const JOBK = { post: "הודעה", tz: "צינתוק", entry: "הודעת כניסה", pm: "הודעה אישית", remind: "תזכורת", shoeva: "שמחת בית השואבה" };
+const LISTN = { members: "כל החברים", admins: "המנהלים", general: "רשימת הרגילות" };
+
+// ---------- טעינה ----------
+Object.assign(LOAD, {
+  msgs: () => withNotes(api("messages?n=" + state.msgN)),
+  trash: () => api("trash"),
+  studio: () => Promise.all([api("weekly"), api("overview")]).then(([w, o]) => ({ weekly: w, names: o.names })),
+  sched: () => Promise.all([api("schedule"), api("holy")]).then(([s, h]) => ({ ...s, holy: h })),
+  event: () => api("schedule"),
+  reports: () => Promise.all([api("report?m=" + state.repM), api("convstats"), api("heard")]).then(([r, c, h]) => ({ r, c, h })),
+  live: () => Promise.all([api("calls?day=" + state.liveDay), api("online")]).then(([c, o]) => ({ calls: c, online: o.online, now: o.now })),
+  system: () => Promise.all([api("health"), api("ads"), api("whoami")]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
+});
+
+// ---------- הודעות: אצווה, הורדה, הערות, תיקון תמלול ----------
+RENDER.msgs = d => {
+  const q = (state.filter.msgs || "").trim(), notes = state.notes.msg || {};
+  const list = q ? d.list.filter(m => [m.id, m.n, m.p, m.t, (notes[m.id] || {}).t].join(" ").includes(q)) : d.list;
+  const only = state.filter.msgOnly || "";
+  const shown = only === "imp" ? list.filter(m => m.imp) : only === "notr" ? list.filter(m => !m.t) : only === "note" ? list.filter(m => notes[m.id]) : list;
+  return `<div class="card"><h2>הודעות בקו <small>${d.list.length} מתוך ${d.total} · מהחדשה לישנה</small></h2>
+    <div class="row"><input class="search" data-filter="msgs" placeholder="חיפוש בשם, במספר, בתמלול או בהערה" value="${esc(q)}">
+      <select data-filter="msgOnly"><option value="">הכול</option><option value="imp" ${only === "imp" ? "selected" : ""}>רק חשובות</option><option value="notr" ${only === "notr" ? "selected" : ""}>בלי תמלול</option><option value="note" ${only === "note" ? "selected" : ""}>עם הערה</option></select>
+      ${d.list.length < d.total ? `<button class="btn s" data-act="more">טעינת ${Math.min(d.total, 1000)} האחרונות</button>` : ""}
+      <span class="right row">${dlBtn("export_transcripts", "⬇ ייצוא תמלולים (CSV)")}<button class="btn s w-only" data-go="studio">🎙 הקלטה והעלאה</button></span></div></div>
+    ${shown.length ? shown.map(m => { const path = "/1/2/" + m.id + ".wav", note = notes[m.id]; return `<div class="msg"><div class="head"><input type="checkbox" class="sel w-only" data-sel="${m.id}" ${state.sel.has(m.id) ? "checked" : ""} aria-label="בחירה"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${who(m.n, m.p)}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
+      <div class="row"><button class="btn s" data-act="play" data-p="${esc(path)}">▶ השמעה</button><button class="btn s" data-x="dl" data-n="download?p=${esc(encodeURIComponent(path))}">⬇</button>${m.imp ? actBtn({ type: "move", id: m.id, to: "regular" }, "הוצאה מהחשובות") : actBtn({ type: "move", id: m.id, to: "important" }, "העברה לחשובות + צינתוק")}${actBtn({ type: "delete", id: m.id }, "מחיקה", "d")}
+        <button class="btn s w-only" data-x="note" data-kind="msg" data-key="${m.id}">📝 הערה</button><button class="btn s w-only" data-x="fixtr" data-id="${m.id}">✎ תמלול</button>${m.p ? `<button class="btn s" data-x="card" data-p="${esc(m.p)}">👤</button>` : ""}</div>
+      ${note ? `<div class="note">📝 ${esc(note.t)} <span class="small">(${esc(fmtD(note.d))})</span></div>` : ""}
+      ${transcript(m.t) || '<div class="mut small">אין תמלול (עדיין)</div>'}</div>`; }).join("") : `<div class="card">${empty("לא נמצאו הודעות")}</div>`}
+    <div class="batch w-only" id="batch" ${state.sel.size ? "" : "hidden"}><b id="bn">${state.sel.size} נבחרו</b>
+      <button class="btn s d" data-x="batch" data-op="delete">מחיקה</button><button class="btn s" data-x="batch" data-op="important">לחשובות</button><button class="btn s" data-x="batch" data-op="regular">הוצאה מהחשובות</button><button class="btn s" data-x="zipsel">⬇ ZIP</button><button class="btn s" data-x="selall">בחירת כל המוצגות</button><button class="btn s" data-x="selnone">ניקוי</button></div>`;
+};
+const updBatch = () => { const b = $("#batch"); if (b) { b.hidden = !state.sel.size; $("#bn").textContent = state.sel.size + " נבחרו"; } };
+
+// ---------- סל מחזור ----------
+RENDER.trash = d => `<div class="card"><h2>סל המחזור <small>${d.files.length} הקלטות שנמחקו מהקו או הוצאו מהחשובות</small>${d.files.length ? '<button class="btn s d right w-only" data-x="purge" data-all="1">ריקון הסל</button>' : ""}</h2>
+  ${d.files.length ? d.files.map(f => `<div class="msg"><div class="head"><b>${esc(f.name)}</b>${f.imp ? '<span class="pill acc">מהחשובות</span>' : ""}<span class="mut small">${esc(fmtD(f.date))}</span>${f.dur ? `<span class="mut small">${fmtDur(f.dur)}</span>` : ""}</div>
+    <div class="row"><button class="btn s" data-act="play" data-p="/DeletedByAdmin/${esc(f.name)}">▶ השמעה</button><button class="btn s" data-x="dl" data-n="download?p=${esc(encodeURIComponent("/DeletedByAdmin/" + f.name))}">⬇</button>
+      <button class="btn s w-only" data-x="restore" data-name="${esc(f.name)}" data-to="regular">↶ שחזור לרגילות</button><button class="btn s w-only" data-x="restore" data-name="${esc(f.name)}" data-to="important">↶ שחזור לחשובות</button><button class="btn s d w-only" data-x="purge" data-name="${esc(f.name)}">מחיקה לצמיתות</button></div></div>`).join("") : empty("הסל ריק")}</div>`;
+
+// ---------- חברים: ייצוא, ייבוא, כרטיס ----------
+const renderMembers0 = RENDER.members;
+RENDER.members = d => `<div class="card"><div class="row"><b>ניהול החברים</b><span class="mut small">לחיצה על שם פותחת את כרטיס החבר המלא</span>
+  <span class="right row">${dlBtn("members_csv", "⬇ ייצוא לאקסל (CSV)")}<label class="btn s w-only" style="cursor:pointer">⬆ ייבוא מקובץ<input type="file" accept=".csv,.txt,text/csv" data-x-file="import" hidden></label></span></div></div>` + renderMembers0(d);
+
+async function openMember(p) {
+  const box = $("#mm");
+  box.hidden = false; box.querySelector(".box").innerHTML = `<div class="mh"><h2>${esc(nm(p))}</h2><button class="btn s xbtn" data-x="close">✕</button></div><div class="card">טוען…</div>`;
+  try { const d = await api("member?p=" + encodeURIComponent(p)); state.card = d; box.querySelector(".box").innerHTML = memberHtml(d); }
+  catch (e) { box.querySelector(".card").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function memberHtml(d) {
+  const pills = [d.admin && '<span class="pill acc">מנהל</span>', d.tz === "on" ? '<span class="pill ok">בצינתוקים</span>' : d.tz === "off" ? '<span class="pill bad">חסם צינתוקים</span>' : '<span class="pill">לא ברשימת הצינתוקים</span>',
+    d.general && '<span class="pill">ברגילות</span>', d.muted && `<span class="pill warn">מושתק ${d.muted !== "ללא הגבלה" ? "עד " + esc(fmtD(d.muted)) : ""}</span>`, d.blocked && '<span class="pill bad">חסום</span>',
+    d.retort && '<span class="pill warn">תגובה עוקצנית</span>', d.strict && '<span class="pill warn">פיקוח מוגבר</span>', d.rsvp && '<span class="pill ok">נרשם לאירוע</span>', d.person && d.person.c && `<span class="pill">קוד ${esc(d.person.c)}</span>`].filter(Boolean).join(" ");
+  const pmList = (files, old) => files.length ? `<ul class="list">${files.map(f => `<li><span class="num small">${esc(f.name)}</span><span class="mut small">${esc(fmtD(f.date))}</span>${f.name.endsWith(".wav") ? `<button class="btn s" data-x="playin" data-p="${esc(`/personalMessages/Phone/${d.p}${old ? "/Old" : ""}/${f.name}`)}">▶</button>` : '<span class="pill">טקסט</span>'}<button class="btn s d w-only right" data-x="pmdel" data-p="${esc(d.p)}" data-name="${esc(f.name)}" data-old="${old ? 1 : 0}">מחיקה</button></li>`).join("")}</ul>` : empty(old ? "אין" : "התיבה ריקה");
+  const prof = d.profile, mem = d.memory;
+  return `<div class="mh"><h2>${esc(d.n || "מספר לא מוכר")}</h2>${phone(d.p)} ${pills}<button class="btn s xbtn" data-x="close">✕ סגירה</button></div>
+  <div class="card w-only"><div class="row">
+    <button class="btn s" data-x="m-rename" data-p="${d.p}" data-name="${esc(d.n)}">שינוי שם</button>
+    ${d.muted ? `<button class="btn s" data-x="m-act" data-a='${esc(JSON.stringify({ type: "unmute", phone: d.p }))}'>ביטול השתקה</button>` : `<button class="btn s" data-x="m-mute" data-p="${d.p}">השתקה</button>`}
+    <button class="btn s ${d.blocked ? "" : "d"}" data-x="m-block" data-p="${d.p}" data-on="${d.blocked ? 0 : 1}">${d.blocked ? "ביטול חסימה" : "חסימה"}</button>
+    <button class="btn s" data-x="m-tz" data-p="${d.p}">📣 צינתוק אליו</button>
+    <button class="btn s" data-x="m-list" data-list="retort" data-p="${d.p}" data-on="${d.retort ? 0 : 1}">${d.retort ? "הסרה מתגובה עוקצנית" : "תגובה עוקצנית"}</button>
+    <button class="btn s" data-x="m-list" data-list="strict" data-p="${d.p}" data-on="${d.strict ? 0 : 1}">${d.strict ? "הסרה מפיקוח מוגבר" : "פיקוח מוגבר"}</button>
+    ${d.person ? `<button class="btn s" data-x="m-code" data-p="${d.p}" data-c="${esc(d.person.c)}">קוד אישי</button>` : ""}
+    <button class="btn s" data-x="m-rsvp" data-p="${d.p}" data-on="${d.rsvp ? 0 : 1}">${d.rsvp ? "הסרה מהאירוע" : "רישום לאירוע"}</button></div></div>
+  <div class="tiles">${tile(d.msgTotal, "הודעות בארכיון")}${tile(d.callsMonth, "שיחות החודש")}${tile(d.conv.length, "שיחות עם העוזר")}${tile(d.pm.length, "בתיבה האישית")}${tile(d.last ? fmtD(d.last) : "—", "כניסה אחרונה")}</div>
+  <div class="cols">
+    <div class="card w-only"><h2>הודעה אישית קולית</h2><form class="form" data-xf="m-pm" data-p="${d.p}"><textarea name="text" placeholder="מה להגיד ל${esc(d.n || "חבר")}? העוזר יקריא בקולו ויניח בתיבה האישית" required maxlength="800"></textarea><div class="row"><button class="btn">🔊 יצירת קול ושמיעה</button><span class="grow"></span></div><div class="mpv"></div></form>
+      <h3>הקלטה שלך לתיבה שלו</h3>${recorderHtml("pm", d.p)}</div>
+    <div class="card"><h2>התיבה האישית <small>${d.pm.length} חדשות</small></h2>${pmList(d.pm, false)}<details><summary class="mut small" style="cursor:pointer">הודעות ששמע (${d.pmOld.length})</summary>${pmList(d.pmOld, true)}</details></div>
+    <div class="card"><h2>הערת מנהל</h2><form class="form" data-xf="m-note" data-p="${d.p}"><textarea name="text" placeholder="הערה פנימית (לא נשמעת בקו)" maxlength="1000">${esc(d.note ? d.note.t : "")}</textarea><div class="row w-only"><button class="btn s">שמירה</button>${d.note ? `<span class="mut small">עודכן ${esc(fmtD(d.note.d))}</span>` : ""}</div></form>
+      <h3>פרסומות אישיות בכניסה</h3><form class="form" data-xf="m-ads" data-p="${d.p}"><textarea name="text" placeholder="פרסומת בכל שורה (העוזר משמיע אחת באקראי)">${esc((d.ads || []).join("\n"))}</textarea><div class="w-only"><button class="btn s">שמירה</button></div></form></div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>מה ה-AI יודע עליו</h2>${prof && (prof.style || (prof.quotes || []).length) ? `<div class="small mut">סגנון</div><div>${esc(prof.style || "")}</div>${(prof.quotes || []).length ? `<div class="small mut" style="margin-top:6px">משפטים אופייניים</div><ul style="margin:4px 0;padding-inline-start:18px">${prof.quotes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}` : empty("עוד אין פרופיל")}
+      ${mem && (mem.notes || []).length ? `<div class="small mut" style="margin-top:8px">זיכרון העוזר</div><ul style="margin:4px 0;padding-inline-start:18px">${mem.notes.map(x => `<li>${esc(typeof x === "string" ? x : JSON.stringify(x))}</li>`).join("")}</ul>` : ""}${d.talk ? `<div class="small mut" style="margin-top:8px">על מה הוא מדבר</div><div>${esc(d.talk)}</div>` : ""}</div>
+    <div class="card"><h2>שיחות אחרונות לקו</h2>${d.calls.length ? `<div class="tl">${d.calls.slice(0, 30).map(c => `<div class="r"><span class="num small mut">${esc(fmtD(c.t))}</span><span>${esc(c.l)}</span><span class="mut small num">${esc(c.x ? "עד " + c.x.slice(0, 5) : "")}</span></div>`).join("")}</div>` : empty("אין שיחות בחודשיים האחרונים")}</div>
+  </div>
+  <div class="card"><h2>ההודעות שלו <small>${d.msgTotal}</small></h2>${d.msgs.length ? d.msgs.slice(0, 40).map(m => `<div class="msg"><div class="head"><span class="pill">${m.id}</span><span class="mut small">${esc(fmtD(m.d))}</span><button class="btn s" data-x="playin" data-p="/1/2/${m.id}.wav">▶</button></div>${transcript(m.t)}</div>`).join("") : empty("אין הודעות בארכיון")}</div>
+  <div class="card"><h2>שיחות עם העוזר <small>${d.conv.length}</small></h2>${d.conv.length ? `<div class="conv">${d.conv.slice(0, 40).map(c => `<div><div class="m">${esc(fmtD(c.d))}</div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a)}</div></div>`).join("")}</div>` : empty("אין שיחות")}</div>`;
+}
+
+// ---------- הקלטה והעלאה ----------
+const recorderHtml = (kind, p = "") => `<div class="form" data-rec="${kind}" data-p="${esc(p)}"><div class="rec"><button type="button" class="btn" data-x="rec">⏺ הקלטה</button><span class="dot" hidden></span><span class="num rt">0:00</span>
+  <label class="btn s" style="cursor:pointer">📁 קובץ שמע<input type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" data-x-file="audio" hidden></label></div><div class="rpv"></div></div>`;
+const REC = { on: false };
+function encodeWav(f32, sr) {
+  const b = new ArrayBuffer(44 + f32.length * 2), v = new DataView(b), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + f32.length * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, f32.length * 2, true);
+  for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  return new Uint8Array(b);
+}
+function down(buf, from, to = 16000) {
+  if (from === to) return buf; const r = from / to, n = Math.floor(buf.length / r), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const s = Math.floor(i * r), e = Math.min(buf.length, Math.floor((i + 1) * r)); let t = 0; for (let j = s; j < e; j++) t += buf[j]; out[i] = t / Math.max(1, e - s); }
+  return out;
+}
+const MAX_SEC = 240;
+async function recToggle(wrap) {
+  const btn = wrap.querySelector("[data-x=rec]"), dot = wrap.querySelector(".dot"), rt = wrap.querySelector(".rt");
+  if (REC.on) { // עצירה
+    REC.on = false; clearInterval(REC.timer); REC.node.disconnect(); REC.src.disconnect(); REC.stream.getTracks().forEach(t => t.stop());
+    const len = REC.chunks.reduce((a, c) => a + c.length, 0), all = new Float32Array(len); let o = 0; for (const c of REC.chunks) { all.set(c, o); o += c.length; }
+    const sr = REC.ctx.sampleRate; REC.ctx.close(); btn.textContent = "⏺ הקלטה מחדש"; dot.hidden = true;
+    setWav(wrap, encodeWav(down(all, sr), 16000), Math.round(len / sr)); return;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1);
+  Object.assign(REC, { on: true, stream, ctx, src, node, chunks: [], t0: Date.now() });
+  node.onaudioprocess = e => { if (REC.on) REC.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  src.connect(node); node.connect(ctx.destination);
+  btn.textContent = "⏹ עצירה"; dot.hidden = false;
+  REC.timer = setInterval(() => { const s = Math.round((Date.now() - REC.t0) / 1000); rt.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); if (s >= MAX_SEC) recToggle(wrap); }, 250);
+}
+async function fileToWav(wrap, file) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), buf = await ctx.decodeAudioData(await file.arrayBuffer()); ctx.close();
+  if (buf.duration > MAX_SEC) throw new Error(`הקובץ ארוך מדי (עד ${MAX_SEC / 60} דקות)`);
+  const mono = new Float32Array(buf.length); for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / buf.numberOfChannels; }
+  setWav(wrap, encodeWav(down(mono, buf.sampleRate), 16000), Math.round(buf.duration));
+}
+function setWav(wrap, wav, sec) {
+  wrap._wav = wav; const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), kind = wrap.dataset.rec;
+  const dest = kind === "pm" ? "" : `<select name="kind"><option value="regular">הודעה רגילה בקו</option><option value="important">הודעה חשובה + צינתוק לכולם</option><option value="entry">ההודעה בכניסה לקו</option><option value="pm">תיבה אישית של חבר</option></select><select name="phone"><option value="">מאיזה חבר / לאיזה חבר (לא חובה)</option>${memberOpts()}</select>`;
+  wrap.querySelector(".rpv").innerHTML = `<audio controls src="${url}" style="width:100%;margin-top:6px"></audio><div class="row" style="margin-top:6px">${dest}${kind === "pm" ? "" : '<input name="text" placeholder="תמלול / תיאור (לא חובה)" style="flex:1;min-width:160px">'}<button type="button" class="btn p" data-x="upload">⬆ העלאה לקו (${sec} שנ׳)</button></div>`;
+}
+async function doUpload(wrap) {
+  const kind = wrap.dataset.rec === "pm" ? "pm" : wrap.querySelector("[name=kind]").value, phoneV = wrap.dataset.p || (wrap.querySelector("[name=phone]") || {}).value || "";
+  if (!wrap._wav) throw new Error("אין הקלטה");
+  if (kind === "pm" && !phoneV) throw new Error("צריך לבחור חבר");
+  const msg = { regular: "להעלות את ההקלטה כהודעה רגילה בקו?", important: "להעלות כהודעה חשובה ולשלוח צינתוק לכל החברים?", entry: "להחליף את ההודעה בכניסה לקו בהקלטה הזו?", pm: `להניח את ההקלטה בתיבה האישית של ${nm(phoneV)}?` }[kind];
+  if (kind === "important" ? !confirm2(msg) : !confirm(msg)) return;
+  const r = await api("upload", { kind, data: b64(wrap._wav), phone: phoneV, text: ((wrap.querySelector("[name=text]") || {}).value || "").trim() });
+  toast(kind === "regular" || kind === "important" ? `ההקלטה עלתה כהודעה ${r.id}` : kind === "entry" ? "ההודעה בכניסה הוחלפה" : "ההקלטה הונחה בתיבה האישית");
+  wrap._wav = null; wrap.querySelector(".rpv").innerHTML = "";
+}
+
+// ---------- שידור: קול העוזר, הקלטה, סיכום שבועי ----------
+RENDER.studio = d => {
+  const w = d.weekly;
+  return `<div class="cols two">
+  <div class="card w-only"><h2>🔊 הודעה בקול העוזר</h2><form class="form" data-xf="tts"><textarea name="text" placeholder="הנוסח. העוזר יקריא אותו בקולו. בהודעה לכל החברים השם של כל אחד נשמע לפני ההודעה" required maxlength="1500">${esc(state.tts ? state.tts.text : "")}</textarea><div class="row"><button class="btn">יצירת קול ושמיעה</button></div></form>
+    <div id="ttsout">${state.tts ? ttsOut() : ""}</div></div>
+  <div class="card w-only"><h2>🎙 הקלטה או העלאת קובץ</h2><div class="mut small" style="margin-bottom:8px">מקליטים מהמיקרופון או בוחרים קובץ (wav, mp3, m4a…), שומעים, ובוחרים לאן להעלות.</div>${recorderHtml("line")}</div>
+  </div>
+  <div class="card w-only"><h2>📣 צינתוק לחברים נבחרים</h2><form class="form" data-xf="tzsel">${picker("rcpt")}<div><button class="btn">שליחת צינתוק לנבחרים</button></div></form></div>
+  <div class="card"><h2>🗞 הסיכום השבועי <small>${w.done ? "פורסם לאחרונה ב-" + esc(w.done) : "יוצא אוטומטית במוצאי שבת"}</small></h2>
+    <div class="row w-only"><button class="btn" data-x="weekly-dry">יצירת טיוטה מההודעות של השבוע</button><span class="mut small">הטיוטה לא עולה לקו עד שמאשרים</span></div>
+    ${w.draft ? `<form class="form w-only" data-xf="weekly" style="margin-top:10px"><div class="mut small">טיוטה מ-${esc(fmtD(w.draft.d))} · ${w.draft.count} הודעות</div><textarea name="text" style="min-height:180px">${esc(w.draft.summary)}</textarea><div><button class="btn p">פרסום בקו (הודעה רגילה)</button></div></form>` : ""}</div>`;
+};
+const ttsOut = () => `<audio controls src="${API_BASE}preview?id=${encodeURIComponent(state.tts.id)}${tokq()}" style="width:100%;margin-top:8px"></audio>
+  <form class="form" data-xf="sendpm" style="margin-top:8px"><div class="row"><select name="to"><option value="members">לתיבות האישיות של כל החברים</option><option value="admins">לתיבות של המנהלים</option><option value="sel">לחברים שאבחר</option></select><button class="btn p">שליחה</button><span class="mut small">${state.tts.seconds} שניות</span></div>
+  <details><summary class="mut small" style="cursor:pointer">בחירת חברים</summary>${picker("rcpt")}</details></form>`;
+
+// ---------- תזמונים: תזמון מתקדם + לוח שבת וחג ----------
+const renderSched0 = RENDER.sched;
+RENDER.sched = d => {
+  const minAt = d.now.slice(0, 16).replace(" ", "T"), h = d.holy;
+  return `<div class="card w-only"><h2>⏰ תזמון מתקדם</h2><form class="form" data-xf="sched2">
+    <div class="row"><select name="type" data-x-change="stype"><option value="post">הודעה בקו (בקול העוזר)</option><option value="tz">צינתוק לרשימה</option><option value="entry">החלפת ההודעה בכניסה</option><option value="pm">הודעה אישית לחברים נבחרים</option><option value="remind">תזכורת לחבר</option></select>
+      <input type="datetime-local" name="at" min="${minAt}" required><select name="every"><option value="">פעם אחת</option><option value="day">כל יום</option><option value="week">כל שבוע</option></select><label class="small mut">עד <input type="datetime-local" name="until"></label></div>
+    <div class="s-text"><textarea name="text" placeholder="הנוסח" maxlength="1500"></textarea></div>
+    <div class="s-post row"><label class="chk"><input type="checkbox" name="important"> הודעה חשובה + צינתוק לכולם</label></div>
+    <div class="s-tz" hidden><select name="list"><option value="members">כל החברים</option><option value="admins">מנהלים</option><option value="general">רשימת הרגילות</option></select></div>
+    <div class="s-pm" hidden>${picker("rcpt")}</div>
+    <div class="s-remind" hidden><select name="phone"><option value="">לאיזה חבר?</option>${memberOpts()}</select></div>
+    <div><button class="btn p">קביעת התזמון</button> <span class="mut small">בשבת ובחג שום דבר לא יוצא – התזמון ימתין למוצאי שבת/חג</span></div></form></div>
+  ${renderSched0(d)}
+  <div class="cols"><div class="card"><h2>🕯 שבת וחג <small>${h.holy ? "עכשיו זמן קודש" : "עכשיו חול"}</small></h2>${h.periods.length ? `<ul class="list">${h.periods.map(p => `<li><span class="grow ${p.past ? "mut" : ""}">${esc(fmtD(p.from))} ← ${esc(fmtD(p.to))}</span>${p.active ? '<span class="pill warn">עכשיו</span>' : p.past ? '<span class="pill">עבר</span>' : ""}</li>`).join("")}</ul>` : empty("אין נתונים מ-Hebcal")}</div>
+    <div class="card"><h2>צינתוקים שמחכים למוצאי שבת/חג <small>${h.deferred.length}</small>${h.deferred.length ? '<button class="btn s d right w-only" data-x="def" data-op="cancel_all">ביטול כולם</button>' : ""}</h2>${h.deferred.length ? `<ul class="list">${h.deferred.map(x => `<li><span class="grow">${esc(x.label)}</span><span class="w-only row"><button class="btn s" data-x="def" data-op="send" data-i="${x.i}">שליחה עכשיו</button><button class="btn s d" data-x="def" data-op="cancel" data-i="${x.i}">ביטול</button></span></li>`).join("")}</ul>` : empty("אין")}</div></div>`;
+};
+
+// ---------- אירוע ----------
+RENDER.event = d => `<div class="cols two">
+  <div class="card"><h2>🎉 ${esc(d.event.title)} <small>שלוחה 9</small></h2><div class="mut">${esc(d.event.desc || "")}</div>
+    <div class="tiles" style="margin-top:10px">${tile(d.rsvp.length, "נרשמו", "good")}${tile(d.notReg.length, "עוד לא נרשמו", d.notReg.length ? "warn" : "")}</div>
+    <div class="row" style="margin-top:10px">${dlBtn("rsvp_csv", "⬇ רשימת הנרשמים (CSV)")}${d.notReg.length ? '<button class="btn s w-only" data-x="ev-tzmiss">📣 צינתוק למי שלא נרשם</button>' : ""}</div>
+    <form class="form w-only" data-xf="ev-edit" style="margin-top:12px"><div class="small mut">עריכת פרטי האירוע (הנרשמים נשארים)</div><div class="row"><input name="title" value="${esc(d.event.title)}" required><input name="desc" value="${esc(d.event.desc || "")}" placeholder="מתי ואיפה"></div><div><button class="btn s">שמירה</button></div></form></div>
+  <div class="card"><h2>הנרשמים <small>${d.rsvp.length}</small></h2>${d.rsvp.length ? `<ol style="margin:0;padding-inline-start:20px">${d.rsvp.map(r => `<li style="margin-bottom:4px">${esc(r.n)} <span class="mut small">${esc(fmtD(r.ts))}</span> <button class="btn s d w-only" data-x="ev-rsvp" data-op="rsvp_remove" data-p="${esc(r.p)}">הסרה</button></li>`).join("")}</ol>` : empty("אף אחד עוד לא נרשם")}
+    <h3>עוד לא נרשמו</h3>${d.notReg.length ? `<div class="chips">${d.notReg.map(r => `<span class="chip">${esc(r.n)} <button class="btn s w-only" data-x="ev-rsvp" data-op="rsvp_add" data-p="${esc(r.p)}" data-name="${esc(r.n)}" style="padding:0 6px">+ רישום</button></span>`).join("")}</div>` : empty("כולם נרשמו 🎉")}</div></div>`;
+
+// ---------- העוזר: רשימות מיוחדות ----------
+const renderBot0 = RENDER.bot;
+RENDER.bot = d => renderBot0(d) + `<div class="card w-only"><h2>עריכת הרשימות המיוחדות</h2><div class="cols">${[["retort", "תגובה עוקצנית", d.retort], ["strict", "פיקוח מוגבר – כל הודעה מחכה לאישור", d.strict]].map(([k, l, arr]) => `<div><b class="small">${l}</b><div class="chips" style="margin:6px 0">${arr.map(x => `<span class="chip">${esc(x.n)} <button class="btn s" data-x="lst" data-list="${k}" data-p="${esc(x.p)}" data-on="0" style="padding:0 6px">✕</button></span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="row"><select data-lst="${k}"><option value="">הוספת חבר…</option>${memberOpts()}</select><button class="btn s" data-x="lstadd" data-list="${k}">הוספה</button></div></div>`).join("")}</div><div class="mut small" style="margin-top:6px">הרשימות האלה משנות את היחס של העוזר לחבר, ונכנסות לתוקף מיד.</div></div>`;
+
+// ---------- דוחות ----------
+const WD = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+RENDER.reports = d => {
+  const r = d.r, c = d.c, h = d.h, cq = (state.filter.convq || "").trim();
+  const conv = cq ? c.conv.filter(x => (x.q + " " + x.a + " " + x.n).includes(cq)) : c.conv.slice(0, 40);
+  return `<div class="card"><div class="row"><h2 style="margin:0">📊 דוח חודשי</h2><input type="month" value="${esc(state.repM)}" data-x-change="repm"><span class="right row"><button class="btn s" data-x="print">🖨 הדפסה / PDF</button></span></div></div>
+  <div class="tiles">${tileD(r.calls, "שיחות", r.callsPrev)}${tileD(r.callers, "מתקשרים שונים", r.callersPrev)}${tileD(r.msgs, "הודעות שעלו", r.msgsPrev)}${tileD(r.conv, "שיחות עם העוזר", r.convPrev)}${tile(r.imp, "הודעות חשובות")}${tile(r.active + "/" + r.members, "חברים שהתקשרו")}</div>
+  <div class="cols two"><div class="card"><h2>שיחות לפי יום <small>${esc(r.month)}</small></h2>${chart(r.byDay.map(x => x.d.slice(8)), r.byDay.map(x => x.n), { unit: "שיחות", xName: "יום" })}</div>
+    <div class="card"><h2>שעות השיא</h2>${chart(r.byHour.map((_, i) => String(i).padStart(2, "0")), r.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div></div>
+  <div class="cols"><div class="card"><h2>הכי פעילים</h2>${hbars(r.top, "n", "calls")}</div><div class="card"><h2>לפי יום בשבוע</h2>${hbars(r.byWeekday.map((n, i) => ({ l: WD[i], n })), "l", "n")}</div>
+    <div class="card"><h2>לא התקשרו החודש <small>${r.silent.length}</small></h2>${r.silent.length ? `<div class="chips">${r.silent.map(x => `<button class="chip" data-x="card" data-p="${esc(x.p)}">${esc(x.n)}</button>`).join("")}</div>` : empty("כולם התקשרו 🎉")}</div>
+    <div class="card"><h2>לאן נכנסו</h2>${hbars(Object.entries(r.byFolder).map(([l, n]) => ({ l, n })).sort((a, b) => b.n - a.n).slice(0, 10), "l", "n")}</div></div>
+  <div class="card"><h2>👂 מי שמע את ההודעות החשובות</h2>${h.list.length ? h.list.map(x => `<details style="margin-bottom:6px"><summary style="cursor:pointer"><b>${esc(x.f.replace(".wav", ""))}</b> <span class="mut small">${esc(fmtD(x.t))}</span> <span class="pill ok">שמעו ${x.heard.length}</span> <span class="pill ${x.not.length ? "bad" : ""}">לא שמעו ${x.not.length}</span></summary>
+    <div class="row" style="margin:6px 0"><button class="btn s" data-act="play" data-p="/1/1/${esc(x.f)}">▶ השמעה</button>${x.not.length ? `<button class="btn s w-only" data-x="heardtz" data-ph='${esc(JSON.stringify(x.not.map(y => y.p)))}'>📣 צינתוק ל-${x.not.length} שלא שמעו</button>` : ""}</div>
+    <div class="chips">${x.heard.map(y => `<span class="chip ok">${esc(y.n)}</span>`).join("")}${x.not.map(y => `<span class="chip bad">${esc(y.n)}</span>`).join("")}</div></details>`).join("") : empty("אין הודעות חשובות")}</div>
+  <div class="cols two"><div class="card"><h2>🤖 על מה שואלים את העוזר <small>${c.total} שיחות${c.first ? " מאז " + esc(fmtD(c.first)) : ""}</small></h2>${c.words.length ? `<div class="words">${c.words.map(x => `<span title="${x.n}">${esc(x.w)}</span>`).join("")}</div>` : empty("אין מספיק שיחות")}
+    <h3>מי משתמש הכי הרבה</h3>${hbars(c.per, "n", "c")}</div>
+    <div class="card"><h2>שיחות עם העוזר לפי שעה</h2>${chart(c.byHour.map((_, i) => String(i).padStart(2, "0")), c.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div></div>
+  <div class="card"><h2>חיפוש בשיחות עם העוזר</h2><input class="search" data-filter="convq" placeholder="מילה, שם, נושא…" value="${esc(cq)}">
+    <div class="conv" style="margin-top:10px">${conv.slice(0, 60).map(x => `<div><div class="m">${esc(fmtD(x.d))} · ${esc(x.n)}</div><div class="q">${esc(x.q)}</div><div class="a">${esc(x.a)}</div></div>`).join("") || empty("לא נמצא")}</div></div>`;
+};
+
+// ---------- בקרה חיה ----------
+RENDER.live = d => {
+  const now = Date.now(); for (const c of d.online) if (!state.firstSeen[c.p]) state.firstSeen[c.p] = now;
+  const conf = d.online.filter(c => c.w === "בחדר הוועידה");
+  const dur = p => { const s = Math.round((now - (state.firstSeen[p] || now)) / 1000); return s < 60 ? s + " שנ׳" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  return `<div class="row"><button class="btn" data-x="mon">🖥 מסך בקרה מלא</button><span class="mut small">מתעדכן כל 15 שניות. משך השיחה נמדד מהרגע שהדף ראה אותה.</span></div>
+  <div class="cols"><div class="card"><h2>בקו עכשיו <span class="pill ${d.online.length ? "ok" : ""}">${d.online.length}</span></h2>${d.online.length ? `<ul class="list">${d.online.map(c => `<li><div class="grow"><div>${who(c.n, c.p)}</div><div class="mut small">${esc(c.w)}</div></div><span class="num small live-d" data-p="${esc(c.p)}">${dur(c.p)}</span>${c.id ? `<button class="btn s d w-only" data-act="hangup" data-id="${esc(c.id)}" data-phone="${esc(c.p)}" data-name="${esc(c.n)}">ניתוק</button>` : ""}</li>`).join("")}</ul>` : empty("אף אחד לא מחובר")}</div>
+    <div class="card"><h2>חדר הוועידה <span class="pill">${conf.length}</span></h2>${conf.length ? `<div class="chips">${conf.map(c => `<span class="chip ok">${esc(c.n || c.p)}</span>`).join("")}</div>` : empty("החדר ריק")}</div></div>
+  <div class="card"><div class="row"><h2 style="margin:0">ציר הזמן של היום</h2><input type="date" value="${esc(state.liveDay)}" data-x-change="liveday"><span class="mut small">${d.calls.ents.length} כניסות לשלוחות · ${d.calls.callers} מתקשרים</span></div>
+    ${d.calls.ents.length ? `<div class="tl" style="margin-top:8px">${d.calls.ents.slice().reverse().map(e => `<div class="r"><span class="num small mut">${esc(e.t)}</span><span><b>${esc(e.n || e.p)}</b> · ${esc(e.l)}</span><span class="mut small num">${esc(e.x ? "עד " + e.x : "")}</span></div>`).join("")}</div>` : empty("אין כניסות ביום הזה")}</div>`;
+};
+
+// ---------- מערכת ----------
+RENDER.system = d => {
+  const h = d.h, ago = h.cronAgo === null ? "לא ידוע" : h.cronAgo < 120 ? "לפני " + h.cronAgo + " שניות" : "לפני " + Math.round(h.cronAgo / 60) + " דקות";
+  const np = notifPref();
+  return `<div class="tiles">${tile(ago, "הריצה הקבועה (cron)", h.cronAgo !== null && h.cronAgo < 300 ? "good" : "warn")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
+  <div class="cols">
+    <div class="card"><h2>🔔 התראות בדפדפן</h2><div class="mut small">התראה כשמגיעה הודעה שממתינה לאישור, בקשת הצטרפות, הודעה חדשה בקו או כשמישהו נכנס לקו – גם כשהלשונית ברקע.</div>
+      <form class="form" data-xf="notif" style="margin-top:8px">${[["pend", "הודעות לאישור ובקשות הצטרפות"], ["msg", "הודעה חדשה בקו"], ["online", "מישהו נכנס לקו"]].map(([k, l]) => `<label class="chk"><input type="checkbox" name="${k}" ${np[k] ? "checked" : ""}> ${l}</label>`).join("")}
+      <div class="row"><button class="btn s p">שמירה והפעלה</button><span class="mut small">${"Notification" in window ? (Notification.permission === "granted" ? "ההרשאה ניתנה" : Notification.permission === "denied" ? "הדפדפן חוסם התראות לאתר הזה" : "הדפדפן יבקש אישור") : "הדפדפן לא תומך בהתראות"}</span></div></form></div>
+    <div class="card"><h2>💾 גיבוי ושחזור</h2><div class="mut small">גיבוי של כל ההגדרות: שמות, כללים, תזמונים, חסומים, השתקות, רשימות, פרסומות, אירוע, ארכיון התמלולים, פרופילים והערות.</div>
+      <div class="row" style="margin-top:8px">${dlBtn("backup", "⬇ הורדת גיבוי", "p")}<label class="btn s w-only" style="cursor:pointer">⬆ שחזור מגיבוי<input type="file" accept=".json,application/json" data-x-file="restore" hidden></label></div></div>
+    <div class="card w-only"><h2>🔗 קישור לצפייה בלבד</h2><div class="mut small">למנהל נוסף שרק צריך לראות: הכול גלוי, אבל אי אפשר לבצע שום פעולה. הקישור פג אחרי מספר הימים שנבחר, או כשמשנים את ADMIN_PASS.</div>
+      <form class="row" data-xf="share" style="margin-top:8px"><select name="days"><option value="1">יום</option><option value="7" selected>שבוע</option><option value="30">חודש</option></select><button class="btn s">יצירת קישור</button></form><div id="shareout"></div></div>
+  </div>
+  <div class="cols two"><div class="card"><h2>⚙️ תור משימות רקע <small>${h.bg.length}</small>${h.bg.length ? '<button class="btn s d right w-only" data-x="bgclear">ניקוי התור</button>' : ""}</h2>${h.bg.length ? `<ul class="list">${h.bg.slice(0, 50).map(s => `<li><span class="pill">${esc(s.k)}</span><span class="grow small">${esc(s.what)}</span>${s.tries ? `<span class="pill warn">ניסיון ${s.tries}</span>` : ""}<button class="btn s d w-only" data-x="bgdrop" data-i="${s.i}">✕</button></li>`).join("")}</ul>` : empty("התור ריק")}
+    <div class="mut small" style="margin-top:6px">הריצה האחרונה: ${esc(h.lastCron || "—")} · בדיקות מאוחרות: ${h.postcheck} · תמלולים בהמתנה: ${h.aai} · תגובות בתור: ${h.retortq} · סיכום שבועי אחרון: ${esc(h.weeklyDone || "—")}</div></div>
+    <div class="card"><h2>🧯 שגיאות אחרונות ביומן <small>${h.errors.length}</small></h2>${h.errors.length ? `<ul class="list log">${h.errors.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("")}</ul>` : empty("אין שגיאות 👍")}</div></div>
+  <div class="card"><h2>📢 פרסומות אישיות <small>${d.ads.ads.length} חברים</small></h2>${d.ads.ads.length ? `<ul class="list">${d.ads.ads.map(a => `<li><button class="btn s" data-x="card" data-p="${esc(a.p)}">${esc(a.n)}</button><span class="grow small">${a.list.map(esc).join(" · ")}</span></li>`).join("")}</ul>` : empty("אין")}<div class="mut small">עריכה מתוך כרטיס החבר.</div></div>
+  <div class="card"><h2>⌨️ קיצורי מקלדת</h2><div class="small">${[["Alt+1…9", "מעבר בין לשוניות"], ["/ או Ctrl+K", "חיפוש"], ["A", "עוזר AI"], ["M", "מסך בקרה"], ["R", "רענון"], ["Esc", "סגירה"]].map(([k, l]) => `<span class="kbd">${k}</span> ${l}`).join(" &nbsp;·&nbsp; ")}</div>
+    <div class="mut small" style="margin-top:6px">מחובר כ${d.me.ro ? "צופה (צפייה בלבד)" : "מנהל"} · החיבור בתוקף עד ${esc(new Date(d.me.exp).toLocaleString("he-IL"))}</div></div>`;
+};
+
+// ---------- ג'ובים: טקסט מורחב ----------
+const jobText2 = j => (JOBK[j.type] || j.type) + (j.type === "post" ? (j.important ? " חשובה: " : " רגילה: ") + (j.text || "") : j.type === "tz" ? " ל" + (LISTN[j.list] || j.list) : j.type === "pm" ? ` ל-${(j.phones || []).length} חברים: ${j.text || ""}` : j.type === "remind" ? ` ל${j.who || nm(j.phone)}: ${j.text || ""}` : j.text ? ": " + j.text : "") + (j.every ? (j.every === "day" ? " · כל יום" : " · כל שבוע") + (j.until ? " עד " + fmtD(j.until) : "") : "");
+
+// ---------- פעולות (כל מה שמסומן data-x) ----------
+async function after(tab) { delete state.data.home; if (tab) delete state.data[tab]; await show(state.tab, true); }
+const X = {
+  close: () => { $("#mm").hidden = true; },
+  card: d => openMember(d.p),
+  pick: (d, b) => { for (const c of b.closest("form,.card").querySelectorAll(".picker input")) c.checked = d.v === "1"; },
+  dl: d => apiFile(d.n),
+  playin: (d, b) => { b.outerHTML = audio(d.p).replace("<audio ", '<audio autoplay style="height:32px;max-width:260px" '); },
+  print: () => window.print(),
+  mon: () => monitor(true),
+  monx: () => monitor(false),
+  rec: (d, b) => recToggle(b.closest("[data-rec]")),
+  upload: (d, b) => doUpload(b.closest("[data-rec]")),
+  // הודעות
+  selall: () => { for (const c of main.querySelectorAll("[data-sel]")) { c.checked = true; state.sel.add(c.dataset.sel); } updBatch(); },
+  selnone: () => { state.sel.clear(); for (const c of main.querySelectorAll("[data-sel]")) c.checked = false; updBatch(); },
+  batch: async d => {
+    const ids = [...state.sel], n = ids.length, msg = { delete: `למחוק ${n} הודעות מהקו? (אפשר לשחזר מסל המחזור)`, important: `להעביר ${n} הודעות לחשובות ולשלוח צינתוק לכולם?`, regular: `להוציא ${n} הודעות מהחשובות?` }[d.op];
+    if (d.op === "regular" ? !confirm(msg) : !confirm2(msg)) return;
+    const r = await api("batch", { ids, op: d.op }), bad = r.results.filter(x => x.error);
+    toast(`בוצע על ${r.results.length - bad.length} הודעות${bad.length ? `, ${bad.length} נכשלו` : ""}`, !!bad.length); state.sel.clear(); await after("msgs");
+  },
+  zipsel: () => apiFile("zip", { paths: [...state.sel].map(id => "/1/2/" + id + ".wav") }, "messages.zip"),
+  note: async d => {
+    const cur = (state.notes[d.kind] || {})[d.key], t = prompt("הערת מנהל (ריק = מחיקה)", cur ? cur.t : ""); if (t === null) return;
+    const r = await api("notes", { kind: d.kind, key: d.key, text: t }); state.notes = r.notes; render(state.tab); toast(t.trim() ? "ההערה נשמרה" : "ההערה נמחקה");
+  },
+  fixtr: async d => {
+    const m = (state.data.msgs.list || []).find(x => x.id === d.id), t = prompt(`תיקון התמלול של הודעה ${d.id}`, m ? m.t : ""); if (t === null) return;
+    await api("transcript", { id: d.id, text: t }); if (m) m.t = t.trim(); render(state.tab); toast("התמלול עודכן");
+  },
+  restore: async d => { if (!confirm(`לשחזר את ${d.name} ל${d.to === "important" ? "חשובות" : "רגילות"}?`)) return; const r = await api("restore", { name: d.name, to: d.to }); toast("שוחזר כהודעה " + r.id); await after("trash"); },
+  purge: async d => { if (d.all ? !confirm2("למחוק לצמיתות את כל ההקלטות בסל המחזור? אי אפשר לבטל") : !confirm(`למחוק לצמיתות את ${d.name}?`)) return; const r = await api("purge", d.all ? { all: true } : { name: d.name }); toast(`נמחקו ${r.n} הקלטות`); await after("trash"); },
+  // כרטיס חבר
+  "m-act": async d => { const a = JSON.parse(d.a); if (!confirm(describe(a))) return; toast((await api("act", { a })).r); openMember(a.phone); },
+  "m-rename": async d => { const name = prompt("שם חדש", d.name); if (!name || name.trim() === d.name) return; toast((await api("act", { a: { type: "rename", phone: d.p, name: name.trim() } })).r); openMember(d.p); },
+  "m-mute": async d => { const h = prompt("לכמה שעות להשתיק? (ההודעות שלו יחכו לאישור)", "24"); if (h === null) return; toast((await api("act", { a: { type: "mute", phone: d.p, hours: Math.max(1, Math.min(720, +h || 24)) } })).r); openMember(d.p); },
+  "m-block": async d => { const on = d.on === "1"; if (!confirm(on ? "לחסום? הוא ינותק מיד בכל שיחה לקו" : "לבטל את החסימה?")) return; await api("block", { phone: d.p, on }); toast(on ? "נחסם" : "החסימה בוטלה"); openMember(d.p); },
+  "m-tz": async d => { if (!confirm(`לשלוח צינתוק ל${nm(d.p)}?`)) return; const r = await api("tz_phones", { phones: [d.p] }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : "הצינתוק נשלח"); },
+  "m-list": async d => { await api("lists", { list: d.list, phone: d.p, on: d.on === "1" }); toast("עודכן"); openMember(d.p); },
+  "m-code": async d => { const c = prompt("קוד אישי חדש (שתי ספרות) לתפריט ההודעות האישיות", d.c); if (!c || c === d.c) return; await api("codes", { phone: d.p, code: c }); toast("הקוד עודכן. התפריטים יתעדכנו תוך כמה דקות"); openMember(d.p); },
+  "m-rsvp": async d => { await api("event", { op: d.on === "1" ? "rsvp_add" : "rsvp_remove", phone: d.p, name: nm(d.p) }); toast("עודכן"); openMember(d.p); },
+  pmdel: async d => { if (!confirm("למחוק את ההודעה מהתיבה האישית?")) return; await api("pm_delete", { phone: d.p, name: d.name, old: d.old === "1" }); toast("נמחקה"); openMember(d.p); },
+  // רשימות
+  lst: async d => { await api("lists", { list: d.list, phone: d.p, on: d.on === "1" }); toast("עודכן"); await after("bot"); },
+  lstadd: async d => { const p = main.querySelector(`[data-lst="${d.list}"]`).value; if (!p) return; await api("lists", { list: d.list, phone: p, on: true }); toast("נוסף"); await after("bot"); },
+  // תזמון / שבת
+  def: async d => { if (d.op === "cancel_all" ? !confirm2("לבטל את כל הצינתוקים שמחכים?") : !confirm(d.op === "send" ? "לשלוח עכשיו, למרות שבת/חג?" : "לבטל את הצינתוק הזה?")) return; await api("deferred", { op: d.op, i: +d.i }); toast("בוצע"); await after("sched"); },
+  // אירוע
+  "ev-tzmiss": async () => { if (!confirm2("לשלוח צינתוק לכל מי שעוד לא נרשם לאירוע?")) return; const r = await api("event", { op: "tz_missing" }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); },
+  "ev-rsvp": async d => { if (d.op === "rsvp_remove" && !confirm(`להסיר את ${nm(d.p)} מהנרשמים?`)) return; await api("event", { op: d.op, phone: d.p, name: d.name || nm(d.p) }); toast("עודכן"); await after("event"); },
+  heardtz: async d => { const ph = JSON.parse(d.ph); if (!confirm(`לשלוח צינתוק ל-${ph.length} שעוד לא שמעו?`)) return; const r = await api("heard", { phones: ph }); toast(r.deferred ? "יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); },
+  // שידור
+  "weekly-dry": async (d, b) => { b.textContent = "יוצר טיוטה… (עד דקה)"; const r = await api("weekly", { op: "dry" }); toast(r.skipped || "הטיוטה מוכנה"); await after("studio"); },
+  // מערכת
+  bgclear: async () => { if (!confirm2("לנקות את כל משימות הרקע? (הקלטות שעוד לא נוצרו לא ייווצרו)")) return; const r = await api("health", { op: "clearbg" }); toast(`נוקו ${r.n} משימות`); await after("system"); },
+  bgdrop: async d => { await api("health", { op: "dropbg", i: +d.i }); await after("system"); },
+  copy: async d => { try { await navigator.clipboard.writeText(d.v); toast("הועתק"); } catch { prompt("העתיקו:", d.v); } },
+  ai: () => aiToggle(),
+  aisug: d => aiSend(d.q),
+  airun: (d, b) => aiRun(+d.i, b),
+};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-x]");
+  if (!b) { // לחיצה על שם בטבלת החברים = כרטיס חבר
+    const td = state.tab === "members" && e.target.closest("#main .tbl td:first-child"), ph = td && td.parentElement.querySelector("[data-phone]");
+    if (ph) openMember(ph.dataset.phone);
+    if (e.target.id === "mm") $("#mm").hidden = true;
+    return;
+  }
+  const f = X[b.dataset.x]; if (!f) return;
+  if (b.tagName === "BUTTON" && b.type !== "button") e.preventDefault();
+  try { b.disabled = true; await f(b.dataset, b, e); } catch (err) { toast(err.message, true); } finally { if (b.isConnected) b.disabled = false; }
+});
+main.addEventListener("change", e => {
+  const s = e.target.closest("[data-sel]"); if (s) { if (s.checked) state.sel.add(s.dataset.sel); else state.sel.delete(s.dataset.sel); updBatch(); }
+});
+document.addEventListener("change", async e => {
+  const t = e.target, k = t.dataset.xChange, fk = t.dataset.xFile;
+  try {
+    if (k === "repm" && t.value) { state.repM = t.value; await show("reports", true); }
+    if (k === "liveday" && t.value) { state.liveDay = t.value; await show("live", true); }
+    if (k === "stype") { const f = t.form, v = t.value; for (const [cls, on] of [["s-text", v !== "tz"], ["s-post", v === "post"], ["s-tz", v === "tz"], ["s-pm", v === "pm"], ["s-remind", v === "remind"]]) f.querySelector("." + cls).hidden = !on; }
+    if (fk === "audio" && t.files[0]) await fileToWav(t.closest("[data-rec]"), t.files[0]);
+    if (fk === "import" && t.files[0]) await importMembers(t.files[0]);
+    if (fk === "restore" && t.files[0]) await restoreBackup(t.files[0]);
+  } catch (err) { toast(err.message, true); }
+  if (fk) t.value = "";
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-xf]"); if (!f) return; e.preventDefault();
+  const v = Object.fromEntries(new FormData(f)), rc = new FormData(f).getAll("rcpt"), k = f.dataset.xf, btn = f.querySelector("button:not([type=button])");
+  try {
+    if (btn) btn.disabled = true;
+    if (k === "tts") { if (btn) btn.textContent = "יוצר קול…"; const r = await api("tts", { text: v.text.trim() }); state.tts = { ...r, text: v.text.trim() }; $("#ttsout").innerHTML = ttsOut(); }
+    if (k === "sendpm") {
+      const to = v.to, body = to === "sel" ? { id: state.tts.id, phones: rc } : { id: state.tts.id, list: to };
+      if (to === "sel" && !rc.length) throw new Error("לא נבחרו חברים");
+      const msg = to === "members" ? "לשלוח את ההודעה לתיבה האישית של כל החברים?" : to === "admins" ? "לשלוח לתיבות של המנהלים?" : `לשלוח ל-${rc.length} חברים?`;
+      if (to === "members" ? !confirm2(msg) : !confirm(msg)) return;
+      const r = await api("send_pm", body); toast(`ההודעה תגיע ל-${r.count} תיבות בדקות הקרובות`); state.tts = null; await after("studio");
+    }
+    if (k === "tzsel") { if (!rc.length) throw new Error("לא נבחרו חברים"); if (!confirm(`לשלוח צינתוק ל-${rc.length} חברים?`)) return; const r = await api("tz_phones", { phones: rc }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); }
+    if (k === "weekly") { if (!confirm2("לפרסם את הסיכום השבועי בקו (עם צינתוק לרשימת הרגילות)?")) return; const r = await api("weekly", { op: "send", text: v.text }); toast("הסיכום עלה כהודעה " + r.file); await after("studio"); }
+    if (k === "sched2") {
+      const body = { type: v.type, at: v.at.replace("T", " ").slice(0, 16), text: (v.text || "").trim(), important: !!v.important, list: v.list, phones: rc, phone: v.phone, every: v.every, until: v.until ? v.until.replace("T", " ").slice(0, 16) : "" };
+      const what = { post: (body.important ? "הודעה חשובה" : "הודעה") + ": " + body.text, tz: "צינתוק ל" + LISTN[body.list], entry: "החלפת הודעת הכניסה: " + body.text, pm: `הודעה אישית ל-${rc.length} חברים`, remind: `תזכורת ל${nm(body.phone)}` }[body.type];
+      if (!confirm(`לקבוע ל-${body.at}${body.every ? (body.every === "day" ? ", כל יום" : ", כל שבוע") : ""}:\n${what}`)) return;
+      await api("schedule2", body); toast("התזמון נקבע"); f.reset(); await after("sched");
+    }
+    if (k === "ev-edit") { if (!confirm("לעדכן את פרטי האירוע? התפריט בשלוחה 9 יוקלט מחדש")) return; await api("event", { op: "edit", title: v.title, desc: v.desc }); toast("האירוע עודכן"); await after("event"); }
+    if (k === "m-pm") {
+      const out = f.querySelector(".mpv");
+      if (!f._tts || f._tts.text !== v.text.trim()) { if (btn) btn.textContent = "יוצר קול…"; const r = await api("tts", { text: v.text.trim() }); f._tts = { ...r, text: v.text.trim() }; out.innerHTML = `<audio controls src="${API_BASE}preview?id=${encodeURIComponent(r.id)}${tokq()}" style="width:100%;margin-top:6px"></audio><div class="mut small">שמעתם? לחיצה נוספת על הכפתור שולחת.</div>`; if (btn) btn.textContent = "✉ שליחה לתיבה שלו"; return; }
+      if (!confirm(`לשלוח את ההודעה לתיבה האישית של ${nm(f.dataset.p)}?`)) return;
+      await api("send_pm", { id: f._tts.id, phones: [f.dataset.p] }); toast("ההודעה תגיע לתיבה בדקות הקרובות"); openMember(f.dataset.p);
+    }
+    if (k === "m-note") { await api("notes", { kind: "member", key: f.dataset.p, text: v.text }); toast("נשמר"); }
+    if (k === "m-ads") { await api("ads", { phone: f.dataset.p, list: v.text.split("\n") }); toast("הפרסומות נשמרו"); }
+    if (k === "notif") { const pref = { pend: !!v.pend, msg: !!v.msg, online: !!v.online }; try { localStorage.setItem("notif", JSON.stringify(pref)); } catch {} if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); toast("ההגדרות נשמרו"); render("system"); }
+    if (k === "share") { const r = await api("share", { days: +v.days }); const url = "https://shmuel-lamed.github.io/07/#t=" + r.token; $("#shareout").innerHTML = `<div class="row" style="margin-top:8px"><input value="${esc(url)}" readonly style="flex:1" onclick="this.select()"><button type="button" class="btn s" data-x="copy" data-v="${esc(url)}">העתקה</button></div><div class="mut small">בתוקף ${r.days} ימים</div>`; }
+  } catch (err) { toast(err.message, true); }
+  finally { if (btn && btn.isConnected) { btn.disabled = false; if (k === "tts") btn.textContent = "יצירת קול ושמיעה"; } }
+});
+
+// ---------- ייבוא חברים ושחזור גיבוי ----------
+async function importMembers(file) {
+  const text = await file.text(), rows = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cells = line.split(/[,;\t]/).map(c => c.replace(/^"|"$/g, "").trim()), p = cells.map(c => c.replace(/[\s-]/g, "")).find(c => /^0\d{8,9}$/.test(c));
+    const n = cells.find(c => /[֐-׿a-zA-Z]/.test(c) && !/^(שם|name|טלפון|phone)$/i.test(c));
+    if (p && n) rows.push({ p, n: n.slice(0, 40) });
+  }
+  if (!rows.length) throw new Error("לא נמצאו שורות עם מספר טלפון ושם");
+  const isNew = r => !state.names[r.p], diff = r => state.names[r.p] && state.names[r.p] !== r.n;
+  const box = $("#mm"); box.hidden = false;
+  box.querySelector(".box").innerHTML = `<div class="mh"><h2>ייבוא חברים</h2><span class="mut">${rows.length} שורות</span><button class="btn s xbtn" data-x="close">✕</button></div>
+    <div class="card"><div class="tiles">${tile(rows.filter(isNew).length, "חדשים – יצטרפו", "good")}${tile(rows.filter(diff).length, "שם שונה")}${tile(rows.filter(r => !isNew(r) && !diff(r)).length, "ללא שינוי")}</div>
+    <div class="wrap" style="margin-top:10px;max-height:320px"><table class="tbl small"><tr><th>שם בקובץ</th><th>טלפון</th><th>מצב</th></tr>${rows.map(r => `<tr><td>${esc(r.n)}</td><td>${phone(r.p)}</td><td>${isNew(r) ? '<span class="pill ok">חדש</span>' : diff(r) ? `<span class="pill warn">עכשיו: ${esc(state.names[r.p])}</span>` : '<span class="pill">קיים</span>'}</td></tr>`).join("")}</table></div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="imp-rename"> לעדכן גם שמות של חברים קיימים</label>
+    <div class="row" style="margin-top:8px"><button class="btn p" id="imp-go">ייבוא</button></div></div>`;
+  $("#imp-go").onclick = async () => {
+    if (!confirm2(`לייבא? ${rows.filter(isNew).length} חברים חדשים יצטרפו לקבוצה`)) return;
+    $("#imp-go").disabled = true;
+    try { const r = await api("members_import", { rows, rename: $("#imp-rename").checked }); toast(`נוספו ${r.added.length}, שונו ${r.renamed.length}${r.errors.length ? `, ${r.errors.length} שגיאות` : ""}`, !!r.errors.length); box.hidden = true; await after("members"); }
+    catch (err) { toast(err.message, true); $("#imp-go").disabled = false; }
+  };
+}
+async function restoreBackup(file) {
+  const data = JSON.parse(await file.text()); if (!data || !data._meta) throw new Error("זה לא קובץ גיבוי של הקו");
+  const keys = data._meta.keys.filter(k => k in data), label = { people: "רשימת החברים", names_over: "השמות", rules: "כללי העוזר", scheduled: "תזמונים", blocked: "חסומים", watch: "השתקות", retort: "רשימת תגובה עוקצנית", strict: "רשימת פיקוח מוגבר", ads: "פרסומות", event: "האירוע", approved: "אישורי הצטרפות", archive: "ארכיון התמלולים", facts: "עובדות", profiles: "פרופילים", dashnotes: "הערות מנהל", joinmap: "בקשות הצטרפות", demap: "מיפוי הודעות" };
+  const box = $("#mm"); box.hidden = false;
+  box.querySelector(".box").innerHTML = `<div class="mh"><h2>שחזור מגיבוי</h2><span class="mut">מ-${esc(data._meta.at)}</span><button class="btn s xbtn" data-x="close">✕</button></div>
+    <div class="card"><div class="mut small">מה לשחזר? הערכים הנוכחיים יוחלפו בערכים מהגיבוי.</div><div class="picker" style="margin-top:8px">${keys.map(k => `<label><input type="checkbox" name="rk" value="${k}"><span>${esc(label[k] || k)}</span></label>`).join("")}</div>
+    <div class="row" style="margin-top:8px"><button class="btn p d" id="rs-go">שחזור</button></div></div>`;
+  $("#rs-go").onclick = async () => {
+    const sel = [...box.querySelectorAll("[name=rk]:checked")].map(x => x.value); if (!sel.length) return toast("לא נבחר כלום", true);
+    if (!confirm2(`לשחזר ${sel.length} פריטים מהגיבוי? הערכים הנוכחיים יימחקו`)) return;
+    try { const part = {}; for (const k of sel) part[k] = data[k]; const r = await api("restore_backup", { data: part, keys: sel }); toast("שוחזר: " + r.done.length + " פריטים"); box.hidden = true; state.data = {}; await show(state.tab, true); }
+    catch (err) { toast(err.message, true); }
+  };
+}
+
+// ---------- אישור כפול לפעולות רחבות שבלשוניות המקוריות ----------
+main.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  let risky = "";
+  if (b.dataset.act === "tz" && b.dataset.list === "members") risky = "צינתוק לכל החברים";
+  if (b.dataset.act === "admin") { try { const a = JSON.parse(b.dataset.a); if (a.type === "entry_delete") risky = "מחיקת ההודעה בכניסה"; } catch {} }
+  if (risky && !confirm2(risky + "?")) { e.stopImmediatePropagation(); e.preventDefault(); }
+}, true);
+main.addEventListener("submit", e => {
+  const f = e.target.closest("form[data-form=broadcast]");
+  if (f && !confirm2("הודעה אישית לכל החברים?")) { e.stopImmediatePropagation(); e.preventDefault(); }
+}, true);
+
+// ---------- חיפוש גלובלי ----------
+const gs = $("#gs"), gsr = $("#gsr");
+let gsMsgs = null, gsSel = 0;
+async function gsSearch() {
+  const q = gs.value.trim(); if (!q) { gsr.hidden = true; return; }
+  if (!gsMsgs && !gsMsgs?.loading) { gsMsgs = { loading: true, list: [] }; api("messages?n=1000").then(d => { gsMsgs = d; gsSearch(); }).catch(() => { gsMsgs = null; }); }
+  const low = q.toLowerCase(), has = s => String(s || "").toLowerCase().includes(low), out = [];
+  const tabs = TABS.filter(([, l]) => has(l)).map(([k, l]) => ({ g: "לשוניות", t: l, s: "", run: () => show(k) }));
+  const mem = Object.entries(state.names).filter(([p, n]) => has(n) || p.includes(q)).slice(0, 6).map(([p, n]) => ({ g: "חברים", t: n, s: p, run: () => openMember(p) }));
+  const msgs = (gsMsgs.list || []).filter(m => has(m.t) || has(m.n) || m.id === q).slice(0, 6).map(m => ({ g: "הודעות", t: `${m.id} · ${m.n || m.p || ""}`, s: String(m.t || "").slice(0, 90), run: () => { state.filter.msgs = q; show("msgs"); } }));
+  const conv = ((state.data.bot || {}).conv || []).filter(c => has(c.q) || has(c.a)).slice(0, 4).map(c => ({ g: "שיחות עם העוזר", t: c.n, s: c.q, run: () => { state.filter.convq = q; show("reports"); } }));
+  const logs = ((state.data.log || {}).lines || []).filter(l => has(l.m)).slice(0, 4).map(l => ({ g: "יומן", t: l.m.slice(0, 80), s: l.t, run: () => { state.filter.log = q; show("log"); } }));
+  out.push(...tabs, ...mem, ...msgs, ...conv, ...logs, { g: "", t: `🤖 לשאול את עוזר ה-AI: "${q}"`, s: "", run: () => { aiToggle(true); aiSend(q); } });
+  gsr.hidden = false; gsSel = 0; gsr._items = out; let g = null;
+  gsr.innerHTML = out.map((r, i) => (r.g !== g ? `<div class="g">${esc((g = r.g))}</div>` : "") + `<button type="button" data-i="${i}" class="${i === 0 ? "on" : ""}">${esc(r.t)}${r.s ? `<small>${esc(r.s)}</small>` : ""}</button>`).join("") + (gsMsgs.loading ? '<div class="g">טוען הודעות…</div>' : "");
+}
+gs.addEventListener("input", gsSearch);
+gs.addEventListener("keydown", e => {
+  const items = gsr._items || [], btns = gsr.querySelectorAll("button");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); gsSel = (gsSel + (e.key === "ArrowDown" ? 1 : -1) + items.length) % Math.max(1, items.length); btns.forEach((b, i) => b.classList.toggle("on", i === gsSel)); }
+  if (e.key === "Enter" && items[gsSel]) { e.preventDefault(); items[gsSel].run(); gsr.hidden = true; gs.blur(); }
+  if (e.key === "Escape") { gsr.hidden = true; gs.blur(); }
+});
+gsr.addEventListener("mousedown", e => { const b = e.target.closest("button[data-i]"); if (b) { e.preventDefault(); gsr._items[+b.dataset.i].run(); gsr.hidden = true; gs.blur(); } });
+gs.addEventListener("blur", () => setTimeout(() => { gsr.hidden = true; }, 150));
+
+// ---------- קיצורי מקלדת ----------
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (e.key === "Escape") { $("#mm").hidden = true; if (!$("#mon").hidden) monitor(false); if (!$("#aip").hidden) aiToggle(false); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); gs.focus(); return; }
+  if (e.altKey && /^[1-9]$/.test(e.key) && TABS[+e.key - 1]) { e.preventDefault(); show(TABS[+e.key - 1][0]); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey || !$("#login-layer").hidden) return;
+  if (e.key === "/") { e.preventDefault(); gs.focus(); }
+  if (e.key.toLowerCase() === "r" || e.key === "ר") show(state.tab, true);
+  if ((e.key.toLowerCase() === "a" || e.key === "ש") && !state.ro) { e.preventDefault(); aiToggle(); }
+  if (e.key.toLowerCase() === "m" || e.key === "צ") monitor(true);
+});
+
+// ---------- מסך בקרה (לחדר / למסך שעומד פתוח) ----------
+let monT = null, monClock = null;
+async function monitor(on) {
+  const m = $("#mon"); m.hidden = !on; clearInterval(monT); clearInterval(monClock);
+  if (!on) { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); return; }
+  try { await m.requestFullscreen(); } catch {}
+  const tick = () => { m.querySelector(".clk").textContent = new Date().toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
+  tick(); monClock = setInterval(tick, 1000);
+  const load = async () => {
+    try {
+      const [p, o] = await Promise.all([api("pulse"), api("overview")]);
+      m.querySelector(".g").innerHTML = `<div class="p"><h2>בקו עכשיו</h2><div class="big ${p.online.length ? "good" : ""}">${p.online.length}</div><ul style="margin-top:10px">${p.online.map(c => `<li>${esc(c.n || c.p)}<small>${esc(c.w)}</small></li>`).join("")}</ul></div>
+        <div class="p"><h2>ממתינות לאישור</h2><div class="big ${p.pending + p.joins ? "bad" : "good"}">${p.pending + p.joins}</div><ul style="margin-top:10px">${o.pending.filter(x => x.n).map(x => `<li>${esc(x.name)}<small>${x.n}</small></li>`).join("")}${p.joins ? `<li>בקשות הצטרפות<small>${p.joins}</small></li>` : ""}</ul></div>
+        <div class="p"><h2>הבא בתור</h2><ul>${o.jobs.slice(0, 5).map(j => `<li>${esc(jobText2(j))}<small>${esc(fmtD(j.at))}</small></li>`).join("") || "<li>אין תזמונים</li>"}</ul></div>
+        <div class="p"><h2>${esc(o.event.title)}</h2><div class="big">${o.event.count}<span style="font-size:24px;color:#9aa3b5"> / ${o.event.total}</span></div><small style="color:#9aa3b5">נרשמו</small></div>
+        <div class="p"><h2>הודעות בקו</h2><div class="big">${o.allCount}</div><small style="color:#9aa3b5">ההודעה האחרונה: ${p.lastMsg}</small>${o.holy ? '<div style="margin-top:12px;color:#fcd34d">🕯 שבת / חג – צינתוקים ממתינים</div>' : ""}</div>`;
+    } catch (e) { m.querySelector(".g").innerHTML = `<div class="p">${esc(e.message)}</div>`; }
+  };
+  load(); monT = setInterval(load, 10000);
+}
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !$("#mon").hidden) { /* נשאר פתוח גם בלי מסך מלא */ } });
+
+// ---------- התראות ודופק ברקע ----------
+const notifPref = () => { try { return JSON.parse(localStorage.getItem("notif") || "null") || { pend: true, msg: false, online: false }; } catch { return { pend: true, msg: false, online: false }; } };
+let lastPulse = null;
+function notifyMe(title, body) {
+  if ("Notification" in window && Notification.permission === "granted") { try { const n = new Notification(title, { body, tag: title, lang: "he", dir: "rtl" }); n.onclick = () => { window.focus(); n.close(); }; return; } catch {} }
+  if (document.hidden) return; toast(title + (body ? " – " + body : ""));
+}
+async function pulse() {
+  if (REMOTE && !adminToken) return;
+  try {
+    const p = await api("pulse"), pref = notifPref(), pend = p.pending + p.joins;
+    document.title = (pend ? `(${pend}) ` : "") + "ניהול קו הקבוצה";
+    $("#b-pend").textContent = pend ? pl(pend, "ממתינה אחת", "# ממתינות") : "אין ממתינות"; $("#b-pend").classList.toggle("warn", pend > 0); if ($("#n-pend")) $("#n-pend").textContent = pend || "";
+    if (lastPulse) {
+      if (pref.pend && pend > lastPulse.pend) notifyMe("הודעה חדשה ממתינה לאישור", pl(pend, "ממתינה אחת", "# ממתינות"));
+      if (pref.msg && p.lastMsg > lastPulse.lastMsg) notifyMe("הודעה חדשה בקו", "הודעה " + p.lastMsg);
+      if (pref.online) for (const c of p.online) if (!lastPulse.online.includes(c.p)) notifyMe((c.n || c.p) + " נכנס לקו", c.w);
+    }
+    lastPulse = { pend, lastMsg: p.lastMsg, online: p.online.map(c => c.p) };
+    if (state.tab === "live" && state.data.live && !document.hidden) { state.data.live.online = p.online; render("live"); }
+  } catch {}
+}
+setInterval(pulse, 45000);
+setInterval(() => { if (state.tab === "live" && !document.hidden) for (const el of main.querySelectorAll(".live-d")) { const s = Math.round((Date.now() - (state.firstSeen[el.dataset.p] || Date.now())) / 1000); el.textContent = s < 60 ? s + " שנ׳" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); } }, 1000);
+setInterval(() => { if (state.tab === "live" && !document.hidden) pulse(); }, 15000);
+
+// ---------- עוזר AI בדף ----------
+const AI_SUG = ["מה ממתין לטיפול עכשיו?", "מי עוד לא נרשם לאירוע?", "תזמן צינתוק לכל החברים מחר ב-20:00", "סכם לי את ההודעות האחרונות", "מי בקו עכשיו?", "תוסיף כלל לעוזר: לענות תמיד בקצרה"];
+function aiToggle(on) {
+  const p = $("#aip"); p.hidden = on === undefined ? !p.hidden : !on;
+  if (!p.hidden) { if (!state.ai.length) aiDraw(); setTimeout(() => $("#aiq").focus(), 50); }
+}
+function aiDraw() {
+  const l = $("#ail");
+  l.innerHTML = (state.ai.length ? "" : `<div class="bub ai">שלום! אני עוזר הניהול. אפשר לשאול אותי על מה שקורה בקו, או לבקש פעולה – אני אכין אותה, ואתם מאשרים בלחיצה.</div><div class="aisug">${AI_SUG.map(s => `<button type="button" data-x="aisug" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div>`) +
+    state.ai.map((m, mi) => m.role === "user" ? `<div class="bub me">${esc(m.text)}</div>` : m.busy ? `<div class="bub ai"><span class="typing"><i></i><i></i><i></i></span></div>` : m.err ? `<div class="bub err">${esc(m.text)}</div>` :
+      `<div class="bub ai">${esc(m.text)}</div>${(m.actions || []).map((a, i) => `<div class="acard ${a.done ? "done" : ""}"><span class="grow">${a.done ? "✓ " : ""}${esc(a.desc || a.kind)}</span><button class="btn s p" data-x="airun" data-i="${mi * 100 + i}">${a.kind === "navigate" || a.kind === "open_member" ? "פתיחה" : "ביצוע"}</button></div>`).join("")}`).join("");
+  l.scrollTop = l.scrollHeight;
+}
+async function aiSend(q) {
+  q = String(q || "").trim(); if (!q) return;
+  const history = state.ai.filter(m => !m.busy && !m.err).slice(-8).map(m => ({ role: m.role, text: m.text + (m.actions && m.actions.length ? "\n[הצעתי: " + m.actions.map(a => a.desc).join("; ") + "]" : "") }));
+  state.ai.push({ role: "user", text: q }, { role: "model", busy: true }); aiDraw();
+  try {
+    const r = await api("ai", { q, history }); state.ai.pop(); state.ai.push({ role: "model", text: r.answer, actions: r.actions });
+    const nav = r.actions.find(a => a.kind === "navigate" || a.kind === "open_member"); if (nav && r.actions.length === 1) { await aiExec(nav); nav.done = true; }
+  } catch (e) { state.ai.pop(); state.ai.push({ role: "model", err: true, text: e.message }); }
+  aiDraw();
+}
+async function aiRun(idx, b) {
+  const m = state.ai[Math.floor(idx / 100)], a = m && (m.actions || [])[idx % 100]; if (!a || a.done) return;
+  if (await aiExec(a) !== false) { a.done = true; aiDraw(); }
+}
+async function aiExec(a) {
+  const ok = msg => confirm(msg || a.desc), wide = msg => confirm2(msg || a.desc);
+  switch (a.kind) {
+    case "navigate": show(a.tab); return;
+    case "open_member": openMember(a.phone); return;
+    case "act": { if (!(a.a.type === "broadcast" ? wide(describe(a.a)) : ok(describe(a.a)))) return false; toast((await api("act", { a: a.a })).r); break; }
+    case "tzintuk": { if (!(a.list === "members" ? wide() : ok())) return false; const r = await api("tzintuk", { list: a.list }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : r.ok ? "הצינתוק נשלח" : "ימות לא אישרו", !r.ok && !r.deferred); break; }
+    case "tz_phones": { if (!ok()) return false; const r = await api("tz_phones", { phones: a.phones }); toast(r.deferred ? "יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); break; }
+    case "pm": {
+      toast("יוצר את הקול…"); const t = await api("tts", { text: a.text });
+      const au = new Audio(API_BASE + "preview?id=" + encodeURIComponent(t.id) + tokq()); au.play().catch(() => {});
+      const msg = `${a.desc}\n\n(הקול מתנגן עכשיו, ${t.seconds} שניות) לשלוח?`;
+      if (!(a.list === "members" ? wide(msg) : ok(msg))) { au.pause(); return false; }
+      const r = await api("send_pm", a.list ? { id: t.id, list: a.list } : { id: t.id, phones: a.phones }); toast(`ההודעה תגיע ל-${r.count} תיבות`); break;
+    }
+    case "schedule2": { if (!ok()) return false; const { kind, desc, ...body } = a; await api("schedule2", body); toast("התזמון נקבע"); break; }
+    case "block": { if (!ok()) return false; await api("block", { phone: a.phone, on: a.on }); toast("עודכן"); break; }
+    case "lists": { if (!ok()) return false; await api("lists", { list: a.list, phone: a.phone, on: a.on }); toast("עודכן"); break; }
+    case "event": { if (!(a.op === "tz_missing" ? wide() : ok())) return false; await api("event", { op: a.op, title: a.title, desc: a.details, phone: a.phone, name: a.name }); toast("בוצע"); break; }
+    case "unsched": { if (!ok()) return false; await api("unsched", { id: a.id }); toast("התזמון בוטל"); break; }
+    default: return false;
+  }
+  state.data = {}; show(state.tab, true);
+}
+$("#aif").addEventListener("submit", e => { e.preventDefault(); const q = $("#aiq").value; $("#aiq").value = ""; aiSend(q); });
+
+// ---------- הפעלה ----------
+async function startApp() {
+  show(state.tab);
+  api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
+  try { const me = await api("whoami"); state.ro = me.ro; document.body.classList.toggle("ro", me.ro); $("#rob").hidden = !me.ro; } catch {}
+  pulse();
+}
+
 $("#login-form").addEventListener("submit", async e => {
   e.preventDefault();
   const btn = e.currentTarget.querySelector("button");
-  try {
-    btn.disabled = true; $("#login-err").textContent = "";
-    await createSession($("#login-pass").value);
-    $("#login-pass").value = ""; hideLogin();
-    state.data = {};
-    await show(state.tab, true);
-    const d = await api("overview");
-    if (!state.data.home) state.data.home = d;
-    state.names = d.names; badges(d);
-  } catch (err) { showLogin(err.message); }
+  try { btn.disabled = true; $("#login-err").textContent = ""; await createSession($("#login-pass").value); $("#login-pass").value = ""; hideLogin(); state.data = {}; await startApp(); }
+  catch (err) { showLogin(err.message); }
   finally { btn.disabled = false; }
 });
 $("#logout").addEventListener("click", () => {
-  adminToken = ""; sessionStorage.removeItem("adminToken"); state.data = {}; $("#main").innerHTML = ""; showLogin();
+  if (!REMOTE) { const f = document.createElement("form"); f.method = "post"; f.action = "/admin/logout"; document.body.append(f); f.submit(); return; }
+  state.data = {}; $("#main").innerHTML = ""; dropSession();
 });
-if (adminToken) {
-  hideLogin();
-  show(state.tab);
-  api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
-} else {
-  showLogin();
-}
+if (!REMOTE || adminToken) { hideLogin(); startApp(); } else showLogin();
 </script>
 </body>
 </html>
