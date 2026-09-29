@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>ניהול קו הקבוצה</title>
+<style>
+:root{color-scheme:light;--bg:#f9f9f7;--card:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--mut:#898781;--line:#e1e0d9;--axis:#c3c2b7;--acc:#2a78d6;--acc2:#1c5cab;--accbg:#e9f1fc;--good:#0ca30c;--goodt:#006300;--warn:#fab219;--warnt:#7a5200;--bad:#d03b3b;--badbg:#fbe9e9;--ring:rgba(11,11,11,.1);--sh:0 1px 2px rgba(0,0,0,.05)}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0d0d0d;--card:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--mut:#898781;--line:#2c2c2a;--axis:#383835;--acc:#3987e5;--acc2:#86b6ef;--accbg:#16233a;--goodt:#4ade80;--warnt:#fab219;--bad:#e66767;--badbg:#3a1c1c;--ring:rgba(255,255,255,.1);--sh:none}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0d0d0d;--card:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--mut:#898781;--line:#2c2c2a;--axis:#383835;--acc:#3987e5;--acc2:#86b6ef;--accbg:#16233a;--goodt:#4ade80;--warnt:#fab219;--bad:#e66767;--badbg:#3a1c1c;--ring:rgba(255,255,255,.1);--sh:none}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+a{color:var(--acc)}button{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{max-width:1100px;margin:auto;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bar h1{font-size:18px;margin:0;font-weight:700}.bar .sub{color:var(--mut);font-size:12px;white-space:nowrap}
+.grow{flex:1}.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.badge.live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-inline-end:6px;vertical-align:1px}
+.badge.warn{background:var(--warn);color:#1a1a19;border-color:transparent;font-weight:600}
+.tabs{max-width:1100px;margin:auto;padding:0 10px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:0 0 auto;background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;color:var(--ink2);font-weight:600;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--acc);border-color:var(--acc)}.tabs b{font-weight:600;font-size:11px;background:var(--bad);color:#fff;border-radius:999px;padding:0 6px;margin-inline-start:4px}.tabs b:empty{display:none}
+main{max-width:1100px;margin:auto;padding:14px 16px 40px;display:grid;gap:14px;transition:opacity .15s}main.busy{opacity:.55;pointer-events:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--sh);cursor:default}.tile b{display:block;font-size:26px;line-height:1.2;font-weight:700}.tile span{color:var(--ink2);font-size:12px}
+.tile.warn b{color:var(--bad)}.tile.good b{color:var(--goodt)}.tile[data-tab]{cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--sh);min-width:0}
+.card h2{font-size:16px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.card h2 small{color:var(--mut);font-weight:400;font-size:13px}
+.cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}.cols.two{grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr))}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.between{justify-content:space-between}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:13px;line-height:1.3}
+.btn:hover{border-color:var(--acc)}.btn.p{background:var(--acc);color:#fff;border-color:transparent}.btn.d{color:var(--bad)}.btn.d:hover{background:var(--badbg);border-color:var(--bad)}.btn.s{padding:4px 9px;font-size:12px}.btn:disabled{opacity:.5;cursor:default}
+.pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap;vertical-align:1px}
+.pill.ok{color:var(--goodt);border-color:var(--good)}.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.acc{background:var(--acc);color:#fff;border-color:transparent}.pill.warn{background:var(--warn);color:#1a1a19;border-color:transparent}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}.tbl th,.tbl td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}.tbl th{color:var(--mut);font-weight:600;font-size:12px;white-space:nowrap}.tbl tr:last-child td{border-bottom:0}.tbl.small td,.tbl.small th{padding:4px 6px;font-size:13px}
+.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}.num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right}
+.mut{color:var(--mut)}.small{font-size:12px}.empty{color:var(--mut);padding:6px 0}.right{margin-inline-start:auto}
+.list{margin:0;padding:0;list-style:none}.list li{padding:8px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.list li:last-child{border-bottom:0}
+.msg{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;display:grid;gap:8px}.msg:last-child{margin-bottom:0}.msg .head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.msg .head b{font-size:15px}
+.msg audio{width:100%;height:36px}.tr{font-size:14px;color:var(--ink2);white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:8px 10px;max-height:5.5em;overflow:hidden;position:relative;cursor:pointer}.tr.open{max-height:none}.tr.long:not(.open)::after{content:"עוד…";position:absolute;bottom:0;inset-inline-start:0;padding:0 10px 4px;background:var(--bg);color:var(--acc);font-size:12px}
+input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:inherit;max-width:100%}input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}textarea{width:100%;min-height:70px;resize:vertical}
+.form{display:grid;gap:8px}.form .row input{flex:1;min-width:120px}label.chk{display:flex;gap:6px;align-items:center;font-size:14px}
+.search{width:100%;max-width:420px}
+.chart{position:relative;direction:ltr}.chart svg{width:100%;height:auto;display:block}.chart .grid{stroke:var(--line);stroke-width:1}.chart .axis{stroke:var(--axis);stroke-width:1}.chart .tick{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.chart .mark{fill:var(--acc)}.chart .hit{fill:transparent}.chart .bar:hover .mark{fill:var(--acc2)}
+.tip{position:absolute;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;pointer-events:none;white-space:nowrap;direction:rtl;transform:translate(-50%,-110%);z-index:2}
+.tblv{direction:rtl;margin-top:6px}.tblv summary{color:var(--mut);font-size:12px;cursor:pointer}
+.hb{display:grid;gap:6px}.hb-row{display:grid;grid-template-columns:minmax(90px,140px) 1fr 40px;gap:8px;align-items:center;font-size:13px}.hb-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hb-b{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}.hb-b i{display:block;height:100%;background:var(--acc);border-radius:5px}.hb-v{text-align:left;color:var(--ink2);font-variant-numeric:tabular-nums}
+.banner{border-radius:12px;padding:10px 14px;background:var(--accbg);border:1px solid var(--acc);display:flex;gap:10px;align-items:center;flex-wrap:wrap}.banner.warn{background:var(--warn);color:#1a1a19;border-color:transparent}
+.online li{align-items:flex-start}.online .w{color:var(--ink2);font-size:13px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{font-size:13px;padding:3px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}.chip.ok{border-color:var(--good);color:var(--goodt)}.chip.bad{border-color:var(--bad);color:var(--bad)}
+.log li{display:block;font-size:13px;padding:6px 0}.log time{color:var(--mut);font-size:12px;margin-inline-end:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.conv{display:grid;gap:6px}.conv .q{font-weight:600}.conv .a{color:var(--ink2)}.conv .m{color:var(--mut);font-size:12px}
+#toast{position:fixed;bottom:18px;inset-inline:0;display:grid;justify-content:center;pointer-events:none;z-index:9}#toast div{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.25);animation:up .2s}#toast div.bad{background:var(--bad);color:#fff}@keyframes up{from{transform:translateY(10px);opacity:0}}
+.err{color:var(--bad)}.icon{width:34px;height:34px;padding:0;display:inline-grid;place-items:center;font-size:16px}
+@media(max-width:600px){.bar{padding:8px 12px}.bar h1{font-size:16px}main{padding:12px 12px 40px}.card{padding:12px}.tile b{font-size:22px}.hb-row{grid-template-columns:minmax(80px,110px) 1fr 36px}}
+@media print{.top,.tabs,.btn,#toast{display:none}}
+.login-layer{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:18px}
+.login-layer[hidden]{display:none}.login-box{width:min(390px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;display:grid;gap:12px;box-shadow:var(--sh)}
+.login-box h2{margin:0;font-size:20px}.login-box p{margin:0;color:var(--mut);font-size:13px}.login-box button{width:100%}.login-err{color:var(--bad);min-height:1.4em;font-size:13px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <div><h1>ניהול קו הקבוצה</h1><div class="sub" id="clock">073-351-2880</div></div>
+    <div class="grow"></div>
+    <div class="badges"><span class="badge live" id="b-online">…</span><span class="badge" id="b-pend">…</span></div>
+    <button class="btn icon" id="theme" title="מצב בהיר/כהה" aria-label="מצב בהיר/כהה">◐</button>
+    <button class="btn icon" id="refresh" title="רענון" aria-label="רענון">↻</button>
+    <button class="btn s" id="logout" type="button">יציאה</button>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="לשוניות"></nav>
+</header>
+<main id="main"></main>
+<div id="toast" aria-live="polite"></div>
+<div class="login-layer" id="login-layer" hidden>
+  <form class="login-box" id="login-form">
+    <h2>ניהול קו הקבוצה</h2>
+    <p>כניסה מאובטחת דרך GitHub Pages. הסיסמה נשלחת ישירות לשרת ואינה נשמרת ב-GitHub.</p>
+    <input id="login-pass" type="password" placeholder="סיסמת ניהול" autocomplete="current-password" required>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn p" type="submit">כניסה</button>
+  </form>
+</div>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const state = { tab: (location.hash || "#home").slice(1), data: {}, msgN: 200, filter: {}, names: {} };
+const TABS = [["home", "סקירה"], ["pending", "ממתינות"], ["msgs", "הודעות"], ["members", "חברים"], ["sched", "תזמונים"], ["bot", "העוזר"], ["stats", "סטטיסטיקה"], ["log", "יומן"]];
+const KIND_ACTS = { // מקשים כמו בשלוחה 7-4: 1 חשובה, 2 רגילה, 3 מחיקה
+  default: [["1", "חשובה + צינתוק", "p"], ["2", "רגילה", ""], ["3", "מחיקה", "d"]],
+  demoted: [["1", "להעביר לחשובות", "p"], ["2", "להשאיר ברגילות", ""], ["3", "למחוק מהקו", "d"]],
+  join: [["3", "מחיקת הבקשה", "d"]],
+};
+
+// ---------- עזרים ----------
+const API_BASE = "/admin/api/";
+let adminToken = sessionStorage.getItem("adminToken") || "";
+
+function showLogin(msg = "") {
+  $("#login-err").textContent = msg;
+  $("#login-layer").hidden = false;
+  setTimeout(() => $("#login-pass").focus(), 0);
+}
+function hideLogin() { $("#login-layer").hidden = true; $("#login-err").textContent = ""; }
+async function createSession(password) {
+  const r = await fetch(API_BASE + "session", {
+    method: "POST",
+    body: JSON.stringify({ password })
+  });
+  const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
+  if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
+  adminToken = j.token;
+  sessionStorage.setItem("adminToken", adminToken);
+}
+async function api(name, body) {
+  if (!adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
+  const sep = name.includes("?") ? "&" : "?";
+  const url = API_BASE + name + sep + "token=" + encodeURIComponent(adminToken);
+  const r = await fetch(url, body ? { method: "POST", body: JSON.stringify(body) } : undefined);
+  if (r.status === 401) {
+    adminToken = ""; sessionStorage.removeItem("adminToken"); showLogin("החיבור פג. יש להיכנס שוב.");
+    throw new Error("החיבור פג");
+  }
+  const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
+  if (!r.ok || j.error) throw new Error(j.error || "שגיאה " + r.status);
+  return j;
+}
+function toast(msg, bad) { const d = document.createElement("div"); if (bad) d.className = "bad"; d.textContent = msg; $("#toast").replaceChildren(d); setTimeout(() => d.remove(), bad ? 6000 : 3500); }
+const fmtD = s => { s = String(s || ""); let m = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[1]}/${m[2]} ${m[4]}`; m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[3]}/${m[2]} ${m[4]}`; return s.slice(0, 16); };
+const fmtDur = s => !s ? "" : s >= 60 ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : Math.round(s) + " שנ׳";
+const phone = p => p ? `<span class="num small mut">${esc(p.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3").replace(/^(\d{2})(\d{3})(\d{4})$/, "$1-$2-$3"))}</span>` : "";
+const who = (n, p) => `<b>${esc(n || (p ? "מספר לא מוכר" : "לא ידוע"))}</b> ${phone(p)}`;
+const audio = path => `<audio controls preload="none" src="${API_BASE}audio?p=${encodeURIComponent(path)}&token=${encodeURIComponent(adminToken)}"></audio>`;
+const transcript = t => t ? `<div class="tr${t.length > 220 ? " long" : ""}" data-toggle="tr">${esc(t)}</div>` : "";
+const empty = t => `<div class="empty">${esc(t || "אין")}</div>`;
+const tile = (n, l, cls, tab) => `<div class="tile ${cls || ""}" ${tab ? `data-tab="${tab}"` : ""}><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
+const pl = (n, one, many) => n === 1 ? one : many.replace("#", n);
+const actBtn = (a, label, cls = "", extra = "") => `<button class="btn s ${cls}" data-act="admin" data-a="${esc(JSON.stringify(a))}" ${extra}>${esc(label)}</button>`;
+function describe(a) {
+  const nm = p => state.names[p] || p;
+  switch (a.type) {
+    case "delete": return `למחוק מהקו את הודעה ${a.id}?`;
+    case "move": return a.to === "important" ? `להעביר את הודעה ${a.id} להודעות החשובות ולשלוח צינתוק לכולם?` : `להוציא את הודעה ${a.id} מהחשובות (תישאר ברגילות)?`;
+    case "schedule": return `לפרסם ב-${a.at} ${a.important ? "הודעה חשובה עם צינתוק לכולם" : "הודעה רגילה"}:\n${a.text}`;
+    case "event": return `לפתוח בשלוחה 9 הרשמה חדשה לאירוע "${a.title}"? הרשימה הקודמת נשמרת.`;
+    case "mute": return `להשתיק את ${nm(a.phone)} ל-${a.hours} שעות? ההודעות שלו יחכו לאישור.`;
+    case "unmute": return `לבטל את ההשתקה של ${nm(a.phone)}?`;
+    case "entry": return `להחליף את ההודעה בכניסה לקו ל:\n${a.text}`;
+    case "entry_delete": return "למחוק את ההודעה שבכניסה לקו?";
+    case "approve_join": return `להוסיף את ${a.name} (${a.phone}) לקבוצה?`;
+    case "rule_add": return `להוסיף לעוזר כלל קבוע:\n${a.text}`;
+    case "rule_remove": return `למחוק את כלל מספר ${a.n}?`;
+    case "rename": return `לשנות את השם של ${nm(a.phone)} ל"${a.name}"?`;
+    case "broadcast": return `להשאיר לכל אחד מהחברים הודעה אישית עם השם שלו:\n${a.text}`;
+    case "undo": return "לבטל את הפעולה האחרונה?";
+  }
+  return "לבצע?";
+}
+
+// ---------- לשוניות ----------
+$("#tabs").innerHTML = TABS.map(([k, l]) => `<button data-go="${k}" class="${k === state.tab ? "on" : ""}">${l}${k === "pending" ? ' <b id="n-pend"></b>' : ""}</button>`).join("");
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) show(b.dataset.go); });
+$("#refresh").addEventListener("click", () => show(state.tab, true));
+window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (t && t !== state.tab) show(t); });
+const LOAD = { home: () => api("overview"), pending: () => api("pending"), msgs: () => api("messages?n=" + state.msgN), members: () => api("members"), sched: () => api("schedule"), bot: () => api("assistant"), stats: () => api("stats"), log: () => api("log") };
+async function show(tab, force) {
+  if (!LOAD[tab]) tab = "home";
+  state.tab = tab; history.replaceState(null, "", "#" + tab);
+  for (const b of $("#tabs").children) b.classList.toggle("on", b.dataset.go === tab);
+  const main = $("#main");
+  if (state.data[tab] && !force) { render(tab); }
+  main.classList.add("busy");
+  try { state.data[tab] = await LOAD[tab](); if (state.data[tab].names) state.names = state.data[tab].names; render(tab); }
+  catch (e) { if (!state.data[tab]) main.innerHTML = `<div class="card"><h2>שגיאה</h2><div class="err">${esc(e.message)}</div><div class="mut small">אפשר לנסות שוב עם כפתור הרענון למעלה</div></div>`; else toast(e.message, true); }
+  main.classList.remove("busy");
+}
+function render(tab) { const d = state.data[tab]; if (!d) return; $("#main").innerHTML = RENDER[tab](d); if (tab === "home") { badges(d); } }
+function badges(d) {
+  const pend = (d.pending || []).reduce((a, x) => a + x.n, 0) + (d.joins || 0);
+  $("#b-online").textContent = d.online.length ? pl(d.online.length, "אחד בקו", "# בקו") : "אף אחד בקו";
+  $("#b-pend").textContent = pend ? pl(pend, "ממתינה אחת", "# ממתינות") : "אין ממתינות"; $("#b-pend").classList.toggle("warn", pend > 0);
+  $("#n-pend").textContent = pend || ""; $("#clock").textContent = "073-351-2880 · עודכן " + fmtD(d.now).slice(6);
+}
+
+// ---------- סקירה ----------
+const RENDER = {};
+RENDER.home = d => {
+  const pend = d.pending.reduce((a, x) => a + x.n, 0);
+  return `
+  ${d.holy ? `<div class="banner">🕯️ <b>שבת / חג</b> – צינתוקים נשמרים ויוצאים במוצאי שבת או חג${d.deferred.length ? ` (${d.deferred.length} מחכים)` : ""}</div>` : d.deferred.length ? `<div class="banner">${d.deferred.length} צינתוקים מחכים למוצאי שבת/חג</div>` : ""}
+  <div class="tiles">${tile(d.online.length, "מחוברים עכשיו", d.online.length ? "good" : "")}${tile(pend, "הודעות לאישור", pend ? "warn" : "", "pending")}${tile(d.joins, "בקשות הצטרפות", d.joins ? "warn" : "", "pending")}${tile(d.members.active + "/" + d.members.total, "פעילים בצינתוקים", "", "members")}${tile(d.event.count, "נרשמו ל" + d.event.title, "", "sched")}${tile(d.allCount, "הודעות בקו מאז ומעולם", "", "msgs")}</div>
+  <div class="cols">
+    <div class="card" id="online-card">${onlineHtml(d.online)}</div>
+    <div class="card"><h2>פעולות מהירות</h2>
+      <div class="row"><button class="btn" data-act="tz" data-list="members">📣 צינתוק לכל החברים</button><button class="btn" data-act="tz" data-list="admins">צינתוק למנהלים</button>
+      ${d.undo ? actBtn({ type: "undo" }, "↶ ביטול: " + d.undo.desc, "d") : '<span class="mut small">אין פעולה לביטול</span>'}</div>
+      <h2 style="margin-top:14px">ממתין לטיפול <small>שלוחה 7</small></h2>
+      <ul class="list">${d.pending.map(p => `<li><span class="grow">${esc(p.name)}</span><span class="pill ${p.n ? "bad" : ""}">${p.n}</span></li>`).join("")}<li><span class="grow">בקשות הצטרפות</span><span class="pill ${d.joins ? "bad" : ""}">${d.joins}</span></li></ul>
+      ${pend + d.joins ? '<div class="row" style="margin-top:8px"><button class="btn p" data-go="pending">לטיפול בממתינות ←</button></div>' : ""}
+    </div>
+    <div class="card"><h2>תזמונים קרובים</h2>${d.jobs.length ? `<ul class="list">${d.jobs.map(j => `<li><span class="num small mut">${esc(fmtD(j.at))}</span><span class="grow">${esc(jobText(j))}</span></li>`).join("")}</ul>` : empty("אין הודעות מתוזמנות")}
+      <h2 style="margin-top:14px">האירוע בשלוחה 9</h2><div><b>${esc(d.event.title)}</b> <span class="mut">${esc(d.event.desc || "")}</span></div><div class="mut small">נרשמו ${d.event.count} מתוך ${d.event.total} חברים</div>
+    </div>
+    <div class="card"><h2>מושתקים <small>הודעות שלהם מחכות לאישור</small></h2>${d.muted.length ? `<ul class="list">${d.muted.map(m => `<li>${who(m.n, m.p)}<span class="mut small">${m.until ? "עד " + esc(fmtD(m.until)) : ""}</span>${actBtn({ type: "unmute", phone: m.p }, "ביטול השתקה", "", 'style="margin-inline-start:auto"')}</li>`).join("")}</ul>` : empty("אף אחד לא מושתק")}
+      <h2 style="margin-top:14px">מנהלים</h2><div class="chips">${d.admins.map(a => `<span class="chip">${esc(a.n)}</span>`).join("")}</div>
+    </div>
+  </div>`;
+};
+const jobText = j => j.type === "post" ? (j.important ? "הודעה חשובה: " : "הודעה רגילה: ") + (j.text || "") : j.type === "remind" ? `תזכורת ל${j.who || j.phone}: ${j.text || ""}` : j.type === "shoeva" ? "הודעה חשובה על שמחת בית השואבה" : j.type;
+const onlineHtml = list => `<h2>מי בקו עכשיו <small>מתעדכן כל 10 שניות</small><span class="pill ${list.length ? "ok" : ""}">${list.length}</span></h2>` +
+  (list.length ? `<ul class="list online">${list.map(c => `<li><div class="grow"><div>${who(c.n, c.p)}</div><div class="w">${esc(c.w)}</div></div>${c.id ? `<button class="btn s d" data-act="hangup" data-id="${esc(c.id)}" data-phone="${esc(c.p)}" data-name="${esc(c.n)}">ניתוק</button>` : ""}</li>`).join("")}</ul>` : empty("אף אחד לא מחובר כרגע"));
+
+// ---------- ממתינות ----------
+RENDER.pending = d => {
+  const total = d.lists.reduce((a, l) => a + l.files.length, 0);
+  $("#n-pend").textContent = total || "";
+  if (!total) return `<div class="card"><h2>הודעות ממתינות לאישור</h2>${empty("אין כרגע הודעות שממתינות לאישור, ואין בקשות הצטרפות 👍")}</div>`;
+  return d.lists.filter(l => l.files.length).map(l => `<div class="card"><h2>${esc(l.name)} <span class="pill bad">${l.files.length}</span></h2>
+    ${l.files.map(f => `<div class="msg" data-file="${esc(f.name)}"><div class="head">${l.k === "join" ? `<b>בקשה ${esc(f.name.replace(".wav", ""))}</b> ${f.p ? phone(f.p) : '<span class="mut">מספר לא ידוע</span>'}` : who(f.n, f.p)}<span class="mut small">${esc(fmtD(f.date))}</span>${f.dur ? `<span class="mut small">${fmtDur(f.dur)}</span>` : ""}</div>
+      ${audio(l.folder + "/" + f.name)}${transcript(f.t)}
+      <div class="row">${l.k === "join" ? `<form class="row grow" data-form="join" data-file="${esc(f.name)}"><input name="name" placeholder="שם מלא (אפשר להשאיר ריק – השם יזוהה מההקלטה)" style="flex:1;min-width:200px"><button class="btn s p">אישור הצטרפות</button></form>` : ""}
+      ${(KIND_ACTS[l.k] || KIND_ACTS.default).map(([code, label, cls]) => `<button class="btn s ${cls}" data-act="review" data-kind="${l.k}" data-file="${esc(f.name)}" data-code="${code}" data-label="${esc(label)}">${label}</button>`).join("")}</div>
+    </div>`).join("")}</div>`).join("");
+};
+
+// ---------- הודעות ----------
+RENDER.msgs = d => {
+  const q = (state.filter.msgs || "").trim();
+  const list = q ? d.list.filter(m => [m.id, m.n, m.p, m.t].join(" ").includes(q)) : d.list;
+  return `<div class="card"><h2>הודעות בקו <small>${d.list.length} מתוך ${d.total} · מהחדשה לישנה</small></h2>
+    <div class="row"><input class="search" data-filter="msgs" placeholder="חיפוש בשם, במספר, במספר ההודעה או בתמלול" value="${esc(q)}">${d.list.length < d.total ? `<button class="btn s" data-act="more">טעינת ${Math.min(d.total, 1000)} האחרונות</button>` : ""}</div></div>
+    ${list.length ? list.map(m => `<div class="msg"><div class="head"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${who(m.n, m.p)}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
+      <div class="row"><button class="btn s" data-act="play" data-p="${esc("/1/2/" + m.id + ".wav")}">▶ השמעה</button>${m.imp ? actBtn({ type: "move", id: m.id, to: "regular" }, "הוצאה מהחשובות") : actBtn({ type: "move", id: m.id, to: "important" }, "העברה לחשובות + צינתוק")}${actBtn({ type: "delete", id: m.id }, "מחיקה", "d")}</div>
+      ${transcript(m.t) || '<div class="mut small">אין תמלול (עדיין)</div>'}</div>`).join("") : `<div class="card">${empty("לא נמצאו הודעות")}</div>`}`;
+};
+
+// ---------- חברים ----------
+RENDER.members = d => {
+  const q = (state.filter.members || "").trim();
+  const rows = q ? d.rows.filter(r => (r.n + " " + r.p).includes(q)) : d.rows;
+  const tz = r => r.tz === "on" ? '<span class="pill ok">פעיל</span>' : r.tz === "off" ? '<span class="pill bad">חסם צינתוקים</span>' : '<span class="pill">לא ברשימה</span>';
+  return `<div class="card"><h2>חברי הקבוצה <small>${d.rows.length} · פעילים בצינתוקים ${d.rows.filter(r => r.tz === "on").length}</small></h2>
+    <div class="row"><input class="search" data-filter="members" placeholder="חיפוש לפי שם או מספר" value="${esc(q)}"></div>
+    <div class="wrap" style="margin-top:10px"><table class="tbl"><tr><th>שם</th><th>טלפון</th><th>צינתוקים</th><th>רגילות</th><th>אירוע</th><th>שיחות החודש</th><th>כניסה אחרונה</th><th></th></tr>
+    ${rows.map(r => `<tr><td><b>${esc(r.n || "ללא שם")}</b>${r.admin ? ' <span class="pill acc">מנהל</span>' : ""}${r.muted ? ` <span class="pill warn">מושתק${r.muted !== "ללא הגבלה" ? " עד " + esc(fmtD(r.muted)) : ""}</span>` : ""}${r.blocked ? ' <span class="pill bad">חסום</span>' : ""}${r.code ? `<div class="mut small">קוד ${esc(r.code)} בהודעות האישיות</div>` : ""}</td>
+      <td>${phone(r.p)}</td><td>${tz(r)}</td><td>${r.general ? "✓" : ""}</td><td>${r.rsvp ? "✓" : ""}</td><td class="num">${r.calls || ""}</td><td class="num small mut">${esc(fmtD(r.last))}</td>
+      <td><div class="row" style="flex-wrap:nowrap">${r.n ? `<button class="btn s" data-act="rename" data-phone="${esc(r.p)}" data-name="${esc(r.n)}">שם</button>` : ""}${r.muted ? actBtn({ type: "unmute", phone: r.p }, "ביטול השתקה") : `<button class="btn s" data-act="mute" data-phone="${esc(r.p)}">השתקה</button>`}<button class="btn s ${r.blocked ? "" : "d"}" data-act="block" data-phone="${esc(r.p)}" data-on="${r.blocked ? "0" : "1"}">${r.blocked ? "ביטול חסימה" : "חסימה"}</button></div></td></tr>`).join("")}</table></div>
+    ${rows.length ? "" : empty("לא נמצאו חברים")}</div>
+  <div class="cols">
+    <div class="card"><h2>בקשות הצטרפות <span class="pill ${d.joins.length ? "bad" : ""}">${d.joins.length}</span></h2>${d.joins.length ? `<ul class="list">${d.joins.map(j => `<li>${phone(j.p) || '<span class="mut">מספר לא ידוע</span>'}<span class="mut small">${esc(fmtD(j.date))}</span><button class="btn s p right" data-go="pending">לטיפול</button></li>`).join("")}</ul>` : empty("אין בקשות")}
+      <h2 style="margin-top:14px">אושרו ומחכים שיתקשרו</h2>${d.approved.length ? `<ul class="list">${d.approved.map(a => `<li>${who(a.n, a.p)}<span class="mut small">אושר ${esc(fmtD(a.t))} על ידי ${esc(a.by)}</span></li>`).join("")}</ul>` : empty("אין")}</div>
+    <div class="card"><h2>הוספת חבר ידנית</h2><form class="form" data-form="addmember"><div class="row"><input name="phone" placeholder="מספר טלפון" inputmode="tel" required pattern="0\\d{8,9}"><input name="name" placeholder="שם מלא" required></div><div class="mut small">החבר נכנס לרשימות של הקו ולתפריט ההודעות האישיות, ובפעם הבאה שיתקשר יצטרף אוטומטית לרשימת הצינתוקים.</div><div><button class="btn p">הוספה</button></div></form>
+      <h2 style="margin-top:14px">חסומים <small>מנותקים מיד כשמתקשרים</small></h2>${d.blocked.length ? `<div class="chips">${d.blocked.map(b => `<span class="chip bad">${esc(b.n || b.p)} <button class="btn s" data-act="block" data-phone="${esc(b.p)}" data-on="0" style="padding:0 6px;margin-inline-start:4px">✕</button></span>`).join("")}</div>` : empty("אין מספרים חסומים")}
+      <form class="row" data-form="blockphone" style="margin-top:8px"><input name="phone" placeholder="חסימת מספר שאינו חבר" inputmode="tel" required pattern="0\\d{8,9}"><button class="btn s d">חסימה</button></form></div>
+  </div>`;
+};
+
+// ---------- תזמונים ----------
+RENDER.sched = d => {
+  const minAt = d.now.slice(0, 16).replace(" ", "T");
+  return `<div class="cols">
+    <div class="card"><h2>הודעה מתוזמנת חדשה</h2><form class="form" data-form="schedule"><div class="row"><input type="datetime-local" name="at" min="${minAt}" required></div><textarea name="text" placeholder="נוסח ההודעה (העוזר יקריא אותה בקולו לקו)" required maxlength="1500"></textarea><label class="chk"><input type="checkbox" name="important"> הודעה חשובה (עם צינתוק לכל החברים)</label><div><button class="btn p">תזמון</button></div></form></div>
+    <div class="card"><h2>הרשמה לאירוע <small>שלוחה 9</small></h2><div><b>${esc(d.event.title)}</b> <span class="mut">${esc(d.event.desc || "")}</span></div><div class="mut small" style="margin-bottom:8px">נרשמו ${d.rsvp.length} · לא נרשמו ${d.notReg.length}</div>
+      <details><summary class="mut small" style="cursor:pointer">הנרשמים והחסרים</summary><div class="cols" style="margin-top:8px"><div><b class="small">נרשמו</b><ol style="margin:4px 0;padding-inline-start:18px">${d.rsvp.map(r => `<li>${esc(r.n)} <span class="mut small">${esc(fmtD(r.ts))}</span></li>`).join("") || '<li class="mut">אף אחד עוד לא</li>'}</ol></div><div><b class="small">לא נרשמו</b><div class="chips" style="margin-top:4px">${d.notReg.map(r => `<span class="chip">${esc(r.n)}</span>`).join("") || '<span class="mut small">כולם נרשמו 🎉</span>'}</div></div></div></details>
+      <form class="form" data-form="event" style="margin-top:10px"><div class="row"><input name="title" placeholder="אירוע חדש: שם" required><input name="desc" placeholder="מתי ואיפה"></div><div><button class="btn">פתיחת הרשמה חדשה</button></div></form></div>
+  </div>
+  <div class="card"><h2>כל התזמונים <small>${d.jobs.filter(j => !j.done).length} ממתינים</small></h2>${d.jobs.length ? `<div class="wrap"><table class="tbl"><tr><th>זמן</th><th>מה</th><th>מי קבע</th><th>מצב</th><th></th></tr>${d.jobs.map(j => `<tr><td class="num small">${esc(j.at)}</td><td>${esc(jobText(j))}</td><td class="small mut">${esc(j.byName || "")}</td><td>${j.done ? `<span class="pill ok">נשלח ${esc(fmtD(j.done))}</span>` : '<span class="pill">ממתין</span>'}</td><td>${j.done ? "" : `<button class="btn s d" data-act="unsched" data-id="${esc(j.id || "")}" data-at="${esc(j.at)}" data-text="${esc(j.text || "")}" data-type="${esc(j.type)}">ביטול</button>`}</td></tr>`).join("")}</table></div>` : empty("אין תזמונים")}</div>`;
+};
+
+// ---------- העוזר ----------
+RENDER.bot = d => {
+  const f = state.filter.conv || "";
+  const conv = f ? d.conv.filter(c => c.p === f) : d.conv;
+  const people = [...new Map(d.conv.map(c => [c.p, c.n])).entries()];
+  return `<div class="cols">
+    <div class="card"><h2>כללים קבועים לעוזר <small>${d.rules.length}</small></h2>${d.rules.length ? `<ol style="margin:0;padding-inline-start:20px">${d.rules.map((r, i) => `<li style="margin-bottom:6px">${esc(r)} ${actBtn({ type: "rule_remove", n: i + 1 }, "מחיקה", "d s")}</li>`).join("")}</ol>` : empty("אין כללים")}
+      <form class="row" data-form="rule" style="margin-top:8px"><input name="text" placeholder="כלל חדש לעוזר" required maxlength="300" style="flex:1"><button class="btn">הוספה</button></form></div>
+    <div class="card"><h2>הודעה אישית לכל החברים</h2><form class="form" data-form="broadcast"><textarea name="text" placeholder="הנוסח ממשיך את השם של החבר, למשל: , שים לב, מחר השיעור בשמונה" required maxlength="800"></textarea><div><button class="btn p">שליחה לתיבות האישיות</button></div></form>
+      <h2 style="margin-top:14px">ההודעה בכניסה לקו</h2><form class="form" data-form="entry"><textarea name="text" placeholder="נוסח חדש להודעה שכולם שומעים בכניסה" required maxlength="600"></textarea><div class="row"><button class="btn">החלפה</button>${actBtn({ type: "entry_delete" }, "מחיקת ההודעה בכניסה", "d")}</div></form></div>
+  </div>
+  <div class="card"><h2>שיחות עם העוזר <small>${d.conv.length} האחרונות</small><select data-filter="conv" class="right"><option value="">כל החברים</option>${people.map(([p, n]) => `<option value="${esc(p)}" ${p === f ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></h2>
+    ${conv.length ? `<div class="conv">${conv.slice(0, 80).map(c => `<div><div class="m">${esc(fmtD(c.d))} · ${esc(c.n)}</div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a)}</div></div>`).join("")}</div>` : empty("אין שיחות")}</div>
+  <div class="cols">
+    <div class="card"><h2>היסטוריית פעולות <small>אפשר לבטל רק את האחרונה</small></h2>${d.undo.length ? `<ul class="list">${d.undo.map((u, i) => `<li><span class="mut small num">${esc(fmtD(u.d))}</span><span class="grow">${esc(u.desc)}</span>${i === 0 ? actBtn({ type: "undo" }, "↶ ביטול", "d") : ""}</li>`).join("")}</ul>` : empty("אין פעולות")}</div>
+    <div class="card"><h2>רשימות מיוחדות</h2><div class="small mut">תגובה עוקצנית (retort)</div><div class="chips" style="margin-bottom:8px">${d.retort.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="small mut">פיקוח מוגבר (strict) – כל הודעה מחכה לאישור</div><div class="chips">${d.strict.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="mut small" style="margin-top:8px">הרשימות האלה נערכות דרך KV בלבד.</div></div>
+  </div>`;
+};
+
+// ---------- סטטיסטיקה ----------
+RENDER.stats = d => {
+  const dl = d.days.map(x => x.slice(8) + "/" + x.slice(5, 7)), last = d.days.length - 1;
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  return `<div class="tiles">${tile(d.calls[last], "שיחות היום")}${tile(d.callers[last], "מתקשרים היום")}${tile(sum(d.calls), "שיחות ב-30 יום")}${tile(sum(d.msgs), "הודעות ב-30 יום")}${tile(sum(d.conv), "שיחות עם העוזר ב-30 יום")}${tile(d.quiet.length, "לא נכנסו שבוע", d.quiet.length ? "warn" : "good")}</div>
+  <div class="cols two">
+    <div class="card"><h2>שיחות לפי יום <small>30 הימים האחרונים</small></h2>${chart(dl, d.calls, { unit: "שיחות", xName: "יום" })}</div>
+    <div class="card"><h2>שיחות לפי שעה <small>${d.system.months.join(", ")}</small></h2>${chart(d.byHour.map((_, i) => String(i).padStart(2, "0")), d.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div>
+    <div class="card"><h2>הודעות שעלו לקו לפי יום</h2>${chart(dl, d.msgs, { unit: "הודעות", xName: "יום" })}</div>
+    <div class="card"><h2>שיחות עם העוזר לפי יום</h2>${chart(dl, d.conv, { unit: "שיחות", xName: "יום" })}</div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>הפעילים ביותר <small>שיחות, ${d.system.months.join(" + ")}</small></h2>${hbars(d.perMember, "n", "calls")}</div>
+    <div class="card"><h2>איפה מבלים בקו <small>כניסות לשלוחות</small></h2>${hbars(d.byFolder, "l", "n")}</div>
+    <div class="card"><h2>ההודעה החשובה האחרונה ${d.lastImp ? `<small>הודעה ${esc(d.lastImp.f.replace(".wav", ""))} · ${esc(fmtD(d.lastImp.t))}</small>` : ""}</h2>${d.lastImp ? `<div class="small mut">שמעו (${d.heard.length})</div><div class="chips" style="margin-bottom:8px">${d.heard.map(x => `<span class="chip ok">${esc(x.n)}</span>`).join("") || '<span class="mut small">אף אחד עדיין</span>'}</div><div class="small mut">עוד לא שמעו (${d.notHeard.length})</div><div class="chips">${d.notHeard.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">כולם שמעו 🎉</span>'}</div>` : empty("אין הודעות חשובות")}</div>
+    <div class="card"><h2>לא נכנסו לקו בשבוע האחרון <small>${d.quiet.length}</small></h2>${d.quiet.length ? `<ul class="list">${d.quiet.map(q => `<li><span class="grow">${esc(q.n)}</span><span class="mut small num">${q.last ? "אחרון: " + esc(fmtD(q.last)) : "לא נכנס החודש"}</span></li>`).join("")}</ul>` : empty("כולם היו בקו השבוע 🎉")}</div>
+    <div class="card"><h2>מצב המערכת</h2><ul class="list"><li><span class="grow">שבת/חג עכשיו</span><span class="pill ${d.holy ? "warn" : ""}">${d.holy ? "כן" : "לא"}</span></li><li><span class="grow">צינתוקים שמחכים למוצאי שבת</span><span class="pill">${d.deferred.length}</span></li><li><span class="grow">הודעות בארכיון / מתומללות</span><span class="pill">${d.system.archive} / ${d.system.transcribed}</span></li><li><span class="grow">פרופילים של חברים</span><span class="pill">${d.system.profiles}</span></li><li><span class="grow">שיחות עם העוזר ביומן</span><span class="pill">${d.system.conv}</span></li><li><span class="grow">שיחות ביומני ימות (${esc(d.system.months.join(", "))})</span><span class="pill">${d.system.totalCalls}</span></li></ul></div>
+  </div>`;
+};
+function chart(labels, values, o = {}) {
+  const W = 440, H = o.h || 150, L = 28, R = 6, T = 10, B = 22, n = Math.max(1, values.length);
+  const max = Math.max(1, ...values), iw = (W - L - R) / n, bw = Math.max(2, Math.min(16, iw - 3)), r = Math.min(4, bw / 2);
+  const y = v => T + (H - T - B) * (1 - v / max), base = H - B;
+  const ticks = [...new Set([0, Math.round(max / 2), max])];
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.unit || "")}">`;
+  for (const t of ticks) s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${L - 5}" y="${y(t) + 4}" class="tick" text-anchor="end">${t}</text>`;
+  values.forEach((v, i) => { const x = L + i * iw + (iw - bw) / 2, yy = y(v), rr = Math.min(r, Math.max(0, base - yy) / 2);
+    const path = v > 0 ? `M${x} ${base}V${yy + rr}Q${x} ${yy} ${x + rr} ${yy}H${x + bw - rr}Q${x + bw} ${yy} ${x + bw} ${yy + rr}V${base}Z` : "";
+    s += `<g class="bar" data-i="${i}"><rect x="${L + i * iw}" y="${T}" width="${iw}" height="${H - T - B}" class="hit"/>${path ? `<path d="${path}" class="mark"/>` : ""}</g>`; });
+  const step = Math.max(1, Math.ceil(n / (o.xEvery || 6)));
+  labels.forEach((l, i) => { if (i % step === 0 || i === n - 1) s += `<text x="${L + i * iw + iw / 2}" y="${H - 6}" class="tick" text-anchor="middle">${esc(l)}</text>`; });
+  s += `<line x1="${L}" x2="${W - R}" y1="${base}" y2="${base}" class="axis"/></svg>`;
+  return `<div class="chart" data-labels="${esc(JSON.stringify(labels))}" data-values="${esc(JSON.stringify(values))}" data-unit="${esc(o.unit || "")}">${s}<div class="tip" hidden></div>
+    <details class="tblv"><summary>הנתונים בטבלה</summary><div class="wrap"><table class="tbl small"><tr><th>${esc(o.xName || "")}</th><th>${esc(o.unit || "")}</th></tr>${labels.map((l, i) => `<tr><td>${esc(l)}</td><td class="num">${values[i]}</td></tr>`).join("")}</table></div></details></div>`;
+}
+const hbars = (rows, k, v) => rows.length ? `<div class="hb">${rows.map(r => `<div class="hb-row"><span class="hb-l" title="${esc(r[k])}">${esc(r[k])}</span><span class="hb-b"><i style="width:${Math.round(100 * r[v] / Math.max(1, rows[0][v]))}%"></i></span><span class="hb-v">${r[v]}</span></div>`).join("")}</div>` : empty("אין נתונים");
+
+// ---------- יומן ----------
+RENDER.log = d => {
+  const q = (state.filter.log || "").trim();
+  const lines = q ? d.lines.filter(l => (l.t + " " + l.m).includes(q)) : d.lines;
+  return `<div class="card"><h2>יומן השרת <small>${d.lines.length} הרשומות האחרונות</small></h2><div class="row"><input class="search" data-filter="log" placeholder="סינון" value="${esc(q)}"></div>
+    <ul class="list log" style="margin-top:8px">${lines.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("") || empty("אין רשומות")}</ul></div>`;
+};
+
+// ---------- פעולות ----------
+const main = $("#main");
+main.addEventListener("input", e => { const f = e.target.dataset.filter; if (f) { state.filter[f] = e.target.value; const pos = e.target.selectionStart; render(state.tab); const el = main.querySelector(`[data-filter="${f}"]`); if (el && el.focus) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } } });
+main.addEventListener("change", e => { const f = e.target.dataset.filter; if (f && e.target.tagName === "SELECT") { state.filter[f] = e.target.value; render(state.tab); } });
+main.addEventListener("click", async e => {
+  const tr = e.target.closest("[data-toggle=tr]"); if (tr) { tr.classList.toggle("open"); return; }
+  const go = e.target.closest("[data-go],[data-tab]"); if (go && !e.target.closest("[data-act]")) { show(go.dataset.go || go.dataset.tab); return; }
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const d = b.dataset;
+  try {
+    b.disabled = true;
+    if (d.act === "play") { b.outerHTML = audio(d.p).replace("<audio ", "<audio autoplay "); return; }
+    if (d.act === "more") { state.msgN = 1000; await show("msgs", true); return; }
+    if (d.act === "admin") { const a = JSON.parse(d.a); if (!confirm(describe(a))) return; const r = await api("act", { a }); toast(r.r); await refreshAfter(); return; }
+    if (d.act === "review") { if (d.code === "3" && !confirm("למחוק את ההודעה הזו?")) return; if (d.code === "1" && d.kind !== "join" && !confirm(d.kind === "demoted" ? "להעביר להודעות החשובות ולשלוח צינתוק לכולם?" : "לפרסם כהודעה חשובה ולשלוח צינתוק לכל החברים?")) return;
+      const r = await api("review", { kind: d.kind, file: d.file, act: d.code }); toast(r.msg); await show("pending", true); return; }
+    if (d.act === "hangup") { if (!confirm(`לנתק את השיחה של ${d.name}?`)) return; await api("hangup", { id: d.id, phone: d.phone }); toast("השיחה נותקה"); setTimeout(pollOnline, 1500); return; }
+    if (d.act === "tz") { if (!confirm(d.list === "admins" ? "לשלוח צינתוק למנהלים?" : "לשלוח צינתוק לכל החברים ברשימה?")) return; const r = await api("tzintuk", { list: d.list }); toast(r.deferred ? "שבת/חג: הצינתוק יישלח במוצאי שבת או חג" : r.ok ? "הצינתוק נשלח" : "ימות לא אישרו את הצינתוק", !r.ok && !r.deferred); return; }
+    if (d.act === "unsched") { if (!confirm("לבטל את התזמון הזה?")) return; await api("unsched", { id: d.id, at: d.at, text: d.text, type: d.type }); toast("התזמון בוטל"); await show("sched", true); return; }
+    if (d.act === "block") { const on = d.on === "1"; if (!confirm(on ? "לחסום את המספר הזה? הוא ינותק מיד בכל שיחה לקו" : "לבטל את החסימה?")) return; await api("block", { phone: d.phone, on }); toast(on ? "המספר נחסם" : "החסימה בוטלה"); await show("members", true); return; }
+    if (d.act === "rename") { const name = prompt("שם חדש", d.name); if (!name || name.trim() === d.name) return; const r = await api("act", { a: { type: "rename", phone: d.phone, name: name.trim() } }); toast(r.r); await show("members", true); return; }
+    if (d.act === "mute") { const h = prompt("לכמה שעות להשתיק? (ההודעות שלו יחכו לאישור)", "24"); if (h === null) return; const hours = Math.max(1, Math.min(720, +h || 24)); const r = await api("act", { a: { type: "mute", phone: d.phone, hours } }); toast(r.r); await show("members", true); return; }
+  } catch (err) { toast(err.message, true); }
+  finally { b.disabled = false; }
+});
+main.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form]"); if (!f) return; e.preventDefault();
+  const v = Object.fromEntries(new FormData(f)), kind = f.dataset.form, btn = f.querySelector("button");
+  let a = null;
+  if (kind === "schedule") a = { type: "schedule", at: v.at.replace("T", " ").slice(0, 16), text: v.text.trim(), important: !!v.important };
+  if (kind === "event") a = { type: "event", title: v.title.trim(), desc: (v.desc || "").trim() };
+  if (kind === "broadcast") a = { type: "broadcast", text: v.text.trim() };
+  if (kind === "entry") a = { type: "entry", text: v.text.trim() };
+  if (kind === "rule") a = { type: "rule_add", text: v.text.trim() };
+  if (kind === "addmember") a = { type: "approve_join", phone: v.phone.replace(/\D/g, ""), name: v.name.trim() };
+  try {
+    btn.disabled = true;
+    if (kind === "join") { const r = await api("review", { kind: "join", file: f.dataset.file, act: "1", name: (v.name || "").trim() }); toast(r.msg); await show("pending", true); return; }
+    if (kind === "blockphone") { await api("block", { phone: v.phone.replace(/\D/g, ""), on: true }); toast("המספר נחסם"); await show("members", true); return; }
+    if (!a) return;
+    if (!confirm(describe(a))) return;
+    const r = await api("act", { a }); toast(r.r); f.reset(); await refreshAfter();
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+});
+async function refreshAfter() { delete state.data.home; await show(state.tab, true); }
+
+// ---------- זמן אמת, ערכת נושא ----------
+main.addEventListener("mousemove", e => { const g = e.target.closest(".bar"), ch = e.target.closest(".chart"); if (!ch) return; const tip = ch.querySelector(".tip"); if (!g) { tip.hidden = true; return; }
+  const labels = JSON.parse(ch.dataset.labels), values = JSON.parse(ch.dataset.values), i = +g.dataset.i, rc = ch.getBoundingClientRect(), br = g.getBoundingClientRect();
+  tip.textContent = `${labels[i]}: ${values[i]} ${ch.dataset.unit}`; tip.hidden = false; tip.style.left = (br.left + br.width / 2 - rc.left) + "px"; tip.style.top = (br.top - rc.top + 10) + "px"; });
+main.addEventListener("mouseleave", () => { for (const t of main.querySelectorAll(".tip")) t.hidden = true; });
+async function pollOnline() { if (document.hidden) return; try { const d = await api("online"); $("#b-online").textContent = d.online.length ? pl(d.online.length, "אחד בקו", "# בקו") : "אף אחד בקו"; const card = $("#online-card"); if (card && state.tab === "home") { card.innerHTML = onlineHtml(d.online); state.data.home.online = d.online; } } catch {} }
+setInterval(pollOnline, 10000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollOnline(); if (state.tab === "pending") show("pending", true); } });
+const themeBtn = $("#theme");
+themeBtn.addEventListener("click", () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("theme", next); } catch {} });
+try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+$("#login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = e.currentTarget.querySelector("button");
+  try {
+    btn.disabled = true; $("#login-err").textContent = "";
+    await createSession($("#login-pass").value);
+    $("#login-pass").value = ""; hideLogin();
+    state.data = {};
+    await show(state.tab, true);
+    const d = await api("overview");
+    if (!state.data.home) state.data.home = d;
+    state.names = d.names; badges(d);
+  } catch (err) { showLogin(err.message); }
+  finally { btn.disabled = false; }
+});
+$("#logout").addEventListener("click", () => {
+  adminToken = ""; sessionStorage.removeItem("adminToken"); state.data = {}; $("#main").innerHTML = ""; showLogin();
+});
+if (adminToken) {
+  hideLogin();
+  show(state.tab);
+  api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
+} else {
+  showLogin();
+}
+</script>
+</body>
+</html>
