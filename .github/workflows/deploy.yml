@@ -5,8 +5,6 @@
 #   CLOUDFLARE_ACCOUNT_ID – מזהה החשבון (מופיע בכתובת של לוח הבקרה של Cloudflare, אחרי dash.cloudflare.com/)
 name: פריסה ל-Cloudflare
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       confirm:
@@ -18,7 +16,7 @@ permissions:
 concurrency: deploy-yemot-ai
 jobs:
   deploy:
-    if: ${{ github.event_name == 'push' || github.event.inputs.confirm == 'deploy' }}
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
