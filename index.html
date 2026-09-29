@@ -259,7 +259,12 @@ async function apiRaw(name, body) {
   if (REMOTE && !adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
   const opt = body ? { method: "POST", body: JSON.stringify(body) } : {};
   if (!REMOTE) opt.headers = { "Content-Type": "application/json", "X-Requested-With": "dash" };
-  const r = await fetch(apiUrl(name), opt);
+  // תקלת רשת רגעית (למשל בזמן עדכון הגשר, או סינון של נטפרי): קריאה רגילה מנסים שוב עד פעמיים
+  let r;
+  for (let k = 0; ; k++) {
+    try { r = await fetch(apiUrl(name), opt); break; }
+    catch (e) { if (body || k >= 2) throw new Error("אין חיבור לשרת כרגע. נסו שוב בעוד רגע"); await new Promise(res => setTimeout(res, 800 * (k + 1))); }
+  }
   if (r.status === 401) {
     if (!REMOTE) { location.reload(); throw new Error("החיבור פג, נכנסים מחדש"); }
     dropSession("החיבור פג. יש להיכנס שוב."); throw new Error("החיבור פג");
@@ -568,7 +573,7 @@ Object.assign(LOAD, {
   event: () => api("schedule"),
   reports: () => Promise.all([api("report?m=" + state.repM), api("convstats"), api("heard")]).then(([r, c, h]) => ({ r, c, h })),
   live: () => Promise.all([api("calls?day=" + state.liveDay), api("online")]).then(([c, o]) => ({ calls: c, online: o.online, now: o.now })),
-  system: () => Promise.all([api("health"), api("ads"), api("whoami")]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
+  system: () => Promise.all([api("health"), api("ads").catch(() => ({ ads: [], names: state.names })), api("whoami").catch(() => ({ ro: state.ro, exp: 0 }))]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
 });
 
 // ---------- הודעות: אצווה, הורדה, הערות, תיקון תמלול ----------
@@ -799,7 +804,7 @@ RENDER.system = d => {
     <div class="card"><h2>🧯 שגיאות אחרונות ביומן <small>${h.errors.length}</small></h2>${h.errors.length ? `<ul class="list log">${h.errors.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("")}</ul>` : empty("אין שגיאות 👍")}</div></div>
   <div class="card"><h2>📢 פרסומות אישיות <small>${d.ads.ads.length} חברים</small></h2>${d.ads.ads.length ? `<ul class="list">${d.ads.ads.map(a => `<li><button class="btn s" data-x="card" data-p="${esc(a.p)}">${esc(a.n)}</button><span class="grow small">${a.list.map(esc).join(" · ")}</span></li>`).join("")}</ul>` : empty("אין")}<div class="mut small">עריכה מתוך כרטיס החבר.</div></div>
   <div class="card"><h2>⌨️ קיצורי מקלדת</h2><div class="small">${[["Alt+1…9", "מעבר בין לשוניות"], ["/ או Ctrl+K", "חיפוש"], ["A", "עוזר AI"], ["M", "מסך בקרה"], ["R", "רענון"], ["Esc", "סגירה"]].map(([k, l]) => `<span class="kbd">${k}</span> ${l}`).join(" &nbsp;·&nbsp; ")}</div>
-    <div class="mut small" style="margin-top:6px">מחובר כ${d.me.ro ? "צופה (צפייה בלבד)" : "מנהל"} · החיבור בתוקף עד ${esc(new Date(d.me.exp).toLocaleString("he-IL"))}</div></div>`;
+    <div class="mut small" style="margin-top:6px">מחובר כ${d.me.ro ? "צופה (צפייה בלבד)" : "מנהל"} · ${d.me.exp ? "החיבור בתוקף עד " + esc(new Date(d.me.exp).toLocaleString("he-IL")) : ""}</div></div>`;
 };
 
 // ---------- ג'ובים: טקסט מורחב ----------
