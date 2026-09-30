@@ -183,9 +183,29 @@ body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color
 @media print{.aifab,.aip,.batch,.hsearch{display:none!important}}
 
 body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]):not([data-xf=m-note]):not([data-xf=m-ads]),body.ro [data-xf=m-note] button,body.ro [data-xf=m-ads] button,body.ro .aifab{display:none!important}body.ro [data-xf=m-note] textarea,body.ro [data-xf=m-ads] textarea{pointer-events:none}
+
+/* 07 — מרחב ניהול */
+:root{--r:20px;--r2:14px;--acc:#465ce5;--acc2:#3444b6;--accbg:#eef0ff;--ring:rgba(70,92,229,.2)}
+body{background:var(--bg)}
+.skip-link{position:fixed;top:-80px;right:20px;z-index:100;background:var(--card);padding:12px 20px;border-radius:12px}.skip-link:focus{top:12px}
+.top{background:var(--card);color:var(--ink);box-shadow:none;border-bottom:1px solid var(--line)}
+.bar{max-width:1440px;min-height:90px;padding:20px 32px;gap:16px}.bar h1{font-size:21px}.bar h1::before{background-color:var(--acc);width:40px;height:40px;border:0;border-radius:13px}.bar .sub{color:var(--mut);margin-top:4px}
+.top .btn{background:var(--bg);border-color:var(--line);color:var(--ink)}.top .btn:hover{background:var(--accbg);border-color:var(--acc)}
+.badge{background:var(--bg);border-color:var(--line);color:var(--ink2);backdrop-filter:none}.badge.live{background:var(--goodbg);color:var(--goodt)}
+main{max-width:1440px;padding:30px 32px 60px;gap:22px}.card{box-shadow:none;border-radius:var(--r);padding:24px}.card h2{font-size:17px}.tile{padding:23px;box-shadow:none}.tile b{font-size:34px;letter-spacing:-1px}.tile::before{width:3px;top:23px;bottom:23px;border-radius:6px}.tiles{gap:16px}.cols{gap:20px}
+.workspace-heading{display:flex;align-items:end;justify-content:space-between;gap:20px}.workspace-heading h2{font-size:30px;letter-spacing:-1px;margin:0}.workspace-heading p{margin:5px 0 0;color:var(--mut)}.eyebrow{color:var(--acc);font-size:12px;font-weight:700;letter-spacing:1px;margin-bottom:6px}.workspace-date{color:var(--mut);font-size:13px}
+.overview-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:30px 34px;border-radius:24px;background:linear-gradient(120deg,#17224b,#3349ad 65%,#566be7);color:#fff}.overview-hero h2{font-size:27px;margin:0 0 8px;letter-spacing:-.7px}.overview-hero p{margin:0;color:#d8defb;max-width:540px}.overview-hero .eyebrow{color:#bfcaff}.overview-hero .btn{border-color:#ffffff40;background:#ffffff15;color:#fff}.overview-hero .btn.p{background:#fff;color:#283e99;border-color:#fff}.hero-mark{flex:none;display:grid;place-items:center;width:106px;height:106px;border:1px solid #ffffff30;border-radius:30px;font-size:48px;font-weight:800;background:#ffffff0a;transform:rotate(-7deg)}.quick-links{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.quick-link{display:flex;align-items:center;gap:13px;text-align:start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;transition:transform .15s,border-color .15s}.quick-link:hover{transform:translateY(-2px);border-color:var(--acc)}.quick-link i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--accbg);color:var(--acc);font-size:22px}.quick-link b{display:block;font-size:14px}.quick-link small{color:var(--mut);font-size:12px}.quick-link .arrow{margin-inline-start:auto;color:var(--mut)}
+.tabs button .nav-icon{width:24px;text-align:center;font-size:18px;flex:none}.tabs button .nav-label{flex:1;text-align:start}.tabs button:focus-visible,.quick-link:focus-visible,.tile:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.login-layer{background:radial-gradient(ellipse at 20% 20%,var(--accbg),transparent 65%),var(--bg)}.login-box{width:min(440px,100%);padding:38px;border-radius:26px}.login-box h2{font-size:27px}.login-box p{font-size:14px;line-height:1.8}.login-brand{color:var(--acc);font-size:12px;font-weight:800;letter-spacing:2px}.login-box label{font-size:13px;font-weight:600}.login-box button{padding:14px}
+@media(min-width:1100px){body{padding-inline-start:238px}.top{position:sticky;top:0}.tabs{position:fixed;inset-inline-start:0;top:0;bottom:0;width:238px;max-width:none;margin:0;padding:104px 16px 24px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;background:var(--card);border-inline-end:1px solid var(--line)}.tabs::before{content:'07 / קו הקבוצה';position:absolute;top:30px;inset-inline-start:28px;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-1px}.tabs button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 13px;border:0;border-radius:12px;color:var(--ink2);font-size:14px}.tabs button:hover{background:var(--bg);color:var(--ink)}.tabs button.on{background:var(--accbg);color:var(--acc);border:0}.tabs button[data-go=members],.tabs button[data-go=reports],.tabs button[data-go=system]{margin-top:15px}.tabs button.on::after{content:'';width:5px;height:5px;background:var(--acc);border-radius:50%}.tabs b{box-shadow:none}.hsearch{flex:1;max-width:400px}.login-layer{padding-inline-start:256px}}
+@media(max-width:1099px){.tabs{padding:4px 16px 0}.tabs button{color:var(--ink2);display:flex;gap:7px;align-items:center}.tabs button.on{color:var(--acc);border-color:var(--acc)}.tabs button:hover{background:var(--accbg);color:var(--acc)}.tabs button .nav-label{flex:none}.bar{padding:15px 20px}.quick-links{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){main{padding:20px 14px 90px}.bar{gap:8px}.bar h1{font-size:17px}.bar .badges{display:none}.workspace-heading h2{font-size:25px}.workspace-date{display:none}.overview-hero{padding:24px}.overview-hero h2{font-size:23px}.hero-mark{display:none}.quick-link{padding:14px;gap:10px}.quick-link small{font-size:11px}.quick-link .arrow{display:none}.card{padding:18px}.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tile{padding:18px}.tile b{font-size:28px}.login-box{padding:28px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">דילוג לתוכן</a>
 <header class="top">
   <div class="bar">
     <div><h1>ניהול קו הקבוצה</h1><div class="sub" id="clock">073-351-2880</div></div>
@@ -200,7 +220,7 @@ body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-f
   <nav class="tabs" id="tabs" aria-label="לשוניות"></nav>
   <div class="ro-banner" id="rob" hidden>מצב צפייה בלבד – אפשר לראות הכול, אי אפשר לבצע פעולות</div>
 </header>
-<main id="main"></main>
+<main id="main" tabindex="-1"></main>
 <div id="toast" aria-live="polite"></div>
 <div class="modal" id="mm" hidden><div class="box"></div></div>
 <div class="mon" id="mon" hidden><div class="mt"><h1>קו הקבוצה · 073-351-2880</h1><span class="clk"></span><button class="btn" data-x="monx">✕ יציאה</button></div><div class="g"></div></div>
@@ -208,10 +228,12 @@ body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-f
 <div class="aip" id="aip" hidden><div class="ah"><b>✦ עוזר הניהול</b><span class="small" style="opacity:.85">מציע – אתם מאשרים</span><button class="btn s" type="button" data-x="ai" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">✕</button></div><div class="al" id="ail"></div><form id="aif"><input id="aiq" placeholder="למשל: תשתיק את משה ליום, או: מי לא שמע את ההודעה החשובה?" autocomplete="off"><button class="btn p">שליחה</button></form></div>
 <div class="login-layer" id="login-layer" hidden>
   <form class="login-box" id="login-form">
-    <h2>ניהול קו הקבוצה</h2>
-    <p>כניסה מאובטחת דרך GitHub Pages. הסיסמה נשלחת ישירות לשרת ואינה נשמרת ב-GitHub.</p>
+    <div class="login-brand">07 / קו הקבוצה</div>
+    <h2>טוב שחזרת.</h2>
+    <p>כל מה שקורה בקו, במקום אחד.<br>נכנסים ומתחילים לנהל.</p>
+    <label for="login-pass">סיסמת ניהול</label>
     <input id="login-pass" type="password" placeholder="סיסמת ניהול" autocomplete="current-password" required>
-    <div class="login-err" id="login-err"></div>
+    <div class="login-err" id="login-err" role="alert"></div>
     <button class="btn p" type="submit">כניסה</button>
   </form>
 </div>
@@ -293,7 +315,7 @@ const who = (n, p) => `<b>${esc(n || (p ? "מספר לא מוכר" : "לא יד�
 const audio = path => `<audio controls preload="none" src="${API_BASE}audio?p=${encodeURIComponent(path)}${tokq()}"></audio>`;
 const transcript = t => t ? `<div class="tr${t.length > 220 ? " long" : ""}" data-toggle="tr">${esc(t)}</div>` : "";
 const empty = t => `<div class="empty">${esc(t || "אין")}</div>`;
-const tile = (n, l, cls, tab) => `<div class="tile ${cls || ""}" ${tab ? `data-tab="${tab}"` : ""}><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
+const tile = (n, l, cls, tab) => `<${tab ? "button type=\"button\"" : "div"} class="tile ${cls || ""}" ${tab ? `data-tab="${tab}" style="text-align:start;font:inherit"` : ""}><b>${esc(n)}</b><span>${esc(l)}</span></${tab ? "button" : "div"}>`;
 const pl = (n, one, many) => n === 1 ? one : many.replace("#", n);
 const actBtn = (a, label, cls = "", extra = "") => `<button class="btn s ${cls}" data-act="admin" data-a="${esc(JSON.stringify(a))}" ${extra}>${esc(label)}</button>`;
 function describe(a) {
@@ -326,7 +348,7 @@ const LOAD = { home: () => api("overview"), pending: () => api("pending"), msgs:
 async function show(tab, force) {
   if (!LOAD[tab]) tab = "home";
   state.tab = tab; history.replaceState(null, "", "#" + tab);
-  for (const b of $("#tabs").children) b.classList.toggle("on", b.dataset.go === tab);
+  for (const b of $("#tabs").children) { b.classList.toggle("on", b.dataset.go === tab); if (b.dataset.go === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
   const main = $("#main");
   if (state.data[tab] && !force) { render(tab); }
   main.classList.add("busy");
@@ -550,6 +572,21 @@ try { const t = localStorage.getItem("theme"); if (t) document.documentElement.d
 // =====================================================================
 TABS.splice(0, TABS.length, ["home", "סקירה"], ["pending", "ממתינות"], ["msgs", "הודעות"], ["trash", "סל מחזור"], ["members", "חברים"], ["studio", "שידור"], ["sched", "תזמונים"], ["event", "אירוע"], ["bot", "העוזר"], ["reports", "דוחות"], ["stats", "סטטיסטיקה"], ["live", "בקרה חיה"], ["system", "מערכת"], ["log", "יומן"]);
 $("#tabs").innerHTML = TABS.map(([k, l], i) => `<button data-go="${k}" class="${k === state.tab ? "on" : ""}" ${i < 9 ? `title="Alt+${i + 1}"` : ""}>${l}${k === "pending" ? ' <b id="n-pend"></b>' : ""}</button>`).join("");
+const NAV_ICONS = {home:"◫",pending:"◷",msgs:"▤",trash:"⌫",members:"♧",studio:"◉",sched:"◴",event:"◇",bot:"✦",reports:"▥",stats:"▧",live:"◎",system:"⚙",log:"≡"};
+for (const b of $("#tabs").children) {
+  const label = document.createElement("span"); label.className = "nav-label";
+  label.append(b.firstChild); b.prepend(label);
+  const icon = document.createElement("span"); icon.className = "nav-icon"; icon.setAttribute("aria-hidden", "true"); icon.textContent = NAV_ICONS[b.dataset.go] || "◇"; b.prepend(icon);
+  if (b.classList.contains("on")) b.setAttribute("aria-current", "page");
+}
+const baseHome = RENDER.home;
+RENDER.home = d => {
+  const pending = d.pending.reduce((n, p) => n + p.n, 0) + d.joins;
+  const date = new Date().toLocaleDateString("he-IL", {timeZone:"Asia/Jerusalem",weekday:"long",day:"numeric",month:"long"});
+  return `<div class="workspace-heading"><div><div class="eyebrow">מרחב הניהול שלך</div><h2>הקו במבט אחד</h2><p>החברים, ההודעות וכל מה שצריך את תשומת הלב שלך.</p></div><span class="workspace-date">${esc(date)}</span></div>
+  <section class="overview-hero" aria-label="מצב הקו"><div><div class="eyebrow">07 / קו הקבוצה</div><h2>${pending ? `${pending} דברים מחכים לטיפול שלך` : "הכול מסודר. אפשר להתקדם."}</h2><p>${pending ? "הודעות ובקשות הצטרפות מחכות לאישור. פותחים, מקשיבים ומחליטים." : "זה הזמן להכין הודעה חדשה, לראות מי בקו או לתכנן את האירוע הבא."}</p><div class="row" style="margin-top:20px"><button class="btn p" data-go="${pending ? "pending" : "studio"}">${pending ? "לפתיחת הממתינות" : "ליצירת הודעה"} ←</button><button class="btn" data-go="live">לבקרה החיה</button></div></div><div class="hero-mark" aria-hidden="true">07</div></section>
+  <div class="quick-links">${[["studio","◉","אולפן השידור","מקליטים ומכינים הודעה"],["members","♧","החברים בקבוצה","כל חבר והפעילות שלו"],["sched","◴","תכנון ותזמונים","ההודעה הנכונה בזמן הנכון"],["reports","▥","דוחות ותובנות","מבינים מה קורה בקו"]].map(([k,i,t,sub]) => `<button class="quick-link" data-go="${k}"><i aria-hidden="true">${i}</i><span><b>${t}</b><small>${sub}</small></span><span class="arrow" aria-hidden="true">←</span></button>`).join("")}</div>` + baseHome(d);
+};
 const todayIL = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" }).slice(0, 10);
 Object.assign(state, { sel: new Set(), liveDay: todayIL(), repM: todayIL().slice(0, 7), ro: false, firstSeen: {}, tts: null, wav: null, ai: [], notes: { msg: {}, member: {} } });
 const confirm2 = msg => (prompt(msg + "\n\nזו פעולה רחבה. לאישור כתבו: כן") || "").trim() === "כן";
