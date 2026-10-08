@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23465ce5'/%3E%3Crect x='18' y='7' width='28' height='50' rx='6' fill='none' stroke='white' stroke-width='4'/%3E%3Crect x='23' y='13' width='18' height='12' rx='2' fill='white'/%3E%3Cg fill='white'%3E%3Ccircle cx='24' cy='33' r='2.5'/%3E%3Ccircle cx='32' cy='33' r='2.5'/%3E%3Ccircle cx='40' cy='33' r='2.5'/%3E%3Ccircle cx='24' cy='41' r='2.5'/%3E%3Ccircle cx='32' cy='41' r='2.5'/%3E%3Ccircle cx='40' cy='41' r='2.5'/%3E%3Ccircle cx='24' cy='49' r='2.5'/%3E%3Ccircle cx='32' cy='49' r='2.5'/%3E%3Ccircle cx='40' cy='49' r='2.5'/%3E%3C/g%3E%3C/svg%3E">
+<title>ניהול קו הקבוצה</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap");
+:root{color-scheme:light;
+--bg:#f3f5f9;--bg2:#e9edf4;--card:#ffffff;--ink:#101828;--ink2:#475467;--mut:#7d8598;--line:#e4e7ee;--axis:#c7ccd8;
+--acc:#2f5fd1;--acc2:#1e46a8;--accbg:#e8eefc;--acc-ink:#fff;
+--good:#16a34a;--goodt:#15803d;--goodbg:#e7f7ed;--warn:#f59e0b;--warnt:#92400e;--warnbg:#fff4de;--bad:#dc2626;--badbg:#fdeaea;
+--ring:rgba(47,95,209,.18);--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);--sh2:0 10px 30px rgba(16,24,40,.12);
+--hero:linear-gradient(135deg,#1b3a8a 0%,#2f5fd1 55%,#3f7ae6 100%);--hero-ink:#fff;--hero-mut:rgba(255,255,255,.72);--hero-glass:rgba(255,255,255,.14);--hero-line:rgba(255,255,255,.22);
+--r:16px;--r2:12px;--r3:10px}
+:root[data-theme=dark]{color-scheme:dark;
+--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;--axis:#3a4353;
+--acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--acc-ink:#fff;
+--good:#22c55e;--goodt:#4ade80;--goodbg:#132a1c;--warn:#f59e0b;--warnt:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
+--ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 12px 32px rgba(0,0,0,.5);
+--hero:linear-gradient(135deg,#101a33 0%,#182a5a 55%,#1e3a7a 100%);--hero-ink:#fff;--hero-mut:rgba(255,255,255,.66);--hero-glass:rgba(255,255,255,.08);--hero-line:rgba(255,255,255,.14)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
+--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;--axis:#3a4353;
+--acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--acc-ink:#fff;
+--good:#22c55e;--goodt:#4ade80;--goodbg:#132a1c;--warn:#f59e0b;--warnt:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
+--ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 12px 32px rgba(0,0,0,.5);
+--hero:linear-gradient(135deg,#101a33 0%,#182a5a 55%,#1e3a7a 100%);--hero-ink:#fff;--hero-mut:rgba(255,255,255,.66);--hero-glass:rgba(255,255,255,.08);--hero-line:rgba(255,255,255,.14)}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Heebo,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+a{color:var(--acc)}button{font:inherit;color:inherit}
+h1,h2,h3{letter-spacing:-.01em}
+
+/* ---- כותרת עליונה ---- */
+.top{position:sticky;top:0;z-index:5;background:var(--hero);color:var(--hero-ink);box-shadow:0 2px 12px rgba(16,24,40,.18)}
+.bar{max-width:1140px;margin:auto;padding:14px 20px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bar h1{font-size:19px;margin:0;font-weight:800;display:flex;align-items:center;gap:9px}.kosher-phone{width:40px;height:40px;padding:7px;border-radius:13px;background:var(--acc);color:#fff;flex:none;box-shadow:0 5px 15px var(--ring)}
+.bar h1::before{content:"";width:30px;height:30px;border-radius:9px;background:var(--hero-glass);border:1px solid var(--hero-line);flex:none;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z'/%3E%3C/svg%3E");background-size:16px;background-position:center;background-repeat:no-repeat}
+.bar .sub{color:var(--hero-mut);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.grow{flex:1}.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{font-size:12px;padding:4px 11px;border-radius:999px;background:var(--hero-glass);border:1px solid var(--hero-line);color:var(--hero-ink);white-space:nowrap;backdrop-filter:blur(6px)}
+.badge.live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.25);margin-inline-end:7px;vertical-align:1px}
+.badge.warn{background:var(--warn);color:#1a1200;border-color:transparent;font-weight:700}
+.top .btn{background:var(--hero-glass);border-color:var(--hero-line);color:var(--hero-ink)}.top .btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.4)}
+.tabs{max-width:1140px;margin:auto;padding:4px 14px 0;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:0 0 auto;background:none;border:0;border-bottom:3px solid transparent;padding:9px 13px 10px;color:var(--hero-mut);font-weight:600;cursor:pointer;white-space:nowrap;border-radius:8px 8px 0 0;transition:color .15s,background .15s}
+.tabs button:hover{color:var(--hero-ink);background:var(--hero-glass)}
+.tabs button.on{color:var(--hero-ink);border-color:#fff}
+.tabs b{font-weight:700;font-size:11px;background:var(--bad);color:#fff;border-radius:999px;padding:1px 7px;margin-inline-start:5px;box-shadow:0 0 0 2px rgba(0,0,0,.12)}.tabs b:empty{display:none}
+
+/* ---- גוף ---- */
+main{max-width:1140px;margin:auto;padding:20px 20px 48px;display:grid;gap:16px;transition:opacity .15s}main.busy{opacity:.55;pointer-events:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 13px;box-shadow:var(--sh);cursor:default;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.tile::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;background:var(--acc);opacity:.85}
+.tile b{display:block;font-size:30px;line-height:1.15;font-weight:800;font-variant-numeric:tabular-nums;color:var(--acc)}.tile span{color:var(--ink2);font-size:12.5px;font-weight:500}
+.tile.warn::before{background:var(--bad)}.tile.warn b{color:var(--bad)}.tile.good::before{background:var(--good)}.tile.good b{color:var(--goodt)}
+.tile[data-tab]{cursor:pointer}.tile[data-tab]:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh);min-width:0}
+.card h2{font-size:16.5px;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:700}.card h2 small{color:var(--mut);font-weight:400;font-size:13px}
+.card h3{font-size:14.5px;margin:14px 0 8px;font-weight:700}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}.cols.two{grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr))}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.between{justify-content:space-between}
+
+/* ---- כפתורים, תגיות ---- */
+.btn{border:1px solid var(--line);background:var(--card);border-radius:var(--r3);padding:7px 14px;cursor:pointer;font-weight:600;font-size:13.5px;line-height:1.3;box-shadow:var(--sh);transition:background .15s,border-color .15s,transform .1s,box-shadow .15s}
+.btn:hover{border-color:var(--acc);color:var(--acc)}.btn:active{transform:translateY(1px)}
+.btn.p{background:var(--acc);color:var(--acc-ink);border-color:transparent;box-shadow:0 2px 8px var(--ring)}.btn.p:hover{background:var(--acc2);color:#fff}
+.btn.d{color:var(--bad)}.btn.d:hover{background:var(--badbg);border-color:var(--bad);color:var(--bad)}
+.btn.s{padding:4px 10px;font-size:12.5px}.btn:disabled{opacity:.5;cursor:default;transform:none}
+.pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink2);white-space:nowrap;vertical-align:1px;font-weight:500;font-variant-numeric:tabular-nums}
+.pill.ok{color:var(--goodt);border-color:transparent;background:var(--goodbg)}.pill.bad{color:var(--bad);border-color:transparent;background:var(--badbg)}.pill.acc{background:var(--acc);color:#fff;border-color:transparent}.pill.warn{background:var(--warnbg);color:var(--warnt);border-color:transparent}
+
+/* ---- טבלאות ורשימות ---- */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+.tbl th,.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.tbl th{color:var(--mut);font-weight:600;font-size:12px;white-space:nowrap;background:var(--bg);position:sticky;top:0}
+.tbl th:first-child{border-start-end-radius:8px}.tbl th:last-child{border-start-start-radius:8px}
+.tbl tbody tr:hover td{background:color-mix(in srgb,var(--accbg) 45%,transparent)}
+.tbl tr:last-child td{border-bottom:0}.tbl.small td,.tbl.small th{padding:5px 7px;font-size:13px}
+.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px}.num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right}
+.mut{color:var(--mut)}.small{font-size:12px}.empty{color:var(--mut);padding:10px 0;font-size:14px}.right{margin-inline-start:auto}
+.list{margin:0;padding:0;list-style:none}.list li{padding:9px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.list li:last-child{border-bottom:0}
+.msg{border:1px solid var(--line);border-radius:var(--r2);padding:12px 14px;margin-bottom:10px;display:grid;gap:8px;background:var(--card);transition:border-color .15s,box-shadow .15s}.msg:hover{border-color:var(--axis);box-shadow:var(--sh)}.msg:last-child{margin-bottom:0}
+.msg .head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.msg .head b{font-size:15px}
+.msg audio{width:100%;height:38px;border-radius:999px}
+.tr{font-size:14px;color:var(--ink2);white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:9px 12px;max-height:5.5em;overflow:hidden;position:relative;cursor:pointer;border-inline-start:3px solid var(--axis)}.tr.open{max-height:none}
+.tr.long:not(.open)::after{content:"עוד…";position:absolute;bottom:0;inset-inline-start:0;padding:0 12px 5px;background:var(--bg);color:var(--acc);font-size:12px;font-weight:600}
+
+/* ---- טפסים ---- */
+input,select,textarea{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r3);background:var(--bg);color:inherit;max-width:100%;transition:border-color .15s,box-shadow .15s,background .15s}
+input:hover,select:hover,textarea:hover{border-color:var(--axis)}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--acc);box-shadow:0 0 0 3px var(--ring);background:var(--card)}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+textarea{width:100%;min-height:76px;resize:vertical}
+.form{display:grid;gap:8px}.form .row input{flex:1;min-width:120px}label.chk{display:flex;gap:6px;align-items:center;font-size:14px}
+.search{width:100%;max-width:440px;padding-inline-start:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8598' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 12px center;background-size:16px}
+
+/* ---- גרפים ---- */
+.chart{position:relative;direction:ltr}.chart svg{width:100%;height:auto;display:block}.chart .grid{stroke:var(--line);stroke-width:1}.chart .axis{stroke:var(--axis);stroke-width:1}.chart .tick{fill:var(--mut);font-size:11px;font-family:Heebo,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.chart .mark{fill:var(--acc);rx:2}.chart .hit{fill:transparent}.chart .bar:hover .mark{fill:var(--acc2)}
+.tip{position:absolute;background:var(--ink);color:var(--bg);font-size:12px;padding:5px 9px;border-radius:8px;pointer-events:none;white-space:nowrap;direction:rtl;transform:translate(-50%,-110%);z-index:2;box-shadow:var(--sh2)}
+.tblv{direction:rtl;margin-top:6px}.tblv summary{color:var(--mut);font-size:12px;cursor:pointer}
+.hb{display:grid;gap:7px}.hb-row{display:grid;grid-template-columns:minmax(90px,140px) 1fr 40px;gap:8px;align-items:center;font-size:13px}
+.hb-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hb-b{height:10px;background:var(--bg2);border-radius:5px;overflow:hidden}
+.hb-b i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:5px}.hb-v{text-align:left;color:var(--ink2);font-variant-numeric:tabular-nums}
+.banner{border-radius:var(--r2);padding:12px 16px;background:var(--accbg);border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{background:var(--warnbg);color:var(--warnt);border-color:color-mix(in srgb,var(--warn) 50%,transparent);font-weight:500}
+.online li{align-items:flex-start}.online .w{color:var(--ink2);font-size:13px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{font-size:13px;padding:4px 11px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-variant-numeric:tabular-nums}.chip.ok{border-color:transparent;background:var(--goodbg);color:var(--goodt)}.chip.bad{border-color:transparent;background:var(--badbg);color:var(--bad)}
+.log li{display:block;font-size:13px;padding:7px 0}.log time{color:var(--mut);font-size:12px;margin-inline-end:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.conv{display:grid;gap:6px}.conv .q{font-weight:600}.conv .a{color:var(--ink2)}.conv .m{color:var(--mut);font-size:12px}
+#toast{position:fixed;bottom:22px;inset-inline:0;display:grid;justify-content:center;pointer-events:none;z-index:9}
+#toast div{background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:500;max-width:90vw;box-shadow:var(--sh2);animation:up .25s cubic-bezier(.2,.8,.2,1)}#toast div.bad{background:var(--bad);color:#fff}
+@keyframes up{from{transform:translateY(12px);opacity:0}}
+.err{color:var(--bad)}.icon{width:36px;height:36px;padding:0;display:inline-grid;place-items:center;font-size:16px;border-radius:50%}
+@media(max-width:600px){.bar{padding:10px 14px 6px}.bar h1{font-size:17px}.bar h1::before{width:26px;height:26px;background-size:14px}main{padding:14px 14px 40px;gap:12px}.card{padding:14px;border-radius:14px}.tile{padding:12px 14px}.tile b{font-size:24px}.hb-row{grid-template-columns:minmax(80px,110px) 1fr 36px}.tiles{gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}}
+@media print{.top,.tabs,.btn,#toast{display:none}body{background:#fff}.card,.tile{box-shadow:none}}
+
+/* ---- כניסה ---- */
+.login-layer{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;background:var(--bg);
+background-image:radial-gradient(60% 50% at 80% 0%,color-mix(in srgb,var(--acc) 22%,transparent),transparent 70%),radial-gradient(45% 40% at 10% 100%,color-mix(in srgb,var(--acc) 14%,transparent),transparent 70%)}
+.login-layer[hidden]{display:none}
+.login-box{width:min(400px,100%);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px 28px 26px;display:grid;gap:14px;box-shadow:var(--sh2);animation:up .35s cubic-bezier(.2,.8,.2,1)}
+.login-box::before{content:"";width:52px;height:52px;border-radius:16px;background-color:var(--acc);box-shadow:0 6px 18px var(--ring);
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z'/%3E%3C/svg%3E"),var(--hero);background-size:26px,cover;background-position:center;background-repeat:no-repeat}
+.bar h1::before,.login-box::before{display:none}.login-box>.kosher-phone{width:58px;height:58px;padding:10px;border-radius:18px}.login-box h2{margin:0;font-size:22px;font-weight:800}.login-box p{margin:-6px 0 0;color:var(--mut);font-size:13px}
+.login-box input{padding:12px 14px;font-size:16px}.login-box button{width:100%;padding:11px;font-size:15px}
+.login-err{color:var(--bad);min-height:1.4em;font-size:13px;font-weight:500}
+
+/* ---- ניהול מתקדם ---- */
+.hsearch{position:relative;flex:0 1 260px;min-width:150px}
+.hsearch input{width:100%;background:var(--hero-glass);border-color:var(--hero-line);color:var(--hero-ink);padding:7px 12px;font-size:14px}
+.hsearch input::placeholder{color:var(--hero-mut)}.hsearch input:focus{background:rgba(255,255,255,.2);box-shadow:none;border-color:rgba(255,255,255,.5)}
+.sres{position:absolute;top:calc(100% + 6px);inset-inline:0;min-width:320px;max-height:70vh;overflow:auto;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh2);z-index:20;padding:6px}
+.sres[hidden]{display:none}.sres .g{font-size:11px;color:var(--mut);padding:6px 8px 2px;font-weight:600}
+.sres button{display:block;width:100%;text-align:right;background:none;border:0;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13.5px}.sres button:hover,.sres button.on{background:var(--accbg)}
+.sres small{color:var(--mut);display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(10,14,22,.5);display:grid;place-items:start center;padding:24px 12px;overflow:auto;backdrop-filter:blur(2px)}
+.modal[hidden]{display:none}.modal .box{width:min(980px,100%);background:var(--bg);border-radius:20px;box-shadow:var(--sh2);padding:18px;display:grid;gap:14px;animation:up .25s}
+.modal .mh{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.modal .mh h2{margin:0;font-size:20px}
+.xbtn{margin-inline-start:auto}
+.batch{position:sticky;bottom:12px;z-index:6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:14px;box-shadow:var(--sh2)}
+.batch[hidden]{display:none}.batch .btn{box-shadow:none}
+.msg .sel{width:18px;height:18px;accent-color:var(--acc);margin:0}
+.note{font-size:13px;background:var(--warnbg);color:var(--warnt);border-radius:8px;padding:6px 10px}
+.rec{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.rec .dot{width:12px;height:12px;border-radius:50%;background:var(--bad);animation:blink 1s infinite}.rec .dot[hidden]{display:none}
+@keyframes blink{50%{opacity:.25}}
+.picker{display:flex;flex-wrap:wrap;gap:6px;max-height:190px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.picker label{font-size:13px;display:flex;gap:5px;align-items:center;padding:3px 9px;border-radius:999px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+.picker input:checked+span{color:var(--acc);font-weight:700}
+.delta{font-size:12px;font-weight:600;margin-inline-start:6px}.delta.up{color:var(--goodt)}.delta.down{color:var(--bad)}
+.tl{display:grid;gap:2px}.tl .r{display:grid;grid-template-columns:52px 1fr auto;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px;align-items:baseline}.tl .r:last-child{border-bottom:0}
+.words{display:flex;flex-wrap:wrap;gap:6px}.words span{padding:3px 10px;border-radius:999px;background:var(--accbg);color:var(--acc2);font-weight:600}
+span.num{white-space:nowrap}.tile.sm b{font-size:19px;line-height:1.35}body:has(.modal:not([hidden])),body:has(.mon:not([hidden])){overflow:hidden}
+.kbd{font:12px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--bg)}
+body.ro .w-only{display:none!important}.ro-banner{background:var(--warnbg);color:var(--warnt);text-align:center;font-weight:600;padding:6px;font-size:13px}
+/* מסך בקרה */
+.mon{position:fixed;inset:0;z-index:45;background:#0b1020;color:#fff;display:grid;grid-template-rows:auto 1fr;padding:22px 28px;gap:18px;font-size:18px}
+.mon[hidden]{display:none}.mon .mt{display:flex;align-items:center;gap:16px}.mon .mt h1{margin:0;font-size:28px}.mon .clk{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;margin-inline-start:auto}
+.mon .g{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-content:start}
+.mon .p{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:18px}.mon .p h2{margin:0 0 10px;font-size:18px;color:#9fb5e6;font-weight:600}
+.mon .big{font-size:64px;font-weight:800;line-height:1}.mon .big.bad{color:#ff7a7a}.mon .big.good{color:#6ee7a0}
+.mon ul{list-style:none;margin:0;padding:0}.mon li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)}.mon li small{color:#9aa3b5;display:block;font-size:14px}
+.mon .btn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
+/* עוזר AI */
+.aifab{position:fixed;bottom:20px;left:20px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--hero);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 24px rgba(47,95,209,.45)}
+.aifab:hover{transform:scale(1.05)}
+.aip{position:fixed;bottom:88px;left:20px;z-index:31;width:min(430px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--sh2);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;animation:up .25s}
+.aip[hidden]{display:none}.aip .ah{background:var(--hero);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}.aip .ah b{font-size:16px}.aip .ah .btn{margin-inline-start:auto}
+.aip .al{overflow:auto;padding:14px;display:grid;gap:10px;align-content:start}
+.bub{padding:9px 13px;border-radius:14px;font-size:14.5px;white-space:pre-wrap;max-width:92%}.bub.me{background:var(--acc);color:#fff;justify-self:end;border-end-end-radius:4px}.bub.ai{background:var(--bg);justify-self:start;border-end-start-radius:4px}
+.bub.err{background:var(--badbg);color:var(--bad)}
+.acard{border:1px solid var(--line);border-radius:12px;padding:9px 11px;display:flex;gap:8px;align-items:center;background:var(--card);font-size:13.5px}.acard .grow{flex:1}
+.acard.done{opacity:.6}.acard.done .btn{display:none}
+.aip form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}.aip form input{flex:1}
+.aisug{display:flex;flex-wrap:wrap;gap:6px}.aisug button{font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer}
+.typing{display:inline-flex;gap:4px}.typing i{width:6px;height:6px;border-radius:50%;background:var(--mut);animation:blink 1s infinite}.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@media(max-width:600px){.hsearch{order:9;flex:1 1 100%}.aifab{bottom:14px;left:14px;width:50px;height:50px}.aip{left:8px;right:8px;width:auto;bottom:74px}.mon{padding:14px;font-size:16px}.mon .big{font-size:48px}}
+@media print{.aifab,.aip,.batch,.hsearch{display:none!important}}
+
+body.ro [data-act]:not([data-act=play]):not([data-act=more]),body.ro form[data-form],body.ro form[data-xf]:not([data-xf=notif]):not([data-xf=m-note]):not([data-xf=m-ads]),body.ro [data-xf=m-note] button,body.ro [data-xf=m-ads] button,body.ro .aifab{display:none!important}body.ro [data-xf=m-note] textarea,body.ro [data-xf=m-ads] textarea{pointer-events:none}
+
+/* 07 — מרחב ניהול */
+:root{--r:20px;--r2:14px;--acc:#465ce5;--acc2:#3444b6;--accbg:#eef0ff;--ring:rgba(70,92,229,.2)}
+body{background:var(--bg)}
+.skip-link{position:fixed;top:-80px;right:20px;z-index:100;background:var(--card);padding:12px 20px;border-radius:12px}.skip-link:focus{top:12px}
+.top{background:var(--card);color:var(--ink);box-shadow:none;border-bottom:1px solid var(--line)}
+.bar{max-width:1440px;min-height:90px;padding:20px 32px;gap:16px}.bar h1{font-size:21px}.bar h1::before{background-color:var(--acc);width:40px;height:40px;border:0;border-radius:13px}.bar .sub{color:var(--mut);margin-top:4px}
+.top .btn{background:var(--bg);border-color:var(--line);color:var(--ink)}.top .btn:hover{background:var(--accbg);border-color:var(--acc)}
+.badge{background:var(--bg);border-color:var(--line);color:var(--ink2);backdrop-filter:none}.badge.live{background:var(--goodbg);color:var(--goodt)}
+main{max-width:1440px;padding:30px 32px 60px;gap:22px}.card{box-shadow:none;border-radius:var(--r);padding:24px}.card h2{font-size:17px}.tile{padding:23px;box-shadow:none}.tile b{font-size:34px;letter-spacing:-1px}.tile::before{width:3px;top:23px;bottom:23px;border-radius:6px}.tiles{gap:16px}.cols{gap:20px}
+.workspace-heading{display:flex;align-items:end;justify-content:space-between;gap:20px}.workspace-heading h2{font-size:30px;letter-spacing:-1px;margin:0}.workspace-heading p{margin:5px 0 0;color:var(--mut)}.eyebrow{color:var(--acc);font-size:12px;font-weight:700;letter-spacing:1px;margin-bottom:6px}.workspace-date{color:var(--mut);font-size:13px}
+.overview-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:30px 34px;border-radius:24px;background:linear-gradient(120deg,#17224b,#3349ad 65%,#566be7);color:#fff}.overview-hero h2{font-size:27px;margin:0 0 8px;letter-spacing:-.7px}.overview-hero p{margin:0;color:#d8defb;max-width:540px}.overview-hero .eyebrow{color:#bfcaff}.overview-hero .btn{border-color:#ffffff40;background:#ffffff15;color:#fff}.overview-hero .btn.p{background:#fff;color:#283e99;border-color:#fff}.hero-mark{flex:none;display:grid;place-items:center;width:106px;height:106px;border:1px solid #ffffff30;border-radius:30px;font-size:48px;font-weight:800;background:#ffffff0a;transform:rotate(-7deg)}.quick-links{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.quick-link{display:flex;align-items:center;gap:13px;text-align:start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;transition:transform .15s,border-color .15s}.quick-link:hover{transform:translateY(-2px);border-color:var(--acc)}.quick-link i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--accbg);color:var(--acc);font-size:22px}.quick-link b{display:block;font-size:14px}.quick-link small{color:var(--mut);font-size:12px}.quick-link .arrow{margin-inline-start:auto;color:var(--mut)}
+.tabs button .nav-icon{width:24px;text-align:center;font-size:18px;flex:none}.tabs button .nav-label{flex:1;text-align:start}.tabs button:focus-visible,.quick-link:focus-visible,.tile:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.login-layer{background:radial-gradient(ellipse at 20% 20%,var(--accbg),transparent 65%),var(--bg)}.login-box{width:min(440px,100%);padding:38px;border-radius:26px}.login-box h2{font-size:27px}.login-box p{font-size:14px;line-height:1.8}.login-brand{color:var(--acc);font-size:12px;font-weight:800;letter-spacing:2px}.login-box label{font-size:13px;font-weight:600}.login-box button{padding:14px}
+@media(min-width:1100px){body{padding-inline-start:238px}.top{position:sticky;top:0}.tabs{position:fixed;inset-inline-start:0;top:0;bottom:0;width:238px;max-width:none;margin:0;padding:104px 16px 24px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;background:var(--card);border-inline-end:1px solid var(--line)}.tabs::before{content:'07 / קו הקבוצה';position:absolute;top:30px;inset-inline-start:28px;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-1px}.tabs button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 13px;border:0;border-radius:12px;color:var(--ink2);font-size:14px}.tabs button:hover{background:var(--bg);color:var(--ink)}.tabs button.on{background:var(--accbg);color:var(--acc);border:0}.tabs button[data-go=members],.tabs button[data-go=reports],.tabs button[data-go=system]{margin-top:15px}.tabs button.on::after{content:'';width:5px;height:5px;background:var(--acc);border-radius:50%}.tabs b{box-shadow:none}.hsearch{flex:1;max-width:400px}.login-layer{padding-inline-start:256px}}
+@media(max-width:1099px){.tabs{padding:4px 16px 0}.tabs button{color:var(--ink2);display:flex;gap:7px;align-items:center}.tabs button.on{color:var(--acc);border-color:var(--acc)}.tabs button:hover{background:var(--accbg);color:var(--acc)}.tabs button .nav-label{flex:none}.bar{padding:15px 20px}.quick-links{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){main{padding:20px 14px 90px}.bar{gap:8px}.bar h1{font-size:17px}.bar .badges{display:none}.workspace-heading h2{font-size:25px}.workspace-date{display:none}.overview-hero{padding:24px}.overview-hero h2{font-size:23px}.hero-mark{display:none}.quick-link{padding:14px;gap:10px}.quick-link small{font-size:11px}.quick-link .arrow{display:none}.card{padding:18px}.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tile{padding:18px}.tile b{font-size:28px}.login-box{padding:28px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">דילוג לתוכן</a>
+<header class="top">
+  <div class="bar">
+    <div><h1><svg class="kosher-phone" viewBox="0 0 32 32" role="img" aria-label="פלאפון כשר"><rect x="7" y="2" width="18" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="10" y="5" width="12" height="7" rx="1" fill="currentColor"/><g fill="currentColor"><circle cx="11" cy="16" r="1.25"/><circle cx="16" cy="16" r="1.25"/><circle cx="21" cy="16" r="1.25"/><circle cx="11" cy="20" r="1.25"/><circle cx="16" cy="20" r="1.25"/><circle cx="21" cy="20" r="1.25"/><circle cx="11" cy="24" r="1.25"/><circle cx="16" cy="24" r="1.25"/><circle cx="21" cy="24" r="1.25"/></g></svg>ניהול קו הקבוצה</h1><div class="sub" id="clock">073-351-2880</div></div>
+    <div class="grow"></div>
+    <div class="hsearch"><input id="gs" type="search" placeholder="חיפוש חברים, הודעות, תמלולים" autocomplete="off" aria-label="חיפוש"><div class="sres" id="gsr" hidden></div></div>
+    <div class="badges"><span class="badge live" id="b-online">…</span><span class="badge" id="b-pend">…</span></div>
+    <button class="btn icon" id="theme" title="מצב בהיר/כהה" aria-label="מצב בהיר/כהה">◐</button>
+    <button class="btn icon" data-x="mon" title="מסך בקרה (M)" aria-label="מסך בקרה">🖥</button>
+    <button class="btn icon" id="refresh" title="רענון" aria-label="רענון">↻</button>
+    <button class="btn s" id="logout" type="button">יציאה</button>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="לשוניות"></nav>
+  <div class="ro-banner" id="rob" hidden>מצב צפייה בלבד – אפשר לראות הכול, אי אפשר לבצע פעולות</div>
+</header>
+<main id="main" tabindex="-1"></main>
+<div id="toast" aria-live="polite"></div>
+<div class="modal" id="mm" hidden><div class="box"></div></div>
+<div class="mon" id="mon" hidden><div class="mt"><h1>קו הקבוצה · 073-351-2880</h1><span class="clk"></span><button class="btn" data-x="monx">✕ יציאה</button></div><div class="g"></div></div>
+<button class="aifab" data-x="ai" title="עוזר AI (A)" aria-label="עוזר AI">✦</button>
+<div class="aip" id="aip" hidden><div class="ah"><b>✦ עוזר הניהול</b><span class="small" style="opacity:.85">מציע – אתם מאשרים</span><button class="btn s" type="button" data-x="ai" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">✕</button></div><div class="al" id="ail"></div><form id="aif"><input id="aiq" placeholder="למשל: תשתיק את משה ליום, או: מי לא שמע את ההודעה החשובה?" autocomplete="off"><button class="btn p">שליחה</button></form></div>
+<div class="login-layer" id="login-layer" hidden>
+  <form class="login-box" id="login-form">
+    <svg class="kosher-phone" viewBox="0 0 32 32" role="img" aria-label="פלאפון כשר"><rect x="7" y="2" width="18" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="10" y="5" width="12" height="7" rx="1" fill="currentColor"/><g fill="currentColor"><circle cx="11" cy="16" r="1.25"/><circle cx="16" cy="16" r="1.25"/><circle cx="21" cy="16" r="1.25"/><circle cx="11" cy="20" r="1.25"/><circle cx="16" cy="20" r="1.25"/><circle cx="21" cy="20" r="1.25"/><circle cx="11" cy="24" r="1.25"/><circle cx="16" cy="24" r="1.25"/><circle cx="21" cy="24" r="1.25"/></g></svg>
+    <div class="login-brand">07 / קו הקבוצה</div>
+    <h2>טוב שחזרת.</h2>
+    <p>כל מה שקורה בקו, במקום אחד.<br>נכנסים ומתחילים לנהל.</p>
+    <label for="login-pass">סיסמת ניהול</label>
+    <input id="login-pass" type="password" placeholder="סיסמת ניהול" autocomplete="current-password" required>
+    <div class="login-err" id="login-err" role="alert"></div>
+    <button class="btn p" type="submit">כניסה</button>
+  </form>
+</div>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const state = { tab: (location.hash || "#home").slice(1), data: {}, msgN: 200, filter: {}, names: {} };
+const TABS = [["home", "סקירה"], ["pending", "ממתינות"], ["msgs", "הודעות"], ["members", "חברים"], ["sched", "תזמונים"], ["bot", "העוזר"], ["stats", "סטטיסטיקה"], ["log", "יומן"]];
+const KIND_ACTS = { // מקשים כמו בשלוחה 7-4: 1 חשובה, 2 רגילה, 3 מחיקה
+  default: [["1", "חשובה + צינתוק", "p"], ["2", "רגילה", ""], ["3", "מחיקה", "d"]],
+  demoted: [["1", "להעביר לחשובות", "p"], ["2", "להשאיר ברגילות", ""], ["3", "למחוק מהקו", "d"]],
+  join: [["3", "מחיקת הבקשה", "d"]],
+};
+
+// ---------- עזרים ----------
+// ---------- חיבור לשרת ----------
+// אותו קובץ משמש בשני מקומות: ב-Worker (/admin, עם cookie) וב-GitHub Pages (דרך הגשר ב-Supabase, עם אסימון בפרמטר).
+const REMOTE = !location.pathname.startsWith("/admin");
+const API_BASE = REMOTE ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" : "/admin/api/";
+let adminToken = "";
+try { if (REMOTE) adminToken = sessionStorage.getItem("adminToken") || ""; } catch {}
+{ // קישור לצפייה בלבד: .../07/#t=<אסימון>
+  const m = /^#t=([\w.-]+)$/.exec(location.hash);
+  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem("adminToken", adminToken); } catch {} history.replaceState(null, "", location.pathname); state.tab = "home"; }
+}
+const tokq = (sep = "&") => REMOTE && adminToken ? sep + "token=" + encodeURIComponent(adminToken) : "";
+const apiUrl = name => API_BASE + name + tokq(name.includes("?") ? "&" : "?");
+
+function showLogin(msg = "") {
+  $("#login-err").textContent = msg;
+  $("#login-layer").hidden = false;
+  setTimeout(() => $("#login-pass").focus(), 0);
+}
+function hideLogin() { $("#login-layer").hidden = true; $("#login-err").textContent = ""; }
+async function createSession(password) {
+  const r = await fetch(API_BASE + "session", { method: "POST", body: JSON.stringify({ password }) });
+  const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
+  if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
+  adminToken = j.token;
+  try { sessionStorage.setItem("adminToken", adminToken); } catch {}
+}
+function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem("adminToken"); } catch {} showLogin(msg); }
+async function apiRaw(name, body) {
+  if (REMOTE && !adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
+  const opt = body ? { method: "POST", body: JSON.stringify(body) } : {};
+  if (!REMOTE) opt.headers = { "Content-Type": "application/json", "X-Requested-With": "dash" };
+  // תקלת רשת רגעית (למשל בזמן עדכון הגשר, או סינון של נטפרי): קריאה רגילה מנסים שוב עד פעמיים
+  let r;
+  for (let k = 0; ; k++) {
+    try { r = await fetch(apiUrl(name), opt); break; }
+    catch (e) { if (body || k >= 2) throw new Error("אין חיבור לשרת כרגע. נסו שוב בעוד רגע"); await new Promise(res => setTimeout(res, 800 * (k + 1))); }
+  }
+  if (r.status === 401) {
+    if (!REMOTE) { location.reload(); throw new Error("החיבור פג, נכנסים מחדש"); }
+    dropSession("החיבור פג. יש להיכנס שוב."); throw new Error("החיבור פג");
+  }
+  return r;
+}
+async function api(name, body) {
+  const r = await apiRaw(name, body);
+  const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
+  if (!r.ok || j.error) throw new Error(j.error || "שגיאה " + r.status);
+  return j;
+}
+// הורדת קובץ (CSV, ZIP, הקלטה, גיבוי) דרך fetch, כדי שיעבוד גם דרך הגשר
+async function apiFile(name, body, fallback = "file") {
+  const r = await apiRaw(name, body);
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "שגיאה " + r.status); }
+  const blob = await r.blob(), m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("content-disposition") || "");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = m ? decodeURIComponent(m[1]) : fallback;
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+}
+function toast(msg, bad) { const d = document.createElement("div"); if (bad) d.className = "bad"; d.textContent = msg; $("#toast").replaceChildren(d); setTimeout(() => d.remove(), bad ? 6000 : 3500); }
+const fmtD = s => { s = String(s || ""); let m = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[1]}/${m[2]} ${m[4]}`; m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(s); if (m) return `${m[3]}/${m[2]} ${m[4]}`; return s.slice(0, 16); };
+const fmtDur = s => !s ? "" : s >= 60 ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : Math.round(s) + " שנ׳";
+const phone = p => p ? `<span class="num small mut">${esc(p.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3").replace(/^(\d{2})(\d{3})(\d{4})$/, "$1-$2-$3"))}</span>` : "";
+const who = (n, p) => `<b>${esc(n || (p ? "מספר לא מוכר" : "לא ידוע"))}</b> ${phone(p)}`;
+const audio = path => `<audio controls preload="none" src="${API_BASE}audio?p=${encodeURIComponent(path)}${tokq()}"></audio>`;
+const transcript = t => t ? `<div class="tr${t.length > 220 ? " long" : ""}" data-toggle="tr">${esc(t)}</div>` : "";
+const empty = t => `<div class="empty">${esc(t || "אין")}</div>`;
+const tile = (n, l, cls, tab) => `<${tab ? "button type=\"button\"" : "div"} class="tile ${cls || ""}" ${tab ? `data-tab="${tab}" style="text-align:start;font:inherit"` : ""}><b>${esc(n)}</b><span>${esc(l)}</span></${tab ? "button" : "div"}>`;
+const pl = (n, one, many) => n === 1 ? one : many.replace("#", n);
+const actBtn = (a, label, cls = "", extra = "") => `<button class="btn s ${cls}" data-act="admin" data-a="${esc(JSON.stringify(a))}" ${extra}>${esc(label)}</button>`;
+function describe(a) {
+  const nm = p => state.names[p] || p;
+  switch (a.type) {
+    case "delete": return `למחוק מהקו את הודעה ${a.id}?`;
+    case "move": return a.to === "important" ? `להעביר את הודעה ${a.id} להודעות החשובות ולשלוח צינתוק לכולם?` : `להוציא את הודעה ${a.id} מהחשובות (תישאר ברגילות)?`;
+    case "schedule": return `לפרסם ב-${a.at} ${a.important ? "הודעה חשובה עם צינתוק לכולם" : "הודעה רגילה"}:\n${a.text}`;
+    case "event": return `לפתוח בשלוחה 9 הרשמה חדשה לאירוע "${a.title}"? הרשימה הקודמת נשמרת.`;
+    case "mute": return `להשתיק את ${nm(a.phone)} ל-${a.hours} שעות? ההודעות שלו יחכו לאישור.`;
+    case "unmute": return `לבטל את ההשתקה של ${nm(a.phone)}?`;
+    case "entry": return `להחליף את ההודעה בכניסה לקו ל:\n${a.text}`;
+    case "entry_delete": return "למחוק את ההודעה שבכניסה לקו?";
+    case "approve_join": return `להוסיף את ${a.name} (${a.phone}) לקבוצה?`;
+    case "rule_add": return `להוסיף לעוזר כלל קבוע:\n${a.text}`;
+    case "rule_remove": return `למחוק את כלל מספר ${a.n}?`;
+    case "rename": return `לשנות את השם של ${nm(a.phone)} ל"${a.name}"?`;
+    case "broadcast": return `להשאיר לכל אחד מהחברים הודעה אישית עם השם שלו:\n${a.text}`;
+    case "undo": return "לבטל את הפעולה האחרונה?";
+  }
+  return "לבצע?";
+}
+
+// ---------- לשוניות ----------
+$("#tabs").innerHTML = TABS.map(([k, l]) => `<button data-go="${k}" class="${k === state.tab ? "on" : ""}">${l}${k === "pending" ? ' <b id="n-pend"></b>' : ""}</button>`).join("");
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) show(b.dataset.go); });
+$("#refresh").addEventListener("click", () => show(state.tab, true));
+window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (t && t !== state.tab) show(t); });
+const LOAD = { home: () => api("overview"), pending: () => api("pending"), msgs: () => api("messages?n=" + state.msgN), members: () => api("members"), sched: () => api("schedule"), bot: () => api("assistant"), stats: () => api("stats"), log: () => api("log") };
+async function show(tab, force) {
+  if (!LOAD[tab]) tab = "home";
+  state.tab = tab; history.replaceState(null, "", "#" + tab);
+  for (const b of $("#tabs").children) { b.classList.toggle("on", b.dataset.go === tab); if (b.dataset.go === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
+  const main = $("#main");
+  if (state.data[tab] && !force) { render(tab); }
+  main.classList.add("busy");
+  try { state.data[tab] = await LOAD[tab](); if (state.data[tab].names) state.names = state.data[tab].names; if (state.tab === tab) render(tab); }
+  catch (e) { if (state.tab !== tab) {} else if (!state.data[tab]) main.innerHTML = `<div class="card"><h2>שגיאה</h2><div class="err">${esc(e.message)}</div><div class="mut small">אפשר לנסות שוב עם כפתור הרענון למעלה</div></div>`; else toast(e.message, true); }
+  main.classList.remove("busy");
+}
+function render(tab) { const d = state.data[tab]; if (!d) return; $("#main").innerHTML = RENDER[tab](d); if (tab === "home") { badges(d); } }
+function badges(d) {
+  const pend = (d.pending || []).reduce((a, x) => a + x.n, 0) + (d.joins || 0);
+  $("#b-online").textContent = d.online.length ? pl(d.online.length, "אחד בקו", "# בקו") : "אף אחד בקו";
+  $("#b-pend").textContent = pend ? pl(pend, "ממתינה אחת", "# ממתינות") : "אין ממתינות"; $("#b-pend").classList.toggle("warn", pend > 0);
+  $("#n-pend").textContent = pend || ""; $("#clock").textContent = "073-351-2880 · עודכן " + fmtD(d.now).slice(6);
+}
+
+// ---------- סקירה ----------
+const RENDER = {};
+RENDER.home = d => {
+  const pend = d.pending.reduce((a, x) => a + x.n, 0);
+  return `
+  ${d.holy ? `<div class="banner">🕯️ <b>שבת / חג</b> – צינתוקים נשמרים ויוצאים במוצאי שבת או חג${d.deferred.length ? ` (${d.deferred.length} מחכים)` : ""}</div>` : d.deferred.length ? `<div class="banner">${d.deferred.length} צינתוקים מחכים למוצאי שבת/חג</div>` : ""}
+  <div class="tiles">${tile(d.online.length, "מחוברים עכשיו", d.online.length ? "good" : "")}${tile(pend, "הודעות לאישור", pend ? "warn" : "", "pending")}${tile(d.joins, "בקשות הצטרפות", d.joins ? "warn" : "", "pending")}${tile(d.members.active + "/" + d.members.total, "פעילים בצינתוקים", "", "members")}${tile(d.event.count, "נרשמו ל" + d.event.title, "", "sched")}${tile(d.allCount, "הודעות בקו מאז ומעולם", "", "msgs")}</div>
+  <div class="cols">
+    <div class="card" id="online-card">${onlineHtml(d.online)}</div>
+    <div class="card"><h2>פעולות מהירות</h2>
+      <div class="row"><button class="btn" data-act="tz" data-list="members">📣 צינתוק לכל החברים</button><button class="btn" data-act="tz" data-list="admins">צינתוק למנהלים</button>
+      ${d.undo ? actBtn({ type: "undo" }, "↶ ביטול: " + d.undo.desc, "d") : '<span class="mut small">אין פעולה לביטול</span>'}</div>
+      <h2 style="margin-top:14px">ממתין לטיפול <small>שלוחה 7</small></h2>
+      <ul class="list">${d.pending.map(p => `<li><span class="grow">${esc(p.name)}</span><span class="pill ${p.n ? "bad" : ""}">${p.n}</span></li>`).join("")}<li><span class="grow">בקשות הצטרפות</span><span class="pill ${d.joins ? "bad" : ""}">${d.joins}</span></li></ul>
+      ${pend + d.joins ? '<div class="row" style="margin-top:8px"><button class="btn p" data-go="pending">לטיפול בממתינות ←</button></div>' : ""}
+    </div>
+    <div class="card"><h2>תזמונים קרובים</h2>${d.jobs.length ? `<ul class="list">${d.jobs.map(j => `<li><span class="num small mut">${esc(fmtD(j.at))}</span><span class="grow">${esc(jobText(j))}</span></li>`).join("")}</ul>` : empty("אין הודעות מתוזמנות")}
+      <h2 style="margin-top:14px">האירוע בשלוחה 9</h2><div><b>${esc(d.event.title)}</b> <span class="mut">${esc(d.event.desc || "")}</span></div><div class="mut small">נרשמו ${d.event.count} מתוך ${d.event.total} חברים</div>
+    </div>
+    <div class="card"><h2>מושתקים <small>הודעות שלהם מחכות לאישור</small></h2>${d.muted.length ? `<ul class="list">${d.muted.map(m => `<li>${who(m.n, m.p)}<span class="mut small">${m.until ? "עד " + esc(fmtD(m.until)) : ""}</span>${actBtn({ type: "unmute", phone: m.p }, "ביטול השתקה", "", 'style="margin-inline-start:auto"')}</li>`).join("")}</ul>` : empty("אף אחד לא מושתק")}
+      <h2 style="margin-top:14px">מנהלים</h2><div class="chips">${d.admins.map(a => `<span class="chip">${esc(a.n)}</span>`).join("")}</div>
+    </div>
+  </div>`;
+};
+const jobText = j => jobText2(j);
+const onlineHtml = list => `<h2>מי בקו עכשיו <small>מתעדכן כל 10 שניות</small><span class="pill ${list.length ? "ok" : ""}">${list.length}</span></h2>` +
+  (list.length ? `<ul class="list online">${list.map(c => `<li><div class="grow"><div>${who(c.n, c.p)}</div><div class="w">${esc(c.w)}</div></div>${c.id ? `<button class="btn s d" data-act="hangup" data-id="${esc(c.id)}" data-phone="${esc(c.p)}" data-name="${esc(c.n)}">ניתוק</button>` : ""}</li>`).join("")}</ul>` : empty("אף אחד לא מחובר כרגע"));
+
+// ---------- ממתינות ----------
+RENDER.pending = d => {
+  const total = d.lists.reduce((a, l) => a + l.files.length, 0);
+  $("#n-pend").textContent = total || "";
+  if (!total) return `<div class="card"><h2>הודעות ממתינות לאישור</h2>${empty("אין כרגע הודעות שממתינות לאישור, ואין בקשות הצטרפות 👍")}</div>`;
+  return d.lists.filter(l => l.files.length).map(l => `<div class="card"><h2>${esc(l.name)} <span class="pill bad">${l.files.length}</span></h2>
+    ${l.files.map(f => `<div class="msg" data-file="${esc(f.name)}"><div class="head">${l.k === "join" ? `<b>בקשה ${esc(f.name.replace(".wav", ""))}</b> ${f.p ? phone(f.p) : '<span class="mut">מספר לא ידוע</span>'}` : who(f.n, f.p)}<span class="mut small">${esc(fmtD(f.date))}</span>${f.dur ? `<span class="mut small">${fmtDur(f.dur)}</span>` : ""}</div>
+      ${audio(l.folder + "/" + f.name)}${transcript(f.t)}
+      <div class="row">${l.k === "join" ? `<form class="row grow" data-form="join" data-file="${esc(f.name)}"><input name="name" placeholder="שם מלא (אפשר להשאיר ריק – השם יזוהה מההקלטה)" style="flex:1;min-width:200px"><button class="btn s p">אישור הצטרפות</button></form>` : ""}
+      ${(KIND_ACTS[l.k] || KIND_ACTS.default).map(([code, label, cls]) => `<button class="btn s ${cls}" data-act="review" data-kind="${l.k}" data-file="${esc(f.name)}" data-code="${code}" data-label="${esc(label)}">${label}</button>`).join("")}</div>
+    </div>`).join("")}</div>`).join("");
+};
+
+// ---------- הודעות ----------
+RENDER.msgs = d => {
+  const q = (state.filter.msgs || "").trim();
+  const list = q ? d.list.filter(m => [m.id, m.n, m.p, m.t].join(" ").includes(q)) : d.list;
+  return `<div class="card"><h2>הודעות בקו <small>${d.list.length} מתוך ${d.total} · מהחדשה לישנה</small></h2>
+    <div class="row"><input class="search" data-filter="msgs" placeholder="חיפוש בשם, במספר, במספר ההודעה או בתמלול" value="${esc(q)}">${d.list.length < d.total ? `<button class="btn s" data-act="more">טעינת ${Math.min(d.total, 1000)} האחרונות</button>` : ""}</div></div>
+    ${list.length ? list.map(m => `<div class="msg"><div class="head"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${who(m.n, m.p)}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
+      <div class="row"><button class="btn s" data-act="play" data-p="${esc("/1/2/" + m.id + ".wav")}">▶ השמעה</button>${m.imp ? actBtn({ type: "move", id: m.id, to: "regular" }, "הוצאה מהחשובות") : actBtn({ type: "move", id: m.id, to: "important" }, "העברה לחשובות + צינתוק")}${actBtn({ type: "delete", id: m.id }, "מחיקה", "d")}</div>
+      ${transcript(m.t) || '<div class="mut small">אין תמלול (עדיין)</div>'}</div>`).join("") : `<div class="card">${empty("לא נמצאו הודעות")}</div>`}`;
+};
+
+// ---------- חברים ----------
+RENDER.members = d => {
+  const q = (state.filter.members || "").trim();
+  const rows = q ? d.rows.filter(r => (r.n + " " + r.p).includes(q)) : d.rows;
+  const tz = r => r.tz === "on" ? '<span class="pill ok">פעיל</span>' : r.tz === "off" ? '<span class="pill bad">חסם צינתוקים</span>' : '<span class="pill">לא ברשימה</span>';
+  return `<div class="card"><h2>חברי הקבוצה <small>${d.rows.length} · פעילים בצינתוקים ${d.rows.filter(r => r.tz === "on").length}</small></h2>
+    <div class="row"><input class="search" data-filter="members" placeholder="חיפוש לפי שם או מספר" value="${esc(q)}"></div>
+    <div class="wrap" style="margin-top:10px"><table class="tbl"><tr><th>שם</th><th>טלפון</th><th>צינתוקים</th><th>רגילות</th><th>אירוע</th><th>שיחות החודש</th><th>כניסה אחרונה</th><th></th></tr>
+    ${rows.map(r => `<tr><td><b>${esc(r.n || "ללא שם")}</b>${r.admin ? ' <span class="pill acc">מנהל</span>' : ""}${r.muted ? ` <span class="pill warn">מושתק${r.muted !== "ללא הגבלה" ? " עד " + esc(fmtD(r.muted)) : ""}</span>` : ""}${r.blocked ? ' <span class="pill bad">חסום</span>' : ""}${r.code ? `<div class="mut small">קוד ${esc(r.code)} בהודעות האישיות</div>` : ""}</td>
+      <td>${phone(r.p)}</td><td>${tz(r)}</td><td>${r.general ? "✓" : ""}</td><td>${r.rsvp ? "✓" : ""}</td><td class="num">${r.calls || ""}</td><td class="num small mut">${esc(fmtD(r.last))}</td>
+      <td><div class="row" style="flex-wrap:nowrap">${r.n ? `<button class="btn s" data-act="rename" data-phone="${esc(r.p)}" data-name="${esc(r.n)}">שם</button>` : ""}${r.muted ? actBtn({ type: "unmute", phone: r.p }, "ביטול השתקה") : `<button class="btn s" data-act="mute" data-phone="${esc(r.p)}">השתקה</button>`}<button class="btn s ${r.blocked ? "" : "d"}" data-act="block" data-phone="${esc(r.p)}" data-on="${r.blocked ? "0" : "1"}">${r.blocked ? "ביטול חסימה" : "חסימה"}</button></div></td></tr>`).join("")}</table></div>
+    ${rows.length ? "" : empty("לא נמצאו חברים")}</div>
+  <div class="cols">
+    <div class="card"><h2>בקשות הצטרפות <span class="pill ${d.joins.length ? "bad" : ""}">${d.joins.length}</span></h2>${d.joins.length ? `<ul class="list">${d.joins.map(j => `<li>${phone(j.p) || '<span class="mut">מספר לא ידוע</span>'}<span class="mut small">${esc(fmtD(j.date))}</span><button class="btn s p right" data-go="pending">לטיפול</button></li>`).join("")}</ul>` : empty("אין בקשות")}
+      <h2 style="margin-top:14px">אושרו ומחכים שיתקשרו</h2>${d.approved.length ? `<ul class="list">${d.approved.map(a => `<li>${who(a.n, a.p)}<span class="mut small">אושר ${esc(fmtD(a.t))} על ידי ${esc(a.by)}</span></li>`).join("")}</ul>` : empty("אין")}</div>
+    <div class="card"><h2>הוספת חבר ידנית</h2><form class="form" data-form="addmember"><div class="row"><input name="phone" placeholder="מספר טלפון" inputmode="tel" required pattern="0\\d{8,9}"><input name="name" placeholder="שם מלא" required></div><div class="mut small">החבר נכנס לרשימות של הקו ולתפריט ההודעות האישיות, ובפעם הבאה שיתקשר יצטרף אוטומטית לרשימת הצינתוקים.</div><div><button class="btn p">הוספה</button></div></form>
+      <h2 style="margin-top:14px">חסומים <small>מנותקים מיד כשמתקשרים</small></h2>${d.blocked.length ? `<div class="chips">${d.blocked.map(b => `<span class="chip bad">${esc(b.n || b.p)} <button class="btn s" data-act="block" data-phone="${esc(b.p)}" data-on="0" style="padding:0 6px;margin-inline-start:4px">✕</button></span>`).join("")}</div>` : empty("אין מספרים חסומים")}
+      <form class="row" data-form="blockphone" style="margin-top:8px"><input name="phone" placeholder="חסימת מספר שאינו חבר" inputmode="tel" required pattern="0\\d{8,9}"><button class="btn s d">חסימה</button></form></div>
+  </div>`;
+};
+
+// ---------- תזמונים ----------
+RENDER.sched = d => {
+  const minAt = d.now.slice(0, 16).replace(" ", "T");
+  return `
+  <div class="card"><h2>כל התזמונים <small>${d.jobs.filter(j => !j.done).length} ממתינים</small></h2>${d.jobs.length ? `<div class="wrap"><table class="tbl"><tr><th>זמן</th><th>מה</th><th>מי קבע</th><th>מצב</th><th></th></tr>${d.jobs.map(j => `<tr><td class="num small">${esc(j.at)}</td><td>${esc(jobText(j))}</td><td class="small mut">${esc(j.byName || "")}</td><td>${j.done ? `<span class="pill ok">נשלח ${esc(fmtD(j.done))}</span>` : '<span class="pill">ממתין</span>'}</td><td>${j.done ? "" : `<button class="btn s d" data-act="unsched" data-id="${esc(j.id || "")}" data-at="${esc(j.at)}" data-text="${esc(j.text || "")}" data-type="${esc(j.type)}">ביטול</button>`}</td></tr>`).join("")}</table></div>` : empty("אין תזמונים")}</div>`;
+};
+
+// ---------- העוזר ----------
+RENDER.bot = d => {
+  const f = state.filter.conv || "";
+  const conv = f ? d.conv.filter(c => c.p === f) : d.conv;
+  const people = [...new Map(d.conv.map(c => [c.p, c.n])).entries()];
+  return `<div class="cols">
+    <div class="card"><h2>כללים קבועים לעוזר <small>${d.rules.length}</small></h2>${d.rules.length ? `<ol style="margin:0;padding-inline-start:20px">${d.rules.map((r, i) => `<li style="margin-bottom:6px">${esc(r)} ${actBtn({ type: "rule_remove", n: i + 1 }, "מחיקה", "d s")}</li>`).join("")}</ol>` : empty("אין כללים")}
+      <form class="row" data-form="rule" style="margin-top:8px"><input name="text" placeholder="כלל חדש לעוזר" required maxlength="300" style="flex:1"><button class="btn">הוספה</button></form></div>
+    <div class="card"><h2>הודעה אישית לכל החברים</h2><form class="form" data-form="broadcast"><textarea name="text" placeholder="הנוסח ממשיך את השם של החבר, למשל: , שים לב, מחר השיעור בשמונה" required maxlength="800"></textarea><div><button class="btn p">שליחה לתיבות האישיות</button></div></form>
+      <h2 style="margin-top:14px">ההודעה בכניסה לקו</h2><form class="form" data-form="entry"><textarea name="text" placeholder="נוסח חדש להודעה שכולם שומעים בכניסה" required maxlength="600"></textarea><div class="row"><button class="btn">החלפה</button>${actBtn({ type: "entry_delete" }, "מחיקת ההודעה בכניסה", "d")}</div></form></div>
+  </div>
+  <div class="card"><h2>שיחות עם העוזר <small>${d.conv.length} האחרונות</small><select data-filter="conv" class="right"><option value="">כל החברים</option>${people.map(([p, n]) => `<option value="${esc(p)}" ${p === f ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></h2>
+    ${conv.length ? `<div class="conv">${conv.slice(0, 80).map(c => `<div><div class="m">${esc(fmtD(c.d))} · ${esc(c.n)}</div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a)}</div></div>`).join("")}</div>` : empty("אין שיחות")}</div>
+  <div class="cols">
+    <div class="card"><h2>היסטוריית פעולות <small>אפשר לבטל רק את האחרונה</small></h2>${d.undo.length ? `<ul class="list">${d.undo.map((u, i) => `<li><span class="mut small num">${esc(fmtD(u.d))}</span><span class="grow">${esc(u.desc)}</span>${i === 0 ? actBtn({ type: "undo" }, "↶ ביטול", "d") : ""}</li>`).join("")}</ul>` : empty("אין פעולות")}</div>
+  </div>`;
+};
+
+// ---------- סטטיסטיקה ----------
+RENDER.stats = d => {
+  const dl = d.days.map(x => x.slice(8) + "/" + x.slice(5, 7)), last = d.days.length - 1;
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  return `<div class="tiles">${tile(d.calls[last], "שיחות היום")}${tile(d.callers[last], "מתקשרים היום")}${tile(sum(d.calls), "שיחות ב-30 יום")}${tile(sum(d.msgs), "הודעות ב-30 יום")}${tile(sum(d.conv), "שיחות עם העוזר ב-30 יום")}${tile(d.quiet.length, "לא נכנסו שבוע", d.quiet.length ? "warn" : "good")}</div>
+  <div class="cols two">
+    <div class="card"><h2>שיחות לפי יום <small>30 הימים האחרונים</small></h2>${chart(dl, d.calls, { unit: "שיחות", xName: "יום" })}</div>
+    <div class="card"><h2>שיחות לפי שעה <small>${d.system.months.join(", ")}</small></h2>${chart(d.byHour.map((_, i) => String(i).padStart(2, "0")), d.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div>
+    <div class="card"><h2>הודעות שעלו לקו לפי יום</h2>${chart(dl, d.msgs, { unit: "הודעות", xName: "יום" })}</div>
+    <div class="card"><h2>שיחות עם העוזר לפי יום</h2>${chart(dl, d.conv, { unit: "שיחות", xName: "יום" })}</div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>הפעילים ביותר <small>שיחות, ${d.system.months.join(" + ")}</small></h2>${hbars(d.perMember, "n", "calls")}</div>
+    <div class="card"><h2>איפה מבלים בקו <small>כניסות לשלוחות</small></h2>${hbars(d.byFolder, "l", "n")}</div>
+    <div class="card"><h2>ההודעה החשובה האחרונה ${d.lastImp ? `<small>הודעה ${esc(d.lastImp.f.replace(".wav", ""))} · ${esc(fmtD(d.lastImp.t))}</small>` : ""}</h2>${d.lastImp ? `<div class="small mut">שמעו (${d.heard.length})</div><div class="chips" style="margin-bottom:8px">${d.heard.map(x => `<span class="chip ok">${esc(x.n)}</span>`).join("") || '<span class="mut small">אף אחד עדיין</span>'}</div><div class="small mut">עוד לא שמעו (${d.notHeard.length})</div><div class="chips">${d.notHeard.map(x => `<span class="chip">${esc(x.n)}</span>`).join("") || '<span class="mut small">כולם שמעו 🎉</span>'}</div>` : empty("אין הודעות חשובות")}</div>
+    <div class="card"><h2>לא נכנסו לקו בשבוע האחרון <small>${d.quiet.length}</small></h2>${d.quiet.length ? `<ul class="list">${d.quiet.map(q => `<li><span class="grow">${esc(q.n)}</span><span class="mut small num">${q.last ? "אחרון: " + esc(fmtD(q.last)) : "לא נכנס החודש"}</span></li>`).join("")}</ul>` : empty("כולם היו בקו השבוע 🎉")}</div>
+    <div class="card"><h2>מצב המערכת</h2><ul class="list"><li><span class="grow">שבת/חג עכשיו</span><span class="pill ${d.holy ? "warn" : ""}">${d.holy ? "כן" : "לא"}</span></li><li><span class="grow">צינתוקים שמחכים למוצאי שבת</span><span class="pill">${d.deferred.length}</span></li><li><span class="grow">הודעות בארכיון / מתומללות</span><span class="pill">${d.system.archive} / ${d.system.transcribed}</span></li><li><span class="grow">פרופילים של חברים</span><span class="pill">${d.system.profiles}</span></li><li><span class="grow">שיחות עם העוזר ביומן</span><span class="pill">${d.system.conv}</span></li><li><span class="grow">שיחות ביומני ימות (${esc(d.system.months.join(", "))})</span><span class="pill">${d.system.totalCalls}</span></li></ul></div>
+  </div>`;
+};
+function chart(labels, values, o = {}) {
+  const W = 440, H = o.h || 150, L = 28, R = 6, T = 10, B = 22, n = Math.max(1, values.length);
+  const max = Math.max(1, ...values), iw = (W - L - R) / n, bw = Math.max(2, Math.min(16, iw - 3)), r = Math.min(4, bw / 2);
+  const y = v => T + (H - T - B) * (1 - v / max), base = H - B;
+  const ticks = [...new Set([0, Math.round(max / 2), max])];
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.unit || "")}">`;
+  for (const t of ticks) s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${L - 5}" y="${y(t) + 4}" class="tick" text-anchor="end">${t}</text>`;
+  values.forEach((v, i) => { const x = L + i * iw + (iw - bw) / 2, yy = y(v), rr = Math.min(r, Math.max(0, base - yy) / 2);
+    const path = v > 0 ? `M${x} ${base}V${yy + rr}Q${x} ${yy} ${x + rr} ${yy}H${x + bw - rr}Q${x + bw} ${yy} ${x + bw} ${yy + rr}V${base}Z` : "";
+    s += `<g class="bar" data-i="${i}"><rect x="${L + i * iw}" y="${T}" width="${iw}" height="${H - T - B}" class="hit"/>${path ? `<path d="${path}" class="mark"/>` : ""}</g>`; });
+  const step = Math.max(1, Math.ceil(n / (o.xEvery || 6)));
+  labels.forEach((l, i) => { if (i % step === 0 || i === n - 1) s += `<text x="${L + i * iw + iw / 2}" y="${H - 6}" class="tick" text-anchor="middle">${esc(l)}</text>`; });
+  s += `<line x1="${L}" x2="${W - R}" y1="${base}" y2="${base}" class="axis"/></svg>`;
+  return `<div class="chart" data-labels="${esc(JSON.stringify(labels))}" data-values="${esc(JSON.stringify(values))}" data-unit="${esc(o.unit || "")}">${s}<div class="tip" hidden></div>
+    <details class="tblv"><summary>הנתונים בטבלה</summary><div class="wrap"><table class="tbl small"><tr><th>${esc(o.xName || "")}</th><th>${esc(o.unit || "")}</th></tr>${labels.map((l, i) => `<tr><td>${esc(l)}</td><td class="num">${values[i]}</td></tr>`).join("")}</table></div></details></div>`;
+}
+const hbars = (rows, k, v) => rows.length ? `<div class="hb">${rows.map(r => `<div class="hb-row"><span class="hb-l" title="${esc(r[k])}">${esc(r[k])}</span><span class="hb-b"><i style="width:${Math.round(100 * r[v] / Math.max(1, rows[0][v]))}%"></i></span><span class="hb-v">${r[v]}</span></div>`).join("")}</div>` : empty("אין נתונים");
+
+// ---------- יומן ----------
+RENDER.log = d => {
+  const q = (state.filter.log || "").trim();
+  const lines = q ? d.lines.filter(l => (l.t + " " + l.m).includes(q)) : d.lines;
+  return `<div class="card"><h2>יומן השרת <small>${d.lines.length} הרשומות האחרונות</small></h2><div class="row"><input class="search" data-filter="log" placeholder="סינון" value="${esc(q)}"></div>
+    <ul class="list log" style="margin-top:8px">${lines.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("") || empty("אין רשומות")}</ul></div>`;
+};
+
+// ---------- פעולות ----------
+const main = $("#main");
+main.addEventListener("input", e => { const f = e.target.dataset.filter; if (f) { state.filter[f] = e.target.value; const pos = e.target.selectionStart; render(state.tab); const el = main.querySelector(`[data-filter="${f}"]`); if (el && el.focus) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } } });
+main.addEventListener("change", e => { const f = e.target.dataset.filter; if (f && e.target.tagName === "SELECT") { state.filter[f] = e.target.value; render(state.tab); } });
+main.addEventListener("click", async e => {
+  const tr = e.target.closest("[data-toggle=tr]"); if (tr) { tr.classList.toggle("open"); return; }
+  const go = e.target.closest("[data-go],[data-tab]"); if (go && !e.target.closest("[data-act]")) { show(go.dataset.go || go.dataset.tab); return; }
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const d = b.dataset;
+  try {
+    b.disabled = true;
+    if (d.act === "play") { b.outerHTML = audio(d.p).replace("<audio ", "<audio autoplay "); return; }
+    if (d.act === "more") { state.msgN = 1000; await show("msgs", true); return; }
+    if (d.act === "admin") { const a = JSON.parse(d.a); if (!confirm(describe(a))) return; const r = await api("act", { a }); toast(r.r); await refreshAfter(); return; }
+    if (d.act === "review") { if (d.code === "3" && !confirm("למחוק את ההודעה הזו?")) return; if (d.code === "1" && d.kind !== "join" && !confirm(d.kind === "demoted" ? "להעביר להודעות החשובות ולשלוח צינתוק לכולם?" : "לפרסם כהודעה חשובה ולשלוח צינתוק לכל החברים?")) return;
+      const r = await api("review", { kind: d.kind, file: d.file, act: d.code }); toast(r.msg); await show("pending", true); return; }
+    if (d.act === "hangup") { if (!confirm(`לנתק את השיחה של ${d.name}?`)) return; await api("hangup", { id: d.id, phone: d.phone }); toast("השיחה נותקה"); setTimeout(pollOnline, 1500); return; }
+    if (d.act === "tz") { if (!confirm(d.list === "admins" ? "לשלוח צינתוק למנהלים?" : "לשלוח צינתוק לכל החברים ברשימה?")) return; const r = await api("tzintuk", { list: d.list }); toast(r.deferred ? "שבת/חג: הצינתוק יישלח במוצאי שבת או חג" : r.ok ? "הצינתוק נשלח" : "ימות לא אישרו את הצינתוק", !r.ok && !r.deferred); return; }
+    if (d.act === "unsched") { if (!confirm("לבטל את התזמון הזה?")) return; await api("unsched", { id: d.id, at: d.at, text: d.text, type: d.type }); toast("התזמון בוטל"); await show("sched", true); return; }
+    if (d.act === "block") { const on = d.on === "1"; if (!confirm(on ? "לחסום את המספר הזה? הוא ינותק מיד בכל שיחה לקו" : "לבטל את החסימה?")) return; await api("block", { phone: d.phone, on }); toast(on ? "המספר נחסם" : "החסימה בוטלה"); await show("members", true); return; }
+    if (d.act === "rename") { const name = prompt("שם חדש", d.name); if (!name || name.trim() === d.name) return; const r = await api("act", { a: { type: "rename", phone: d.phone, name: name.trim() } }); toast(r.r); await show("members", true); return; }
+    if (d.act === "mute") { const h = prompt("לכמה שעות להשתיק? (ההודעות שלו יחכו לאישור)", "24"); if (h === null) return; const hours = Math.max(1, Math.min(720, +h || 24)); const r = await api("act", { a: { type: "mute", phone: d.phone, hours } }); toast(r.r); await show("members", true); return; }
+  } catch (err) { toast(err.message, true); }
+  finally { b.disabled = false; }
+});
+main.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form]"); if (!f) return; e.preventDefault();
+  const v = Object.fromEntries(new FormData(f)), kind = f.dataset.form, btn = f.querySelector("button");
+  let a = null;
+  if (kind === "schedule") a = { type: "schedule", at: v.at.replace("T", " ").slice(0, 16), text: v.text.trim(), important: !!v.important };
+  if (kind === "event") a = { type: "event", title: v.title.trim(), desc: (v.desc || "").trim() };
+  if (kind === "broadcast") a = { type: "broadcast", text: v.text.trim() };
+  if (kind === "entry") a = { type: "entry", text: v.text.trim() };
+  if (kind === "rule") a = { type: "rule_add", text: v.text.trim() };
+  if (kind === "addmember") a = { type: "approve_join", phone: v.phone.replace(/\D/g, ""), name: v.name.trim() };
+  try {
+    btn.disabled = true;
+    if (kind === "join") { const r = await api("review", { kind: "join", file: f.dataset.file, act: "1", name: (v.name || "").trim() }); toast(r.msg); await show("pending", true); return; }
+    if (kind === "blockphone") { await api("block", { phone: v.phone.replace(/\D/g, ""), on: true }); toast("המספר נחסם"); await show("members", true); return; }
+    if (!a) return;
+    if (!confirm(describe(a))) return;
+    const r = await api("act", { a }); toast(r.r); f.reset(); await refreshAfter();
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+});
+async function refreshAfter() { delete state.data.home; await show(state.tab, true); }
+
+// ---------- זמן אמת, ערכת נושא ----------
+main.addEventListener("mousemove", e => { const g = e.target.closest(".bar"), ch = e.target.closest(".chart"); if (!ch) return; const tip = ch.querySelector(".tip"); if (!g) { tip.hidden = true; return; }
+  const labels = JSON.parse(ch.dataset.labels), values = JSON.parse(ch.dataset.values), i = +g.dataset.i, rc = ch.getBoundingClientRect(), br = g.getBoundingClientRect();
+  tip.textContent = `${labels[i]}: ${values[i]} ${ch.dataset.unit}`; tip.hidden = false; tip.style.left = (br.left + br.width / 2 - rc.left) + "px"; tip.style.top = (br.top - rc.top + 10) + "px"; });
+main.addEventListener("mouseleave", () => { for (const t of main.querySelectorAll(".tip")) t.hidden = true; });
+async function pollOnline() { if (document.hidden) return; try { const d = await api("online"); $("#b-online").textContent = d.online.length ? pl(d.online.length, "אחד בקו", "# בקו") : "אף אחד בקו"; const card = $("#online-card"); if (card && state.tab === "home") { card.innerHTML = onlineHtml(d.online); state.data.home.online = d.online; } } catch {} }
+setInterval(pollOnline, 10000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollOnline(); if (state.tab === "pending") show("pending", true); } });
+const themeBtn = $("#theme");
+themeBtn.addEventListener("click", () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("theme", next); } catch {} });
+try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+
+// =====================================================================
+// ניהול מתקדם: לשוניות נוספות, כרטיס חבר, אצווה, הקלטה, שידור, דוחות,
+// בקרה חיה, מערכת, חיפוש, מסך בקרה, התראות, קישור צפייה ועוזר AI
+// =====================================================================
+TABS.splice(0, TABS.length, ["home", "סקירה"], ["pending", "ממתינות"], ["msgs", "הודעות"], ["trash", "סל מחזור"], ["members", "חברים"], ["studio", "שידור"], ["sched", "תזמונים"], ["event", "אירוע"], ["bot", "העוזר"], ["reports", "דוחות"], ["stats", "סטטיסטיקה"], ["live", "בקרה חיה"], ["system", "מערכת"], ["log", "יומן"]);
+$("#tabs").innerHTML = TABS.map(([k, l], i) => `<button data-go="${k}" class="${k === state.tab ? "on" : ""}" ${i < 9 ? `title="Alt+${i + 1}"` : ""}>${l}${k === "pending" ? ' <b id="n-pend"></b>' : ""}</button>`).join("");
+const NAV_ICONS = {home:"◫",pending:"◷",msgs:"▤",trash:"⌫",members:"♧",studio:"◉",sched:"◴",event:"◇",bot:"✦",reports:"▥",stats:"▧",live:"◎",system:"⚙",log:"≡"};
+for (const b of $("#tabs").children) {
+  const label = document.createElement("span"); label.className = "nav-label";
+  label.append(b.firstChild); b.prepend(label);
+  const icon = document.createElement("span"); icon.className = "nav-icon"; icon.setAttribute("aria-hidden", "true"); icon.textContent = NAV_ICONS[b.dataset.go] || "◇"; b.prepend(icon);
+  if (b.classList.contains("on")) b.setAttribute("aria-current", "page");
+}
+const baseHome = RENDER.home;
+RENDER.home = d => {
+  const pending = d.pending.reduce((n, p) => n + p.n, 0) + d.joins;
+  const date = new Date().toLocaleDateString("he-IL", {timeZone:"Asia/Jerusalem",weekday:"long",day:"numeric",month:"long"});
+  return `<div class="workspace-heading"><div><div class="eyebrow">מרחב הניהול שלך</div><h2>הקו במבט אחד</h2><p>החברים, ההודעות וכל מה שצריך את תשומת הלב שלך.</p></div><span class="workspace-date">${esc(date)}</span></div>
+  <section class="overview-hero" aria-label="מצב הקו"><div><div class="eyebrow">07 / קו הקבוצה</div><h2>${pending ? `${pending} דברים מחכים לטיפול שלך` : "הכול מסודר. אפשר להתקדם."}</h2><p>${pending ? "הודעות ובקשות הצטרפות מחכות לאישור. פותחים, מקשיבים ומחליטים." : "זה הזמן להכין הודעה חדשה, לראות מי בקו או לתכנן את האירוע הבא."}</p><div class="row" style="margin-top:20px"><button class="btn p" data-go="${pending ? "pending" : "studio"}">${pending ? "לפתיחת הממתינות" : "ליצירת הודעה"} ←</button><button class="btn" data-go="live">לבקרה החיה</button></div></div><div class="hero-mark" aria-hidden="true">07</div></section>
+  <div class="quick-links">${[["studio","◉","אולפן השידור","מקליטים ומכינים הודעה"],["members","♧","החברים בקבוצה","כל חבר והפעילות שלו"],["sched","◴","תכנון ותזמונים","ההודעה הנכונה בזמן הנכון"],["reports","▥","דוחות ותובנות","מבינים מה קורה בקו"]].map(([k,i,t,sub]) => `<button class="quick-link" data-go="${k}"><i aria-hidden="true">${i}</i><span><b>${t}</b><small>${sub}</small></span><span class="arrow" aria-hidden="true">←</span></button>`).join("")}</div>` + baseHome(d);
+};
+const todayIL = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" }).slice(0, 10);
+Object.assign(state, { sel: new Set(), liveDay: todayIL(), repM: todayIL().slice(0, 7), ro: false, firstSeen: {}, tts: null, wav: null, ai: [], notes: { msg: {}, member: {} } });
+const confirm2 = msg => (prompt(msg + "\n\nזו פעולה רחבה. לאישור כתבו: כן") || "").trim() === "כן";
+const nm = p => state.names[p] || p;
+const b64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const memberOpts = (sel = "") => Object.entries(state.names).sort((a, b) => a[1].localeCompare(b[1], "he")).map(([p, n]) => `<option value="${esc(p)}" ${p === sel ? "selected" : ""}>${esc(n)}</option>`).join("");
+const picker = (name = "rcpt", pre = []) => `<div class="row small" style="margin-bottom:4px"><button type="button" class="btn s" data-x="pick" data-v="1">כולם</button><button type="button" class="btn s" data-x="pick" data-v="0">אף אחד</button></div><div class="picker">${Object.entries(state.names).sort((a, b) => a[1].localeCompare(b[1], "he")).map(([p, n]) => `<label><input type="checkbox" name="${name}" value="${esc(p)}" ${pre.includes(p) ? "checked" : ""}><span>${esc(n)}</span></label>`).join("")}</div>`;
+const dlBtn = (name, label, cls = "") => `<button type="button" class="btn s ${cls}" data-x="dl" data-n="${esc(name)}">${label}</button>`;
+const withNotes = p => Promise.all([p, api("notes").catch(() => ({ notes: { msg: {}, member: {} } }))]).then(([d, n]) => { state.notes = n.notes; return d; });
+const delta = (a, b) => { if (!b) return ""; const d = Math.round(100 * (a - b) / b); return d ? `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%</span>` : ""; };
+const tileD = (n, l, prev) => `<div class="tile"><b>${esc(n)}${delta(+n, +prev)}</b><span>${esc(l)}${prev !== undefined ? ` · קודם: ${esc(prev)}` : ""}</span></div>`;
+const JOBK = { post: "הודעה", tz: "צינתוק", entry: "הודעת כניסה", pm: "הודעה אישית", remind: "תזכורת", shoeva: "שמחת בית השואבה" };
+const LISTN = { members: "כל החברים", admins: "המנהלים", general: "רשימת הרגילות" };
+
+// ---------- טעינה ----------
+Object.assign(LOAD, {
+  msgs: () => withNotes(api("messages?n=" + state.msgN)),
+  trash: () => api("trash"),
+  studio: () => Promise.all([api("weekly"), api("overview")]).then(([w, o]) => ({ weekly: w, names: o.names })),
+  sched: () => Promise.all([api("schedule"), api("holy")]).then(([s, h]) => ({ ...s, holy: h })),
+  event: () => api("schedule"),
+  reports: () => Promise.all([api("report?m=" + state.repM), api("convstats"), api("heard")]).then(([r, c, h]) => ({ r, c, h })),
+  live: () => Promise.all([api("calls?day=" + state.liveDay), api("online")]).then(([c, o]) => ({ calls: c, online: o.online, now: o.now })),
+  system: () => Promise.all([api("health").catch(e => ({ blocked: e.message, errors: [], bg: [], cronAgo: null, lastJob: "", pendingError: 0, deferred: 0, postcheck: 0, aai: 0, retortq: 0, weeklyDone: "", testMode: false })), api("ads").catch(() => ({ ads: [], names: state.names })), api("whoami").catch(() => ({ ro: state.ro, exp: 0 }))]).then(([h, ads, me]) => ({ h, ads, me, names: ads.names })),
+});
+
+// ---------- הודעות: אצווה, הורדה, הערות, תיקון תמלול ----------
+RENDER.msgs = d => {
+  const q = (state.filter.msgs || "").trim(), notes = state.notes.msg || {};
+  const list = q ? d.list.filter(m => [m.id, m.n, m.p, m.t, (notes[m.id] || {}).t].join(" ").includes(q)) : d.list;
+  const only = state.filter.msgOnly || "";
+  const shown = only === "imp" ? list.filter(m => m.imp) : only === "notr" ? list.filter(m => !m.t) : only === "note" ? list.filter(m => notes[m.id]) : list;
+  return `<div class="card"><h2>הודעות בקו <small>${d.list.length} מתוך ${d.total} · מהחדשה לישנה</small></h2>
+    <div class="row"><input class="search" data-filter="msgs" placeholder="חיפוש בשם, במספר, בתמלול או בהערה" value="${esc(q)}">
+      <select data-filter="msgOnly"><option value="">הכול</option><option value="imp" ${only === "imp" ? "selected" : ""}>רק חשובות</option><option value="notr" ${only === "notr" ? "selected" : ""}>בלי תמלול</option><option value="note" ${only === "note" ? "selected" : ""}>עם הערה</option></select>
+      ${d.list.length < d.total ? `<button class="btn s" data-act="more">טעינת ${Math.min(d.total, 1000)} האחרונות</button>` : ""}
+      <span class="right row">${dlBtn("export_transcripts", "⬇ ייצוא תמלולים (CSV)")}<button class="btn s w-only" data-go="studio">🎙 הקלטה והעלאה</button></span></div></div>
+    ${shown.length ? shown.map(m => { const path = "/1/2/" + m.id + ".wav", note = notes[m.id]; return `<div class="msg"><div class="head"><input type="checkbox" class="sel w-only" data-sel="${m.id}" ${state.sel.has(m.id) ? "checked" : ""} aria-label="בחירה"><span class="pill ${m.imp ? "acc" : ""}">${m.id}</span>${m.p || m.n ? who(m.n, m.p) : '<b class="mut">הודעה מהמערכת</b>'}<span class="mut small">${esc(fmtD(m.date))}</span>${m.dur ? `<span class="mut small">${fmtDur(m.dur)}</span>` : ""}${m.imp ? '<span class="pill acc">חשובה</span>' : ""}</div>
+      <div class="row"><button class="btn s" data-act="play" data-p="${esc(path)}">▶ השמעה</button><button class="btn s" data-x="dl" data-n="download?p=${esc(encodeURIComponent(path))}">⬇</button>${m.imp ? actBtn({ type: "move", id: m.id, to: "regular" }, "הוצאה מהחשובות") : actBtn({ type: "move", id: m.id, to: "important" }, "העברה לחשובות + צינתוק")}${actBtn({ type: "delete", id: m.id }, "מחיקה", "d")}
+        <button class="btn s w-only" data-x="note" data-kind="msg" data-key="${m.id}">📝 הערה</button><button class="btn s w-only" data-x="fixtr" data-id="${m.id}">✎ תמלול</button>${m.p ? `<button class="btn s" data-x="card" data-p="${esc(m.p)}">👤</button>` : ""}</div>
+      ${note ? `<div class="note">📝 ${esc(note.t)} <span class="small">(${esc(fmtD(note.d))})</span></div>` : ""}
+      ${transcript(m.t) || '<div class="mut small">אין תמלול (עדיין)</div>'}</div>`; }).join("") : `<div class="card">${empty("לא נמצאו הודעות")}</div>`}
+    <div class="batch w-only" id="batch" ${state.sel.size ? "" : "hidden"}><b id="bn">${state.sel.size} נבחרו</b>
+      <button class="btn s d" data-x="batch" data-op="delete">מחיקה</button><button class="btn s" data-x="batch" data-op="important">לחשובות</button><button class="btn s" data-x="batch" data-op="regular">הוצאה מהחשובות</button><button class="btn s" data-x="zipsel">⬇ ZIP</button><button class="btn s" data-x="selall">בחירת כל המוצגות</button><button class="btn s" data-x="selnone">ניקוי</button></div>`;
+};
+const updBatch = () => { const b = $("#batch"); if (b) { b.hidden = !state.sel.size; $("#bn").textContent = state.sel.size + " נבחרו"; } };
+
+// ---------- סל מחזור ----------
+RENDER.trash = d => `<div class="card"><h2>סל המחזור <small>${d.files.length} הקלטות שנמחקו מהקו או הוצאו מהחשובות</small>${d.files.length ? '<button class="btn s d right w-only" data-x="purge" data-all="1">ריקון הסל</button>' : ""}</h2>
+  ${d.files.length ? d.files.map(f => `<div class="msg"><div class="head"><b>${esc(f.name)}</b>${f.imp ? '<span class="pill acc">מהחשובות</span>' : ""}<span class="mut small">${esc(fmtD(f.date))}</span>${f.dur ? `<span class="mut small">${fmtDur(f.dur)}</span>` : ""}</div>
+    <div class="row"><button class="btn s" data-act="play" data-p="/DeletedByAdmin/${esc(f.name)}">▶ השמעה</button><button class="btn s" data-x="dl" data-n="download?p=${esc(encodeURIComponent("/DeletedByAdmin/" + f.name))}">⬇</button>
+      <button class="btn s w-only" data-x="restore" data-name="${esc(f.name)}" data-to="regular">↶ שחזור לרגילות</button><button class="btn s w-only" data-x="restore" data-name="${esc(f.name)}" data-to="important">↶ שחזור לחשובות</button><button class="btn s d w-only" data-x="purge" data-name="${esc(f.name)}">מחיקה לצמיתות</button></div></div>`).join("") : empty("הסל ריק")}</div>`;
+
+// ---------- חברים: ייצוא, ייבוא, כרטיס ----------
+const renderMembers0 = RENDER.members;
+RENDER.members = d => `<div class="card"><div class="row"><b>ניהול החברים</b><span class="mut small">לחיצה על שם פותחת את כרטיס החבר המלא</span>
+  <span class="right row">${dlBtn("members_csv", "⬇ ייצוא לאקסל (CSV)")}<label class="btn s w-only" style="cursor:pointer">⬆ ייבוא מקובץ<input type="file" accept=".csv,.txt,text/csv" data-x-file="import" hidden></label></span></div></div>` + renderMembers0(d);
+
+async function openMember(p) {
+  const box = $("#mm");
+  box.hidden = false; box.querySelector(".box").innerHTML = `<div class="mh"><h2>${esc(nm(p))}</h2><button class="btn s xbtn" data-x="close">✕</button></div><div class="card">טוען…</div>`;
+  try { const d = await api("member?p=" + encodeURIComponent(p)); state.card = d; box.querySelector(".box").innerHTML = memberHtml(d); }
+  catch (e) { box.querySelector(".card").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function memberHtml(d) {
+  const pills = [d.admin && '<span class="pill acc">מנהל</span>', d.tz === "on" ? '<span class="pill ok">בצינתוקים</span>' : d.tz === "off" ? '<span class="pill bad">חסם צינתוקים</span>' : '<span class="pill">לא ברשימת הצינתוקים</span>',
+    d.general && '<span class="pill">ברגילות</span>', d.muted && `<span class="pill warn">מושתק ${d.muted !== "ללא הגבלה" ? "עד " + esc(fmtD(d.muted)) : ""}</span>`, d.blocked && '<span class="pill bad">חסום</span>',
+    d.retort && '<span class="pill warn">תגובה עוקצנית</span>', d.strict && '<span class="pill warn">פיקוח מוגבר</span>', d.rsvp && '<span class="pill ok">נרשם לאירוע</span>', d.person && d.person.c && `<span class="pill">קוד ${esc(d.person.c)}</span>`].filter(Boolean).join(" ");
+  const pmList = (files, old) => files.length ? `<ul class="list">${files.map(f => `<li><span class="num small">${esc(f.name)}</span><span class="mut small">${esc(fmtD(f.date))}</span>${f.name.endsWith(".wav") ? `<button class="btn s" data-x="playin" data-p="${esc(`/personalMessages/Phone/${d.p}${old ? "/Old" : ""}/${f.name}`)}">▶</button>` : '<span class="pill">טקסט</span>'}<button class="btn s d w-only right" data-x="pmdel" data-p="${esc(d.p)}" data-name="${esc(f.name)}" data-old="${old ? 1 : 0}">מחיקה</button></li>`).join("")}</ul>` : empty(old ? "אין" : "התיבה ריקה");
+  const prof = d.profile, mem = d.memory;
+  return `<div class="mh"><h2>${esc(d.n || "מספר לא מוכר")}</h2>${phone(d.p)} ${pills}<button class="btn s xbtn" data-x="close">✕ סגירה</button></div>
+  <div class="card w-only"><div class="row">
+    <button class="btn s" data-x="m-rename" data-p="${d.p}" data-name="${esc(d.n)}">שינוי שם</button>
+    ${d.muted ? `<button class="btn s" data-x="m-act" data-a='${esc(JSON.stringify({ type: "unmute", phone: d.p }))}'>ביטול השתקה</button>` : `<button class="btn s" data-x="m-mute" data-p="${d.p}">השתקה</button>`}
+    <button class="btn s ${d.blocked ? "" : "d"}" data-x="m-block" data-p="${d.p}" data-on="${d.blocked ? 0 : 1}">${d.blocked ? "ביטול חסימה" : "חסימה"}</button>
+    <button class="btn s" data-x="m-tz" data-p="${d.p}">📣 צינתוק אליו</button>
+    <button class="btn s" data-x="m-list" data-list="retort" data-p="${d.p}" data-on="${d.retort ? 0 : 1}">${d.retort ? "הסרה מתגובה עוקצנית" : "תגובה עוקצנית"}</button>
+    <button class="btn s" data-x="m-list" data-list="strict" data-p="${d.p}" data-on="${d.strict ? 0 : 1}">${d.strict ? "הסרה מפיקוח מוגבר" : "פיקוח מוגבר"}</button>
+    ${d.person ? `<button class="btn s" data-x="m-code" data-p="${d.p}" data-c="${esc(d.person.c)}">קוד אישי</button>` : ""}
+    <button class="btn s" data-x="m-rsvp" data-p="${d.p}" data-on="${d.rsvp ? 0 : 1}">${d.rsvp ? "הסרה מהאירוע" : "רישום לאירוע"}</button></div></div>
+  <div class="tiles">${tile(d.msgTotal, "הודעות בארכיון")}${tile(d.callsMonth, "שיחות החודש")}${tile(d.conv.length, "שיחות עם העוזר")}${tile(d.pm.length, "בתיבה האישית")}${tile(d.last ? fmtD(d.last) : "—", "כניסה אחרונה", "sm")}</div>
+  <div class="cols">
+    <div class="card w-only"><h2>הודעה אישית קולית</h2><form class="form" data-xf="m-pm" data-p="${d.p}"><textarea name="text" placeholder="מה להגיד ל${esc(d.n || "חבר")}? העוזר יקריא בקולו ויניח בתיבה האישית" required maxlength="800"></textarea><div class="row"><button class="btn">🔊 יצירת קול ושמיעה</button><span class="grow"></span></div><div class="mpv"></div></form>
+      <h3>הקלטה שלך לתיבה שלו</h3>${recorderHtml("pm", d.p)}</div>
+    <div class="card"><h2>התיבה האישית <small>${d.pm.length} חדשות</small></h2>${pmList(d.pm, false)}<details><summary class="mut small" style="cursor:pointer">הודעות ששמע (${d.pmOld.length})</summary>${pmList(d.pmOld, true)}</details></div>
+    <div class="card"><h2>הערת מנהל</h2><form class="form" data-xf="m-note" data-p="${d.p}"><textarea name="text" placeholder="הערה פנימית (לא נשמעת בקו)" maxlength="1000">${esc(d.note ? d.note.t : "")}</textarea><div class="row w-only"><button class="btn s">שמירה</button>${d.note ? `<span class="mut small">עודכן ${esc(fmtD(d.note.d))}</span>` : ""}</div></form>
+      <h3>פרסומות אישיות בכניסה</h3><form class="form" data-xf="m-ads" data-p="${d.p}"><textarea name="text" placeholder="פרסומת בכל שורה (העוזר משמיע אחת באקראי)">${esc((d.ads || []).join("\n"))}</textarea><div class="w-only"><button class="btn s">שמירה</button></div></form></div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>מה ה-AI יודע עליו</h2>${prof && (prof.style || (prof.quotes || []).length) ? `<div class="small mut">סגנון</div><div>${esc(prof.style || "")}</div>${(prof.quotes || []).length ? `<div class="small mut" style="margin-top:6px">משפטים אופייניים</div><ul style="margin:4px 0;padding-inline-start:18px">${prof.quotes.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}` : empty("עוד אין פרופיל")}
+      ${mem && (mem.notes || []).length ? `<div class="small mut" style="margin-top:8px">זיכרון העוזר</div><ul style="margin:4px 0;padding-inline-start:18px">${mem.notes.map(x => `<li>${esc(typeof x === "string" ? x : JSON.stringify(x))}</li>`).join("")}</ul>` : ""}${d.talk ? `<div class="small mut" style="margin-top:8px">על מה הוא מדבר</div><div>${esc(d.talk)}</div>` : ""}</div>
+    <div class="card"><h2>שיחות אחרונות לקו</h2>${d.calls.length ? `<div class="tl">${d.calls.slice(0, 30).map(c => `<div class="r"><span class="num small mut">${esc(fmtD(c.t))}</span><span>${esc(c.l)}</span><span class="mut small num">${esc(c.x ? "עד " + c.x.slice(0, 5) : "")}</span></div>`).join("")}</div>` : empty("אין שיחות בחודשיים האחרונים")}</div>
+  </div>
+  <div class="card"><h2>ההודעות שלו <small>${d.msgTotal}</small></h2>${d.msgs.length ? d.msgs.slice(0, 40).map(m => `<div class="msg"><div class="head"><span class="pill">${m.id}</span><span class="mut small">${esc(fmtD(m.d))}</span><button class="btn s" data-x="playin" data-p="/1/2/${m.id}.wav">▶</button></div>${transcript(m.t)}</div>`).join("") : empty("אין הודעות בארכיון")}</div>
+  <div class="card"><h2>שיחות עם העוזר <small>${d.conv.length}</small></h2>${d.conv.length ? `<div class="conv">${d.conv.slice(0, 40).map(c => `<div><div class="m">${esc(fmtD(c.d))}</div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a)}</div></div>`).join("")}</div>` : empty("אין שיחות")}</div>`;
+}
+
+// ---------- הקלטה והעלאה ----------
+const recorderHtml = (kind, p = "") => `<div class="form" data-rec="${kind}" data-p="${esc(p)}"><div class="rec"><button type="button" class="btn" data-x="rec">⏺ הקלטה</button><span class="dot" hidden></span><span class="num rt">0:00</span>
+  <label class="btn s" style="cursor:pointer">📁 קובץ שמע<input type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" data-x-file="audio" hidden></label></div><div class="rpv"></div></div>`;
+const REC = { on: false };
+function encodeWav(f32, sr) {
+  const b = new ArrayBuffer(44 + f32.length * 2), v = new DataView(b), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + f32.length * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, f32.length * 2, true);
+  for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  return new Uint8Array(b);
+}
+function down(buf, from, to = 16000) {
+  if (from === to) return buf; const r = from / to, n = Math.floor(buf.length / r), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const s = Math.floor(i * r), e = Math.min(buf.length, Math.floor((i + 1) * r)); let t = 0; for (let j = s; j < e; j++) t += buf[j]; out[i] = t / Math.max(1, e - s); }
+  return out;
+}
+const MAX_SEC = 240;
+async function recToggle(wrap) {
+  const btn = wrap.querySelector("[data-x=rec]"), dot = wrap.querySelector(".dot"), rt = wrap.querySelector(".rt");
+  if (REC.on) { // עצירה
+    REC.on = false; clearInterval(REC.timer); REC.node.disconnect(); REC.src.disconnect(); REC.stream.getTracks().forEach(t => t.stop());
+    const len = REC.chunks.reduce((a, c) => a + c.length, 0), all = new Float32Array(len); let o = 0; for (const c of REC.chunks) { all.set(c, o); o += c.length; }
+    const sr = REC.ctx.sampleRate; REC.ctx.close(); btn.textContent = "⏺ הקלטה מחדש"; dot.hidden = true;
+    setWav(wrap, encodeWav(down(all, sr), 16000), Math.round(len / sr)); return;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1);
+  Object.assign(REC, { on: true, stream, ctx, src, node, chunks: [], t0: Date.now() });
+  node.onaudioprocess = e => { if (REC.on) REC.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  src.connect(node); node.connect(ctx.destination);
+  btn.textContent = "⏹ עצירה"; dot.hidden = false;
+  REC.timer = setInterval(() => { const s = Math.round((Date.now() - REC.t0) / 1000); rt.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); if (s >= MAX_SEC) recToggle(wrap); }, 250);
+}
+async function fileToWav(wrap, file) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)(), buf = await ctx.decodeAudioData(await file.arrayBuffer()); ctx.close();
+  if (buf.duration > MAX_SEC) throw new Error(`הקובץ ארוך מדי (עד ${MAX_SEC / 60} דקות)`);
+  const mono = new Float32Array(buf.length); for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / buf.numberOfChannels; }
+  setWav(wrap, encodeWav(down(mono, buf.sampleRate), 16000), Math.round(buf.duration));
+}
+function setWav(wrap, wav, sec) {
+  wrap._wav = wav; const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), kind = wrap.dataset.rec;
+  const dest = kind === "pm" ? "" : `<select name="kind"><option value="regular">הודעה רגילה בקו</option><option value="important">הודעה חשובה + צינתוק לכולם</option><option value="entry">ההודעה בכניסה לקו</option><option value="pm">תיבה אישית של חבר</option></select><select name="phone"><option value="">מאיזה חבר / לאיזה חבר (לא חובה)</option>${memberOpts()}</select>`;
+  wrap.querySelector(".rpv").innerHTML = `<audio controls src="${url}" style="width:100%;margin-top:6px"></audio><div class="row" style="margin-top:6px">${dest}${kind === "pm" ? "" : '<input name="text" placeholder="תמלול / תיאור (לא חובה)" style="flex:1;min-width:160px">'}<button type="button" class="btn p" data-x="upload">⬆ העלאה לקו (${sec} שנ׳)</button></div>`;
+}
+async function doUpload(wrap) {
+  const kind = wrap.dataset.rec === "pm" ? "pm" : wrap.querySelector("[name=kind]").value, phoneV = wrap.dataset.p || (wrap.querySelector("[name=phone]") || {}).value || "";
+  if (!wrap._wav) throw new Error("אין הקלטה");
+  if (kind === "pm" && !phoneV) throw new Error("צריך לבחור חבר");
+  const msg = { regular: "להעלות את ההקלטה כהודעה רגילה בקו?", important: "להעלות כהודעה חשובה ולשלוח צינתוק לכל החברים?", entry: "להחליף את ההודעה בכניסה לקו בהקלטה הזו?", pm: `להניח את ההקלטה בתיבה האישית של ${nm(phoneV)}?` }[kind];
+  if (kind === "important" ? !confirm2(msg) : !confirm(msg)) return;
+  const r = await api("upload", { kind, data: b64(wrap._wav), phone: phoneV, text: ((wrap.querySelector("[name=text]") || {}).value || "").trim() });
+  toast(kind === "important" ? `ההקלטה עלתה כהודעה ${r.id}. ${r.msg || ""}` : kind === "regular" ? `ההקלטה עלתה כהודעה ${r.id}` : kind === "entry" ? "ההודעה בכניסה הוחלפה" : "ההקלטה הונחה בתיבה האישית");
+  wrap._wav = null; wrap.querySelector(".rpv").innerHTML = "";
+}
+
+// ---------- שידור: קול העוזר, הקלטה, סיכום שבועי ----------
+RENDER.studio = d => {
+  const w = d.weekly;
+  return `<div class="cols two">
+  <div class="card w-only"><h2>🔊 הודעה בקול העוזר</h2><form class="form" data-xf="tts"><textarea name="text" placeholder="הנוסח. העוזר יקריא אותו בקולו. בהודעה לכל החברים השם של כל אחד נשמע לפני ההודעה" required maxlength="1500">${esc(state.tts ? state.tts.text : "")}</textarea><div class="row"><button class="btn">יצירת קול ושמיעה</button></div></form>
+    <div id="ttsout">${state.tts ? ttsOut() : ""}</div></div>
+  <div class="card w-only"><h2>🎙 הקלטה או העלאת קובץ</h2><div class="mut small" style="margin-bottom:8px">מקליטים מהמיקרופון או בוחרים קובץ (wav, mp3, m4a…), שומעים, ובוחרים לאן להעלות.</div>${recorderHtml("line")}</div>
+  </div>
+  <div class="card w-only"><h2>📣 צינתוק לחברים נבחרים</h2><form class="form" data-xf="tzsel">${picker("rcpt")}<div><button class="btn">שליחת צינתוק לנבחרים</button></div></form></div>
+  <div class="card"><h2>🗞 הסיכום השבועי <small>${w.done ? "פורסם לאחרונה ב-" + esc(w.done) : "יוצא אוטומטית במוצאי שבת"}</small></h2>
+    <div class="row w-only"><button class="btn" data-x="weekly-dry">יצירת טיוטה מההודעות של השבוע</button><span class="mut small">הטיוטה לא עולה לקו עד שמאשרים</span></div>
+    ${w.draft ? `<form class="form w-only" data-xf="weekly" style="margin-top:10px"><div class="mut small">טיוטה מ-${esc(fmtD(w.draft.d))} · ${w.draft.count} הודעות</div><textarea name="text" style="min-height:180px">${esc(w.draft.summary)}</textarea><div><button class="btn p">פרסום בקו (הודעה רגילה)</button></div></form>` : ""}</div>`;
+};
+const ttsOut = () => `<audio controls src="${API_BASE}preview?id=${encodeURIComponent(state.tts.id)}${tokq()}" style="width:100%;margin-top:8px"></audio>
+  <form class="form" data-xf="sendpm" style="margin-top:8px"><div class="row"><select name="to"><option value="members">לתיבות האישיות של כל החברים</option><option value="admins">לתיבות של המנהלים</option><option value="sel">לחברים שאבחר</option></select><button class="btn p">שליחה</button><span class="mut small">${state.tts.seconds} שניות</span></div>
+  <details><summary class="mut small" style="cursor:pointer">בחירת חברים</summary>${picker("rcpt")}</details></form>`;
+
+// ---------- תזמונים: תזמון מתקדם + לוח שבת וחג ----------
+const renderSched0 = RENDER.sched;
+RENDER.sched = d => {
+  const minAt = d.now.slice(0, 16).replace(" ", "T"), h = d.holy;
+  return `<div class="card w-only"><h2>⏰ תזמון מתקדם</h2><form class="form" data-xf="sched2">
+    <div class="row"><select name="type" data-x-change="stype"><option value="post">הודעה בקו (בקול העוזר)</option><option value="tz">צינתוק לרשימה</option><option value="entry">החלפת ההודעה בכניסה</option><option value="pm">הודעה אישית לחברים נבחרים</option><option value="remind">תזכורת לחבר</option></select>
+      <input type="datetime-local" name="at" min="${minAt}" required><select name="every"><option value="">פעם אחת</option><option value="day">כל יום</option><option value="week">כל שבוע</option></select><label class="small mut">עד <input type="datetime-local" name="until"></label></div>
+    <div class="s-text"><textarea name="text" placeholder="הנוסח" maxlength="1500"></textarea></div>
+    <div class="s-post row"><label class="chk"><input type="checkbox" name="important"> הודעה חשובה + צינתוק לכולם</label></div>
+    <div class="s-tz" hidden><select name="list"><option value="members">כל החברים</option><option value="admins">מנהלים</option><option value="general">רשימת הרגילות</option></select></div>
+    <div class="s-pm" hidden>${picker("rcpt")}</div>
+    <div class="s-remind" hidden><select name="phone"><option value="">לאיזה חבר?</option>${memberOpts()}</select></div>
+    <div><button class="btn p">קביעת התזמון</button> <span class="mut small">בשבת ובחג שום דבר לא יוצא – התזמון ימתין למוצאי שבת/חג</span></div></form></div>
+  ${renderSched0(d)}
+  <div class="cols"><div class="card"><h2>🕯 שבת וחג <small>${h.holy ? "עכשיו זמן קודש" : "עכשיו חול"}</small></h2>${h.periods.length ? `<ul class="list">${h.periods.map(p => `<li><span class="grow ${p.past ? "mut" : ""}">${esc(fmtD(p.from))} ← ${esc(fmtD(p.to))}</span>${p.active ? '<span class="pill warn">עכשיו</span>' : p.past ? '<span class="pill">עבר</span>' : ""}</li>`).join("")}</ul>` : empty("אין נתונים מ-Hebcal")}</div>
+    <div class="card"><h2>צינתוקים שמחכים למוצאי שבת/חג <small>${h.deferred.length}</small>${h.deferred.length ? '<button class="btn s d right w-only" data-x="def" data-op="cancel_all">ביטול כולם</button>' : ""}</h2>${h.deferred.length ? `<ul class="list">${h.deferred.map(x => `<li><span class="grow">${esc(x.label)}</span><span class="w-only row"><button class="btn s" data-x="def" data-op="send" data-i="${x.i}">שליחה עכשיו</button><button class="btn s d" data-x="def" data-op="cancel" data-i="${x.i}">ביטול</button></span></li>`).join("")}</ul>` : empty("אין")}</div></div>`;
+};
+
+// ---------- אירוע ----------
+RENDER.event = d => `<div class="cols two">
+  <div class="card"><h2>🎉 ${esc(d.event.title)} <small>שלוחה 9</small></h2><div class="mut">${esc(d.event.desc || "")}</div>
+    <div class="tiles" style="margin-top:10px">${tile(d.rsvp.length, "נרשמו", "good")}${tile(d.notReg.length, "עוד לא נרשמו", d.notReg.length ? "warn" : "")}</div>
+    <div class="row" style="margin-top:10px">${dlBtn("rsvp_csv", "⬇ רשימת הנרשמים (CSV)")}${d.notReg.length ? '<button class="btn s w-only" data-x="ev-tzmiss">📣 צינתוק למי שלא נרשם</button>' : ""}</div>
+    <form class="form w-only" data-form="event" style="margin-top:12px"><div class="small mut">אירוע חדש (הרשימה הנוכחית נשמרת בצד)</div><div class="row"><input name="title" placeholder="שם האירוע" required><input name="desc" placeholder="מתי ואיפה"></div><div><button class="btn s">פתיחת הרשמה חדשה</button></div></form>
+    <form class="form w-only" data-xf="ev-edit" style="margin-top:12px"><div class="small mut">עריכת פרטי האירוע (הנרשמים נשארים)</div><div class="row"><input name="title" value="${esc(d.event.title)}" required><input name="desc" value="${esc(d.event.desc || "")}" placeholder="מתי ואיפה"></div><div><button class="btn s">שמירה</button></div></form></div>
+  <div class="card"><h2>הנרשמים <small>${d.rsvp.length}</small></h2>${d.rsvp.length ? `<ol style="margin:0;padding-inline-start:20px">${d.rsvp.map(r => `<li style="margin-bottom:4px">${esc(r.n)} <span class="mut small">${esc(fmtD(r.ts))}</span> <button class="btn s d w-only" data-x="ev-rsvp" data-op="rsvp_remove" data-p="${esc(r.p)}">הסרה</button></li>`).join("")}</ol>` : empty("אף אחד עוד לא נרשם")}
+    <h3>עוד לא נרשמו</h3>${d.notReg.length ? `<div class="chips">${d.notReg.map(r => `<span class="chip">${esc(r.n)} <button class="btn s w-only" data-x="ev-rsvp" data-op="rsvp_add" data-p="${esc(r.p)}" data-name="${esc(r.n)}" style="padding:0 6px">+ רישום</button></span>`).join("")}</div>` : empty("כולם נרשמו 🎉")}</div></div>`;
+
+// ---------- העוזר: רשימות מיוחדות ----------
+const renderBot0 = RENDER.bot;
+RENDER.bot = d => renderBot0(d) + `<div class="card w-only"><h2>עריכת הרשימות המיוחדות</h2><div class="cols">${[["retort", "תגובה עוקצנית", d.retort], ["strict", "פיקוח מוגבר – כל הודעה מחכה לאישור", d.strict]].map(([k, l, arr]) => `<div><b class="small">${l}</b><div class="chips" style="margin:6px 0">${arr.map(x => `<span class="chip">${esc(x.n)} <button class="btn s" data-x="lst" data-list="${k}" data-p="${esc(x.p)}" data-on="0" style="padding:0 6px">✕</button></span>`).join("") || '<span class="mut small">אין</span>'}</div><div class="row"><select data-lst="${k}"><option value="">הוספת חבר…</option>${memberOpts()}</select><button class="btn s" data-x="lstadd" data-list="${k}">הוספה</button></div></div>`).join("")}</div><div class="mut small" style="margin-top:6px">הרשימות האלה משנות את היחס של העוזר לחבר, ונכנסות לתוקף מיד.</div></div>`;
+
+// ---------- דוחות ----------
+const WD = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+RENDER.reports = d => {
+  const r = d.r, c = d.c, h = d.h, cq = (state.filter.convq || "").trim();
+  const conv = cq ? c.conv.filter(x => (x.q + " " + x.a + " " + x.n).includes(cq)) : c.conv.slice(0, 40);
+  return `<div class="card"><div class="row"><h2 style="margin:0">📊 דוח חודשי</h2><input type="month" value="${esc(state.repM)}" data-x-change="repm"><span class="right row"><button class="btn s" data-x="print">🖨 הדפסה / PDF</button></span></div></div>
+  <div class="tiles">${tileD(r.calls, "שיחות", r.callsPrev)}${tileD(r.callers, "מתקשרים שונים", r.callersPrev)}${tileD(r.msgs, "הודעות שעלו", r.msgsPrev)}${tileD(r.conv, "שיחות עם העוזר", r.convPrev)}${tile(r.imp, "הודעות חשובות")}${tile(r.active + "/" + r.members, "חברים שהתקשרו")}</div>
+  <div class="cols two"><div class="card"><h2>שיחות לפי יום <small>${esc(r.month)}</small></h2>${chart(r.byDay.map(x => x.d.slice(8)), r.byDay.map(x => x.n), { unit: "שיחות", xName: "יום" })}</div>
+    <div class="card"><h2>שעות השיא</h2>${chart(r.byHour.map((_, i) => String(i).padStart(2, "0")), r.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div></div>
+  <div class="cols"><div class="card"><h2>הכי פעילים</h2>${hbars(r.top, "n", "calls")}</div><div class="card"><h2>לפי יום בשבוע</h2>${hbars(r.byWeekday.map((n, i) => ({ l: WD[i], n })), "l", "n")}</div>
+    <div class="card"><h2>לא התקשרו החודש <small>${r.silent.length}</small></h2>${r.silent.length ? `<div class="chips">${r.silent.map(x => `<button class="chip" data-x="card" data-p="${esc(x.p)}">${esc(x.n)}</button>`).join("")}</div>` : empty("כולם התקשרו 🎉")}</div>
+    <div class="card"><h2>לאן נכנסו</h2>${hbars(Object.entries(r.byFolder).map(([l, n]) => ({ l, n })).sort((a, b) => b.n - a.n).slice(0, 10), "l", "n")}</div></div>
+  <div class="card"><h2>👂 מי שמע את ההודעות החשובות</h2>${h.list.length ? h.list.map(x => `<details style="margin-bottom:6px"><summary style="cursor:pointer"><b>${esc(x.f.replace(".wav", ""))}</b> <span class="mut small">${esc(fmtD(x.t))}</span> <span class="pill ok">שמעו ${x.heard.length}</span> <span class="pill ${x.not.length ? "bad" : ""}">לא שמעו ${x.not.length}</span></summary>
+    <div class="row" style="margin:6px 0"><button class="btn s" data-act="play" data-p="/1/1/${esc(x.f)}">▶ השמעה</button>${x.not.length ? `<button class="btn s w-only" data-x="heardtz" data-ph='${esc(JSON.stringify(x.not.map(y => y.p)))}'>📣 צינתוק ל-${x.not.length} שלא שמעו</button>` : ""}</div>
+    <div class="chips">${x.heard.map(y => `<span class="chip ok">${esc(y.n)}</span>`).join("")}${x.not.map(y => `<span class="chip bad">${esc(y.n)}</span>`).join("")}</div></details>`).join("") : empty("אין הודעות חשובות")}</div>
+  <div class="cols two"><div class="card"><h2>🤖 על מה שואלים את העוזר <small>${c.total} שיחות${c.first ? " מאז " + esc(fmtD(c.first)) : ""}</small></h2>${c.words.length ? `<div class="words">${c.words.map(x => `<span title="${x.n}">${esc(x.w)}</span>`).join("")}</div>` : empty("אין מספיק שיחות")}
+    <h3>מי משתמש הכי הרבה</h3>${hbars(c.per, "n", "c")}</div>
+    <div class="card"><h2>שיחות עם העוזר לפי שעה</h2>${chart(c.byHour.map((_, i) => String(i).padStart(2, "0")), c.byHour, { unit: "שיחות", xName: "שעה", xEvery: 8 })}</div></div>
+  <div class="card"><h2>חיפוש בשיחות עם העוזר</h2><input class="search" data-filter="convq" placeholder="מילה, שם, נושא…" value="${esc(cq)}">
+    <div class="conv" style="margin-top:10px">${conv.slice(0, 60).map(x => `<div><div class="m">${esc(fmtD(x.d))} · ${esc(x.n)}</div><div class="q">${esc(x.q)}</div><div class="a">${esc(x.a)}</div></div>`).join("") || empty("לא נמצא")}</div></div>`;
+};
+
+// ---------- בקרה חיה ----------
+RENDER.live = d => {
+  const now = Date.now(); for (const c of d.online) if (!state.firstSeen[c.p]) state.firstSeen[c.p] = now;
+  const conf = d.online.filter(c => c.w === "בחדר הוועידה");
+  const dur = p => { const s = Math.round((now - (state.firstSeen[p] || now)) / 1000); return s < 60 ? s + " שנ׳" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  return `<div class="row"><button class="btn" data-x="mon">🖥 מסך בקרה מלא</button><span class="mut small">מתעדכן כל 15 שניות. משך השיחה נמדד מהרגע שהדף ראה אותה.</span></div>
+  <div class="cols"><div class="card"><h2>בקו עכשיו <span class="pill ${d.online.length ? "ok" : ""}">${d.online.length}</span></h2>${d.online.length ? `<ul class="list">${d.online.map(c => `<li><div class="grow"><div>${who(c.n, c.p)}</div><div class="mut small">${esc(c.w)}</div></div><span class="num small live-d" data-p="${esc(c.p)}">${dur(c.p)}</span>${c.id ? `<button class="btn s d w-only" data-act="hangup" data-id="${esc(c.id)}" data-phone="${esc(c.p)}" data-name="${esc(c.n)}">ניתוק</button>` : ""}</li>`).join("")}</ul>` : empty("אף אחד לא מחובר")}</div>
+    <div class="card"><h2>חדר הוועידה <span class="pill">${conf.length}</span></h2>${conf.length ? `<div class="chips">${conf.map(c => `<span class="chip ok">${esc(c.n || c.p)}</span>`).join("")}</div>` : empty("החדר ריק")}</div></div>
+  <div class="card"><div class="row"><h2 style="margin:0">ציר הזמן של היום</h2><input type="date" value="${esc(state.liveDay)}" data-x-change="liveday"><span class="mut small">${d.calls.ents.length} כניסות לשלוחות · ${d.calls.callers} מתקשרים</span></div>
+    ${d.calls.ents.length ? `<div class="tl" style="margin-top:8px">${d.calls.ents.slice().reverse().map(e => `<div class="r"><span class="num small mut">${esc(e.t)}</span><span><b>${esc(e.n || e.p)}</b> · ${esc(e.l)}</span><span class="mut small num">${esc(e.x ? "עד " + e.x : "")}</span></div>`).join("")}</div>` : empty("אין כניסות ביום הזה")}</div>`;
+};
+
+// ---------- מערכת ----------
+RENDER.system = d => {
+  const h = d.h, cronV = h.cronAgo !== null ? "רצה עכשיו" : h.lastJob ? fmtD(h.lastJob) : "—";
+  const np = notifPref();
+  return `${h.blocked ? '<div class="banner warn">נתוני בריאות המערכת לא הגיעו לדפדפן. הנתונים יצאו מהשרת תקין, ונראה שנטפרי חוסם את התשובה הזו, כנראה בגלל התוכן שלה (שורות מהיומן וטקסטים בתור). שאר הלשונית עובד.</div>' : ""}<div class="tiles">${tile(cronV, h.cronAgo !== null ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", "sm good")}${tile(h.bg.length, "משימות רקע בתור", h.bg.length > 20 ? "warn" : "")}${tile(h.pendingError, "הודעות שלא נבדקו", h.pendingError ? "warn" : "good")}${tile(h.deferred, "צינתוקים שמחכים")}${tile(h.testMode ? "פעיל" : "כבוי", "מצב בדיקות (TEST_MODE)", h.testMode ? "warn" : "")}${tile(h.errors.length, "שגיאות ביומן", h.errors.length ? "warn" : "good")}</div>
+  <div class="cols">
+    <div class="card"><h2>🔔 התראות בדפדפן</h2><div class="mut small">התראה כשמגיעה הודעה שממתינה לאישור, בקשת הצטרפות, הודעה חדשה בקו או כשמישהו נכנס לקו – גם כשהלשונית ברקע.</div>
+      <form class="form" data-xf="notif" style="margin-top:8px">${[["pend", "הודעות לאישור ובקשות הצטרפות"], ["msg", "הודעה חדשה בקו"], ["online", "מישהו נכנס לקו"]].map(([k, l]) => `<label class="chk"><input type="checkbox" name="${k}" ${np[k] ? "checked" : ""}> ${l}</label>`).join("")}
+      <div class="row"><button class="btn s p">שמירה והפעלה</button><span class="mut small">${"Notification" in window ? (Notification.permission === "granted" ? "ההרשאה ניתנה" : Notification.permission === "denied" ? "הדפדפן חוסם התראות לאתר הזה" : "הדפדפן יבקש אישור") : "הדפדפן לא תומך בהתראות"}</span></div></form></div>
+    <div class="card"><h2>💾 גיבוי ושחזור</h2><div class="mut small">גיבוי של כל ההגדרות: שמות, כללים, תזמונים, חסומים, השתקות, רשימות, פרסומות, אירוע, ארכיון התמלולים, פרופילים והערות.</div>
+      <div class="row" style="margin-top:8px">${dlBtn("backup", "⬇ הורדת גיבוי", "p")}<label class="btn s w-only" style="cursor:pointer">⬆ שחזור מגיבוי<input type="file" accept=".json,application/json" data-x-file="restore" hidden></label></div></div>
+    <div class="card w-only"><h2>🔗 קישור לצפייה בלבד</h2><div class="mut small">למנהל נוסף שרק צריך לראות: הכול גלוי, אבל אי אפשר לבצע שום פעולה. הקישור פג אחרי מספר הימים שנבחר, או כשמשנים את ADMIN_PASS.</div>
+      <form class="row" data-xf="share" style="margin-top:8px"><select name="days"><option value="1">יום</option><option value="7" selected>שבוע</option><option value="30">חודש</option></select><button class="btn s">יצירת קישור</button></form><div id="shareout"></div></div>
+  </div>
+  <div class="cols two"><div class="card"><h2>⚙️ תור משימות רקע <small>${h.bg.length}</small>${h.bg.length ? '<button class="btn s d right w-only" data-x="bgclear">ניקוי התור</button>' : ""}</h2>${h.bg.length ? `<ul class="list">${h.bg.slice(0, 50).map(s => `<li><span class="pill">${esc(s.k)}</span><span class="grow small">${esc(s.what)}</span>${s.tries ? `<span class="pill warn">ניסיון ${s.tries}</span>` : ""}<button class="btn s d w-only" data-x="bgdrop" data-f="${esc(s.f)}">✕</button></li>`).join("")}</ul>` : empty("התור ריק")}
+    <div class="mut small" style="margin-top:6px">בדיקות מאוחרות: ${h.postcheck} · תמלולים בהמתנה: ${h.aai} · תגובות בתור: ${h.retortq} · סיכום שבועי אחרון: ${esc(h.weeklyDone || "—")}</div></div>
+    <div class="card"><h2>🧯 שגיאות אחרונות ביומן <small>${h.errors.length}</small></h2>${h.errors.length ? `<ul class="list log">${h.errors.map(l => `<li><time>${esc(l.t)}</time>${esc(l.m)}</li>`).join("")}</ul>` : empty("אין שגיאות 👍")}</div></div>
+  <div class="card"><h2>📢 פרסומות אישיות <small>${d.ads.ads.length} חברים</small></h2>${d.ads.ads.length ? `<ul class="list">${d.ads.ads.map(a => `<li><button class="btn s" data-x="card" data-p="${esc(a.p)}">${esc(a.n)}</button><span class="grow small">${a.list.map(esc).join(" · ")}</span></li>`).join("")}</ul>` : empty("אין")}<div class="mut small">עריכה מתוך כרטיס החבר.</div></div>
+  <div class="card"><h2>⌨️ קיצורי מקלדת</h2><div class="small">${[["Alt+1…9", "מעבר בין לשוניות"], ["/ או Ctrl+K", "חיפוש"], ["A", "עוזר AI"], ["M", "מסך בקרה"], ["R", "רענון"], ["Esc", "סגירה"]].map(([k, l]) => `<span class="kbd">${k}</span> ${l}`).join(" &nbsp;·&nbsp; ")}</div>
+    <div class="mut small" style="margin-top:6px">מחובר כ${d.me.ro ? "צופה (צפייה בלבד)" : "מנהל"} · ${d.me.exp ? "החיבור בתוקף עד " + esc(new Date(d.me.exp).toLocaleString("he-IL")) : ""}</div></div>`;
+};
+
+// ---------- ג'ובים: טקסט מורחב ----------
+const jobText2 = j => (JOBK[j.type] || j.type) + (j.type === "post" ? (j.important ? " חשובה: " : " רגילה: ") + (j.text || "") : j.type === "tz" ? " ל" + (LISTN[j.list] || j.list) : j.type === "pm" ? ` ל-${(j.phones || []).length} חברים: ${j.text || ""}` : j.type === "remind" ? ` ל${j.who || nm(j.phone)}: ${j.text || ""}` : j.text ? ": " + j.text : "") + (j.every ? (j.every === "day" ? " · כל יום" : " · כל שבוע") + (j.until ? " עד " + fmtD(j.until) : "") : "");
+
+// ---------- פעולות (כל מה שמסומן data-x) ----------
+async function after(tab) { delete state.data.home; if (tab) delete state.data[tab]; await show(state.tab, true); }
+const X = {
+  close: () => { $("#mm").hidden = true; },
+  card: d => openMember(d.p),
+  pick: (d, b) => { for (const c of b.closest("form,.card").querySelectorAll(".picker input")) c.checked = d.v === "1"; },
+  dl: d => apiFile(d.n),
+  playin: (d, b) => { b.outerHTML = audio(d.p).replace("<audio ", '<audio autoplay style="height:32px;max-width:260px" '); },
+  print: () => window.print(),
+  mon: () => monitor(true),
+  monx: () => monitor(false),
+  rec: (d, b) => recToggle(b.closest("[data-rec]")),
+  upload: (d, b) => doUpload(b.closest("[data-rec]")),
+  // הודעות
+  selall: () => { for (const c of main.querySelectorAll("[data-sel]")) { c.checked = true; state.sel.add(c.dataset.sel); } updBatch(); },
+  selnone: () => { state.sel.clear(); for (const c of main.querySelectorAll("[data-sel]")) c.checked = false; updBatch(); },
+  batch: async d => {
+    const ids = [...state.sel], n = ids.length, msg = { delete: `למחוק ${n} הודעות מהקו? (אפשר לשחזר מסל המחזור)`, important: `להעביר ${n} הודעות לחשובות ולשלוח צינתוק לכולם?`, regular: `להוציא ${n} הודעות מהחשובות?` }[d.op];
+    if (d.op === "regular" ? !confirm(msg) : !confirm2(msg)) return;
+    const results = [];
+    for (let i = 0; i < ids.length; i += 5) { toast(`מבצע… ${Math.min(i + 5, ids.length)} מתוך ${ids.length}`); results.push(...(await api("batch", { ids: ids.slice(i, i + 5), op: d.op })).results); }
+    const bad = results.filter(x => x.error || /לא מצאתי|לא נמצאת|כבר נמצאת/.test(x.r || ""));
+    toast(`בוצע על ${results.length - bad.length} הודעות${bad.length ? `, ${bad.length} לא בוצעו` : ""}`, !!bad.length); state.sel.clear(); await after("msgs");
+  },
+  zipsel: () => { if (state.sel.size > 40) toast("אפשר להוריד עד 40 הקלטות בקובץ אחד – יורדות 40 הראשונות", true); return apiFile("zip", { paths: [...state.sel].slice(0, 40).map(id => "/1/2/" + id + ".wav") }, "messages.zip"); },
+  note: async d => {
+    const cur = (state.notes[d.kind] || {})[d.key], t = prompt("הערת מנהל (ריק = מחיקה)", cur ? cur.t : ""); if (t === null) return;
+    const r = await api("notes", { kind: d.kind, key: d.key, text: t }); state.notes = r.notes; render(state.tab); toast(t.trim() ? "ההערה נשמרה" : "ההערה נמחקה");
+  },
+  fixtr: async d => {
+    const m = (state.data.msgs.list || []).find(x => x.id === d.id), t = prompt(`תיקון התמלול של הודעה ${d.id}`, m ? m.t : ""); if (t === null) return;
+    await api("transcript", { id: d.id, text: t }); if (m) m.t = t.trim(); render(state.tab); toast("התמלול עודכן");
+  },
+  restore: async d => { if (!confirm(`לשחזר את ${d.name} ל${d.to === "important" ? "חשובות" : "רגילות"}?`)) return; const r = await api("restore", { name: d.name, to: d.to }); toast("שוחזר כהודעה " + r.id); await after("trash"); },
+  purge: async d => {
+    if (d.all ? !confirm2("למחוק לצמיתות את כל ההקלטות בסל המחזור? אי אפשר לבטל") : !confirm(`למחוק לצמיתות את ${d.name}?`)) return;
+    let n = 0, r;
+    for (let k = 0; k < 30; k++) { r = await api("purge", d.all ? { all: true } : { name: d.name }); n += r.n; if (!d.all || !r.left || !r.n) break; toast(`נמחקו ${n}, ממשיך…`); }
+    toast(`נמחקו ${n} הקלטות`); await after("trash");
+  },
+  // כרטיס חבר
+  "m-act": async d => { const a = JSON.parse(d.a); if (!confirm(describe(a))) return; toast((await api("act", { a })).r); openMember(a.phone); },
+  "m-rename": async d => { const name = prompt("שם חדש", d.name); if (!name || name.trim() === d.name) return; toast((await api("act", { a: { type: "rename", phone: d.p, name: name.trim() } })).r); openMember(d.p); },
+  "m-mute": async d => { const h = prompt("לכמה שעות להשתיק? (ההודעות שלו יחכו לאישור)", "24"); if (h === null) return; toast((await api("act", { a: { type: "mute", phone: d.p, hours: Math.max(1, Math.min(720, +h || 24)) } })).r); openMember(d.p); },
+  "m-block": async d => { const on = d.on === "1"; if (!confirm(on ? "לחסום? הוא ינותק מיד בכל שיחה לקו" : "לבטל את החסימה?")) return; await api("block", { phone: d.p, on }); toast(on ? "נחסם" : "החסימה בוטלה"); openMember(d.p); },
+  "m-tz": async d => { if (!confirm(`לשלוח צינתוק ל${nm(d.p)}?`)) return; const r = await api("tz_phones", { phones: [d.p] }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : "הצינתוק נשלח"); },
+  "m-list": async d => { await api("lists", { list: d.list, phone: d.p, on: d.on === "1" }); toast("עודכן"); openMember(d.p); },
+  "m-code": async d => { const c = prompt("קוד אישי חדש (שתי ספרות) לתפריט ההודעות האישיות", d.c); if (!c || c === d.c) return; await api("codes", { phone: d.p, code: c }); toast("הקוד עודכן. התפריטים יתעדכנו תוך כמה דקות"); openMember(d.p); },
+  "m-rsvp": async d => { await api("event", { op: d.on === "1" ? "rsvp_add" : "rsvp_remove", phone: d.p, name: nm(d.p) }); toast("עודכן"); openMember(d.p); },
+  pmdel: async d => { if (!confirm("למחוק את ההודעה מהתיבה האישית?")) return; await api("pm_delete", { phone: d.p, name: d.name, old: d.old === "1" }); toast("נמחקה"); openMember(d.p); },
+  // רשימות
+  lst: async d => { await api("lists", { list: d.list, phone: d.p, on: d.on === "1" }); toast("עודכן"); await after("bot"); },
+  lstadd: async d => { const p = main.querySelector(`[data-lst="${d.list}"]`).value; if (!p) return; await api("lists", { list: d.list, phone: p, on: true }); toast("נוסף"); await after("bot"); },
+  // תזמון / שבת
+  def: async d => { if (d.op === "cancel_all" ? !confirm2("לבטל את כל הצינתוקים שמחכים?") : !confirm(d.op === "send" ? "לשלוח עכשיו, למרות שבת/חג?" : "לבטל את הצינתוק הזה?")) return; await api("deferred", { op: d.op, i: +d.i }); toast("בוצע"); await after("sched"); },
+  // אירוע
+  "ev-tzmiss": async () => { if (!confirm2("לשלוח צינתוק לכל מי שעוד לא נרשם לאירוע?")) return; const r = await api("event", { op: "tz_missing" }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); },
+  "ev-rsvp": async d => { if (d.op === "rsvp_remove" && !confirm(`להסיר את ${nm(d.p)} מהנרשמים?`)) return; await api("event", { op: d.op, phone: d.p, name: d.name || nm(d.p) }); toast("עודכן"); await after("event"); },
+  heardtz: async d => { const ph = JSON.parse(d.ph); if (!confirm(`לשלוח צינתוק ל-${ph.length} שעוד לא שמעו?`)) return; const r = await api("heard", { phones: ph }); toast(r.deferred ? "יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); },
+  // שידור
+  "weekly-dry": async (d, b) => { b.textContent = "יוצר טיוטה… (עד דקה)"; const r = await api("weekly", { op: "dry" }); toast(r.skipped || "הטיוטה מוכנה"); await after("studio"); },
+  // מערכת
+  bgclear: async () => { if (!confirm2("לנקות את כל משימות הרקע? (הקלטות שעוד לא נוצרו לא ייווצרו)")) return; const r = await api("health", { op: "clearbg" }); toast(`נוקו ${r.n} משימות`); await after("system"); },
+  bgdrop: async d => { await api("health", { op: "dropbg", f: d.f }); await after("system"); },
+  copy: async d => { try { await navigator.clipboard.writeText(d.v); toast("הועתק"); } catch { prompt("העתיקו:", d.v); } },
+  ai: () => aiToggle(),
+  aisug: d => aiSend(d.q),
+  airun: (d, b) => aiRun(+d.i, b),
+};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-x]");
+  if (!b) { // לחיצה על שם בטבלת החברים = כרטיס חבר
+    const td = state.tab === "members" && e.target.closest("#main .tbl td:first-child"), ph = td && td.parentElement.querySelector("[data-phone]");
+    if (ph) openMember(ph.dataset.phone);
+    if (e.target.id === "mm") $("#mm").hidden = true;
+    return;
+  }
+  const f = X[b.dataset.x]; if (!f) return;
+  if (b.tagName === "BUTTON" && b.type !== "button") e.preventDefault();
+  try { b.disabled = true; await f(b.dataset, b, e); } catch (err) { toast(err.message, true); } finally { if (b.isConnected) b.disabled = false; }
+});
+main.addEventListener("change", e => {
+  const s = e.target.closest("[data-sel]"); if (s) { if (s.checked) state.sel.add(s.dataset.sel); else state.sel.delete(s.dataset.sel); updBatch(); }
+});
+document.addEventListener("change", async e => {
+  const t = e.target, k = t.dataset.xChange, fk = t.dataset.xFile;
+  try {
+    if (k === "repm" && t.value) { state.repM = t.value; await show("reports", true); }
+    if (k === "liveday" && t.value) { state.liveDay = t.value; await show("live", true); }
+    if (k === "stype") { const f = t.form, v = t.value; for (const [cls, on] of [["s-text", v !== "tz"], ["s-post", v === "post"], ["s-tz", v === "tz"], ["s-pm", v === "pm"], ["s-remind", v === "remind"]]) f.querySelector("." + cls).hidden = !on; }
+    if (fk === "audio" && t.files[0]) await fileToWav(t.closest("[data-rec]"), t.files[0]);
+    if (fk === "import" && t.files[0]) await importMembers(t.files[0]);
+    if (fk === "restore" && t.files[0]) await restoreBackup(t.files[0]);
+  } catch (err) { toast(err.message, true); }
+  if (fk) t.value = "";
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-xf]"); if (!f) return; e.preventDefault();
+  const v = Object.fromEntries(new FormData(f)), rc = new FormData(f).getAll("rcpt"), k = f.dataset.xf, btn = f.querySelector("button:not([type=button])");
+  try {
+    if (btn) btn.disabled = true;
+    if (k === "tts") { if (btn) btn.textContent = "יוצר קול…"; const r = await api("tts", { text: v.text.trim() }); state.tts = { ...r, text: v.text.trim() }; $("#ttsout").innerHTML = ttsOut(); }
+    if (k === "sendpm") {
+      const to = v.to, body = to === "sel" ? { id: state.tts.id, phones: rc } : { id: state.tts.id, list: to };
+      if (to === "sel" && !rc.length) throw new Error("לא נבחרו חברים");
+      const msg = to === "members" ? "לשלוח את ההודעה לתיבה האישית של כל החברים?" : to === "admins" ? "לשלוח לתיבות של המנהלים?" : `לשלוח ל-${rc.length} חברים?`;
+      if (to === "members" ? !confirm2(msg) : !confirm(msg)) return;
+      const r = await api("send_pm", body); toast(`ההודעה תגיע ל-${r.count} תיבות בדקות הקרובות`); state.tts = null; await after("studio");
+    }
+    if (k === "tzsel") { if (!rc.length) throw new Error("לא נבחרו חברים"); if (!confirm(`לשלוח צינתוק ל-${rc.length} חברים?`)) return; const r = await api("tz_phones", { phones: rc }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); }
+    if (k === "weekly") { if (!confirm2("לפרסם את הסיכום השבועי בקו (עם צינתוק לרשימת הרגילות)?")) return; const r = await api("weekly", { op: "send", text: v.text }); toast("הסיכום עלה כהודעה " + r.file); await after("studio"); }
+    if (k === "sched2") {
+      const body = { type: v.type, at: v.at.replace("T", " ").slice(0, 16), text: (v.text || "").trim(), important: !!v.important, list: v.list, phones: rc, phone: v.phone, every: v.every, until: v.until ? v.until.replace("T", " ").slice(0, 16) : "" };
+      const what = { post: (body.important ? "הודעה חשובה" : "הודעה") + ": " + body.text, tz: "צינתוק ל" + LISTN[body.list], entry: "החלפת הודעת הכניסה: " + body.text, pm: `הודעה אישית ל-${rc.length} חברים`, remind: `תזכורת ל${nm(body.phone)}` }[body.type];
+      if (!confirm(`לקבוע ל-${body.at}${body.every ? (body.every === "day" ? ", כל יום" : ", כל שבוע") : ""}:\n${what}`)) return;
+      await api("schedule2", body); toast("התזמון נקבע"); f.reset(); await after("sched");
+    }
+    if (k === "ev-edit") { if (!confirm("לעדכן את פרטי האירוע? התפריט בשלוחה 9 יוקלט מחדש")) return; await api("event", { op: "edit", title: v.title, desc: v.desc }); toast("האירוע עודכן"); await after("event"); }
+    if (k === "m-pm") {
+      const out = f.querySelector(".mpv");
+      if (!f._tts || f._tts.text !== v.text.trim()) { if (btn) btn.textContent = "יוצר קול…"; const r = await api("tts", { text: v.text.trim() }); f._tts = { ...r, text: v.text.trim() }; out.innerHTML = `<audio controls src="${API_BASE}preview?id=${encodeURIComponent(r.id)}${tokq()}" style="width:100%;margin-top:6px"></audio><div class="mut small">שמעתם? לחיצה נוספת על הכפתור שולחת.</div>`; if (btn) btn.textContent = "✉ שליחה לתיבה שלו"; return; }
+      if (!confirm(`לשלוח את ההודעה לתיבה האישית של ${nm(f.dataset.p)}?`)) return;
+      await api("send_pm", { id: f._tts.id, phones: [f.dataset.p] }); toast("ההודעה תגיע לתיבה בדקות הקרובות"); openMember(f.dataset.p);
+    }
+    if (k === "m-note") { await api("notes", { kind: "member", key: f.dataset.p, text: v.text }); toast("נשמר"); }
+    if (k === "m-ads") { await api("ads", { phone: f.dataset.p, list: v.text.split("\n") }); toast("הפרסומות נשמרו"); }
+    if (k === "notif") { const pref = { pend: !!v.pend, msg: !!v.msg, online: !!v.online }; try { localStorage.setItem("notif", JSON.stringify(pref)); } catch {} if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); toast("ההגדרות נשמרו"); render("system"); }
+    if (k === "share") { const r = await api("share", { days: +v.days }); const url = "https://shmuel-lamed.github.io/07/#t=" + r.token; $("#shareout").innerHTML = `<div class="row" style="margin-top:8px"><input value="${esc(url)}" readonly style="flex:1" onclick="this.select()"><button type="button" class="btn s" data-x="copy" data-v="${esc(url)}">העתקה</button></div><div class="mut small">בתוקף ${r.days} ימים</div>`; }
+  } catch (err) { toast(err.message, true); }
+  finally { if (btn && btn.isConnected) { btn.disabled = false; if (k === "tts") btn.textContent = "יצירת קול ושמיעה"; } }
+});
+
+// ---------- ייבוא חברים ושחזור גיבוי ----------
+async function importMembers(file) {
+  const text = await file.text(), rows = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cells = line.split(/[,;\t]/).map(c => c.replace(/^"|"$/g, "").trim()), p = cells.map(c => c.replace(/[\s-]/g, "")).find(c => /^0\d{8,9}$/.test(c));
+    const n = cells.find(c => /[֐-׿a-zA-Z]/.test(c) && !/^(שם|name|טלפון|phone)$/i.test(c));
+    if (p && n) rows.push({ p, n: n.slice(0, 40) });
+  }
+  if (!rows.length) throw new Error("לא נמצאו שורות עם מספר טלפון ושם");
+  const isNew = r => !state.names[r.p], diff = r => state.names[r.p] && state.names[r.p] !== r.n;
+  const box = $("#mm"); box.hidden = false;
+  box.querySelector(".box").innerHTML = `<div class="mh"><h2>ייבוא חברים</h2><span class="mut">${rows.length} שורות</span><button class="btn s xbtn" data-x="close">✕</button></div>
+    <div class="card"><div class="tiles">${tile(rows.filter(isNew).length, "חדשים – יצטרפו", "good")}${tile(rows.filter(diff).length, "שם שונה")}${tile(rows.filter(r => !isNew(r) && !diff(r)).length, "ללא שינוי")}</div>
+    <div class="wrap" style="margin-top:10px;max-height:320px"><table class="tbl small"><tr><th>שם בקובץ</th><th>טלפון</th><th>מצב</th></tr>${rows.map(r => `<tr><td>${esc(r.n)}</td><td>${phone(r.p)}</td><td>${isNew(r) ? '<span class="pill ok">חדש</span>' : diff(r) ? `<span class="pill warn">עכשיו: ${esc(state.names[r.p])}</span>` : '<span class="pill">קיים</span>'}</td></tr>`).join("")}</table></div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="imp-rename"> לעדכן גם שמות של חברים קיימים</label>
+    <div class="row" style="margin-top:8px"><button class="btn p" id="imp-go">ייבוא</button></div></div>`;
+  $("#imp-go").onclick = async () => {
+    if (!confirm2(`לייבא? ${rows.filter(isNew).length} חברים חדשים יצטרפו לקבוצה`)) return;
+    $("#imp-go").disabled = true;
+    try {
+      const tot = { added: 0, renamed: 0, errors: 0 };
+      for (let i = 0; i < rows.length; i += 8) { toast(`מייבא… ${Math.min(i + 8, rows.length)} מתוך ${rows.length}`); const r = await api("members_import", { rows: rows.slice(i, i + 8), rename: $("#imp-rename").checked }); tot.added += r.added.length; tot.renamed += r.renamed.length; tot.errors += r.errors.length; }
+      toast(`נוספו ${tot.added}, שונו ${tot.renamed}${tot.errors ? `, ${tot.errors} שגיאות` : ""}`, !!tot.errors); box.hidden = true; await after("members");
+    }
+    catch (err) { toast(err.message, true); $("#imp-go").disabled = false; }
+  };
+}
+async function restoreBackup(file) {
+  const data = JSON.parse(await file.text()); if (!data || !data._meta) throw new Error("זה לא קובץ גיבוי של הקו");
+  const keys = data._meta.keys.filter(k => k in data), label = { people: "רשימת החברים", names_over: "השמות", rules: "כללי העוזר", scheduled: "תזמונים", blocked: "חסומים", watch: "השתקות", retort: "רשימת תגובה עוקצנית", strict: "רשימת פיקוח מוגבר", ads: "פרסומות", event: "האירוע", approved: "אישורי הצטרפות", archive: "ארכיון התמלולים", facts: "עובדות", profiles: "פרופילים", dashnotes: "הערות מנהל", joinmap: "בקשות הצטרפות", demap: "מיפוי הודעות" };
+  const box = $("#mm"); box.hidden = false;
+  box.querySelector(".box").innerHTML = `<div class="mh"><h2>שחזור מגיבוי</h2><span class="mut">מ-${esc(data._meta.at)}</span><button class="btn s xbtn" data-x="close">✕</button></div>
+    <div class="card"><div class="mut small">מה לשחזר? הערכים הנוכחיים יוחלפו בערכים מהגיבוי.</div><div class="picker" style="margin-top:8px">${keys.map(k => `<label><input type="checkbox" name="rk" value="${esc(k)}"><span>${esc(label[k] || k)}</span></label>`).join("")}</div>
+    <div class="row" style="margin-top:8px"><button class="btn p d" id="rs-go">שחזור</button></div></div>`;
+  $("#rs-go").onclick = async () => {
+    const sel = [...box.querySelectorAll("[name=rk]:checked")].map(x => x.value); if (!sel.length) return toast("לא נבחר כלום", true);
+    if (!confirm2(`לשחזר ${sel.length} פריטים מהגיבוי? הערכים הנוכחיים יימחקו`)) return;
+    try { const part = {}; for (const k of sel) part[k] = data[k]; const r = await api("restore_backup", { data: part, keys: sel }); toast("שוחזר: " + r.done.length + " פריטים"); box.hidden = true; state.data = {}; await show(state.tab, true); }
+    catch (err) { toast(err.message, true); }
+  };
+}
+
+// ---------- אישור כפול לפעולות רחבות שבלשוניות המקוריות ----------
+main.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  let risky = "";
+  if (b.dataset.act === "tz" && b.dataset.list === "members") risky = "צינתוק לכל החברים";
+  if (b.dataset.act === "admin") { try { const a = JSON.parse(b.dataset.a); if (a.type === "entry_delete") risky = "מחיקת ההודעה בכניסה"; } catch {} }
+  if (risky && !confirm2(risky + "?")) { e.stopImmediatePropagation(); e.preventDefault(); }
+}, true);
+main.addEventListener("submit", e => {
+  const f = e.target.closest("form[data-form=broadcast]");
+  if (f && !confirm2("הודעה אישית לכל החברים?")) { e.stopImmediatePropagation(); e.preventDefault(); }
+}, true);
+
+// ---------- חיפוש גלובלי ----------
+const gs = $("#gs"), gsr = $("#gsr");
+let gsMsgs = null, gsSel = 0;
+async function gsSearch() {
+  const q = gs.value.trim(); if (!q) { gsr.hidden = true; return; }
+  if (!gsMsgs && !gsMsgs?.loading) { gsMsgs = { loading: true, list: [] }; api("messages?n=1000").then(d => { gsMsgs = d; gsSearch(); }).catch(() => { gsMsgs = null; }); }
+  const low = q.toLowerCase(), has = s => String(s || "").toLowerCase().includes(low), out = [];
+  const tabs = TABS.filter(([, l]) => has(l)).map(([k, l]) => ({ g: "לשוניות", t: l, s: "", run: () => show(k) }));
+  const mem = Object.entries(state.names).filter(([p, n]) => has(n) || p.includes(q)).slice(0, 6).map(([p, n]) => ({ g: "חברים", t: n, s: p, run: () => openMember(p) }));
+  const msgs = (gsMsgs.list || []).filter(m => has(m.t) || has(m.n) || m.id === q).slice(0, 6).map(m => ({ g: "הודעות", t: `${m.id} · ${m.n || m.p || ""}`, s: String(m.t || "").slice(0, 90), run: () => { state.filter.msgs = q; show("msgs"); } }));
+  const conv = ((state.data.bot || {}).conv || []).filter(c => has(c.q) || has(c.a)).slice(0, 4).map(c => ({ g: "שיחות עם העוזר", t: c.n, s: c.q, run: () => { state.filter.convq = q; show("reports"); } }));
+  const logs = ((state.data.log || {}).lines || []).filter(l => has(l.m)).slice(0, 4).map(l => ({ g: "יומן", t: l.m.slice(0, 80), s: l.t, run: () => { state.filter.log = q; show("log"); } }));
+  out.push(...tabs, ...mem, ...msgs, ...conv, ...logs, { g: "", t: `🤖 לשאול את עוזר ה-AI: "${q}"`, s: "", run: () => { aiToggle(true); aiSend(q); } });
+  gsr.hidden = false; gsSel = 0; gsr._items = out; let g = null;
+  gsr.innerHTML = out.map((r, i) => (r.g !== g ? `<div class="g">${esc((g = r.g))}</div>` : "") + `<button type="button" data-i="${i}" class="${i === 0 ? "on" : ""}">${esc(r.t)}${r.s ? `<small>${esc(r.s)}</small>` : ""}</button>`).join("") + (gsMsgs.loading ? '<div class="g">טוען הודעות…</div>' : "");
+}
+gs.addEventListener("input", gsSearch);
+gs.addEventListener("keydown", e => {
+  const items = gsr._items || [], btns = gsr.querySelectorAll("button");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); gsSel = (gsSel + (e.key === "ArrowDown" ? 1 : -1) + items.length) % Math.max(1, items.length); btns.forEach((b, i) => b.classList.toggle("on", i === gsSel)); }
+  if (e.key === "Enter" && items[gsSel]) { e.preventDefault(); items[gsSel].run(); gsr.hidden = true; gs.blur(); }
+  if (e.key === "Escape") { gsr.hidden = true; gs.blur(); }
+});
+gsr.addEventListener("mousedown", e => { const b = e.target.closest("button[data-i]"); if (b) { e.preventDefault(); gsr._items[+b.dataset.i].run(); gsr.hidden = true; gs.blur(); } });
+gs.addEventListener("blur", () => setTimeout(() => { gsr.hidden = true; }, 150));
+
+// ---------- קיצורי מקלדת ----------
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (e.key === "Escape") { $("#mm").hidden = true; if (!$("#mon").hidden) monitor(false); if (!$("#aip").hidden) aiToggle(false); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); gs.focus(); return; }
+  if (e.altKey && /^[1-9]$/.test(e.key) && TABS[+e.key - 1]) { e.preventDefault(); show(TABS[+e.key - 1][0]); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey || !$("#login-layer").hidden) return;
+  if (e.key === "/") { e.preventDefault(); gs.focus(); }
+  if (e.key.toLowerCase() === "r" || e.key === "ר") show(state.tab, true);
+  if ((e.key.toLowerCase() === "a" || e.key === "ש") && !state.ro) { e.preventDefault(); aiToggle(); }
+  if (e.key.toLowerCase() === "m" || e.key === "צ") monitor(true);
+});
+
+// ---------- מסך בקרה (לחדר / למסך שעומד פתוח) ----------
+let monT = null, monClock = null;
+async function monitor(on) {
+  const m = $("#mon"); m.hidden = !on; clearInterval(monT); clearInterval(monClock);
+  if (!on) { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); return; }
+  try { await m.requestFullscreen(); } catch {}
+  const tick = () => { m.querySelector(".clk").textContent = new Date().toLocaleTimeString("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
+  tick(); monClock = setInterval(tick, 1000);
+  const load = async () => {
+    try {
+      const [p, o] = await Promise.all([api("pulse"), api("overview")]);
+      m.querySelector(".g").innerHTML = `<div class="p"><h2>בקו עכשיו</h2><div class="big ${p.online.length ? "good" : ""}">${p.online.length}</div><ul style="margin-top:10px">${p.online.map(c => `<li>${esc(c.n || c.p)}<small>${esc(c.w)}</small></li>`).join("")}</ul></div>
+        <div class="p"><h2>ממתינות לאישור</h2><div class="big ${p.pending + p.joins ? "bad" : "good"}">${p.pending + p.joins}</div><ul style="margin-top:10px">${o.pending.filter(x => x.n).map(x => `<li>${esc(x.name)}<small>${x.n}</small></li>`).join("")}${p.joins ? `<li>בקשות הצטרפות<small>${p.joins}</small></li>` : ""}</ul></div>
+        <div class="p"><h2>הבא בתור</h2><ul>${o.jobs.slice(0, 5).map(j => `<li>${esc(jobText2(j))}<small>${esc(fmtD(j.at))}</small></li>`).join("") || "<li>אין תזמונים</li>"}</ul></div>
+        <div class="p"><h2>${esc(o.event.title)}</h2><div class="big">${o.event.count}<span style="font-size:24px;color:#9aa3b5"> / ${o.event.total}</span></div><small style="color:#9aa3b5">נרשמו</small></div>
+        <div class="p"><h2>הודעות בקו</h2><div class="big">${o.allCount}</div><small style="color:#9aa3b5">ההודעה האחרונה: ${p.lastMsg}</small>${o.holy ? '<div style="margin-top:12px;color:#fcd34d">🕯 שבת / חג – צינתוקים ממתינים</div>' : ""}</div>`;
+    } catch (e) { m.querySelector(".g").innerHTML = `<div class="p">${esc(e.message)}</div>`; }
+  };
+  load(); monT = setInterval(load, 10000);
+}
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !$("#mon").hidden) { /* נשאר פתוח גם בלי מסך מלא */ } });
+
+// ---------- התראות ודופק ברקע ----------
+const notifPref = () => { try { return JSON.parse(localStorage.getItem("notif") || "null") || { pend: true, msg: false, online: false }; } catch { return { pend: true, msg: false, online: false }; } };
+let lastPulse = null;
+function notifyMe(title, body) {
+  if ("Notification" in window && Notification.permission === "granted") { try { const n = new Notification(title, { body, tag: title, lang: "he", dir: "rtl" }); n.onclick = () => { window.focus(); n.close(); }; return; } catch {} }
+  if (document.hidden) return; toast(title + (body ? " – " + body : ""));
+}
+async function pulse() {
+  if (REMOTE && !adminToken) return;
+  try {
+    const p = await api("pulse"), pref = notifPref(), pend = p.pending + p.joins;
+    document.title = (pend ? `(${pend}) ` : "") + "ניהול קו הקבוצה";
+    $("#b-pend").textContent = pend ? pl(pend, "ממתינה אחת", "# ממתינות") : "אין ממתינות"; $("#b-pend").classList.toggle("warn", pend > 0); if ($("#n-pend")) $("#n-pend").textContent = pend || "";
+    if (lastPulse) {
+      if (pref.pend && pend > lastPulse.pend) notifyMe("הודעה חדשה ממתינה לאישור", pl(pend, "ממתינה אחת", "# ממתינות"));
+      if (pref.msg && p.lastMsg > lastPulse.lastMsg) notifyMe("הודעה חדשה בקו", "הודעה " + p.lastMsg);
+      if (pref.online) for (const c of p.online) if (!lastPulse.online.includes(c.p)) notifyMe((c.n || c.p) + " נכנס לקו", c.w);
+    }
+    lastPulse = { pend, lastMsg: p.lastMsg, online: p.online.map(c => c.p) };
+    if (state.tab === "live" && state.data.live && !document.hidden) { state.data.live.online = p.online; render("live"); }
+  } catch {}
+}
+setInterval(pulse, 45000);
+setInterval(() => { if (state.tab === "live" && !document.hidden) for (const el of main.querySelectorAll(".live-d")) { const s = Math.round((Date.now() - (state.firstSeen[el.dataset.p] || Date.now())) / 1000); el.textContent = s < 60 ? s + " שנ׳" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); } }, 1000);
+setInterval(() => { if (state.tab === "live" && !document.hidden) pulse(); }, 15000);
+
+// ---------- עוזר AI בדף ----------
+const AI_SUG = ["מה ממתין לטיפול עכשיו?", "מי עוד לא נרשם לאירוע?", "תזמן צינתוק לכל החברים מחר ב-20:00", "סכם לי את ההודעות האחרונות", "מי בקו עכשיו?", "תוסיף כלל לעוזר: לענות תמיד בקצרה"];
+function aiToggle(on) {
+  const p = $("#aip"); p.hidden = on === undefined ? !p.hidden : !on;
+  if (!p.hidden) { if (!state.ai.length) aiDraw(); setTimeout(() => $("#aiq").focus(), 50); }
+}
+function aiDraw() {
+  const l = $("#ail");
+  l.innerHTML = (state.ai.length ? "" : `<div class="bub ai">שלום! אני עוזר הניהול. אפשר לשאול אותי על מה שקורה בקו, או לבקש פעולה – אני אכין אותה, ואתם מאשרים בלחיצה.</div><div class="aisug">${AI_SUG.map(s => `<button type="button" data-x="aisug" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div>`) +
+    state.ai.map((m, mi) => m.role === "user" ? `<div class="bub me">${esc(m.text)}</div>` : m.busy ? `<div class="bub ai"><span class="typing"><i></i><i></i><i></i></span></div>` : m.err ? `<div class="bub err">${esc(m.text)}</div>` :
+      `<div class="bub ai">${esc(m.text)}</div>${(m.actions || []).map((a, i) => `<div class="acard ${a.done ? "done" : ""}"><span class="grow">${a.done ? "✓ " : ""}${esc(a.desc || a.kind)}</span><button class="btn s p" data-x="airun" data-i="${mi * 100 + i}">${a.kind === "navigate" || a.kind === "open_member" ? "פתיחה" : "ביצוע"}</button></div>`).join("")}`).join("");
+  l.scrollTop = l.scrollHeight;
+}
+async function aiSend(q) {
+  q = String(q || "").trim(); if (!q) return;
+  const history = state.ai.filter(m => !m.busy && !m.err).slice(-8).map(m => ({ role: m.role, text: m.text + (m.actions && m.actions.length ? "\n[הצעתי: " + m.actions.map(a => a.desc).join("; ") + "]" : "") }));
+  state.ai.push({ role: "user", text: q }, { role: "model", busy: true }); aiDraw();
+  try {
+    const r = await api("ai", { q, history }); state.ai.pop(); state.ai.push({ role: "model", text: r.answer, actions: r.actions });
+    const nav = r.actions.find(a => a.kind === "navigate" || a.kind === "open_member"); if (nav && r.actions.length === 1) { await aiExec(nav); nav.done = true; }
+  } catch (e) { state.ai.pop(); state.ai.push({ role: "model", err: true, text: e.message }); }
+  aiDraw();
+}
+async function aiRun(idx, b) {
+  const m = state.ai[Math.floor(idx / 100)], a = m && (m.actions || [])[idx % 100]; if (!a || a.done) return;
+  if (await aiExec(a) !== false) { a.done = true; aiDraw(); }
+}
+async function aiExec(a) {
+  const ok = msg => confirm(msg || a.desc), wide = msg => confirm2(msg || a.desc);
+  switch (a.kind) {
+    case "navigate": show(a.tab); return;
+    case "open_member": openMember(a.phone); return;
+    case "act": { if (!(a.a.type === "broadcast" ? wide(describe(a.a)) : ok(describe(a.a)))) return false; toast((await api("act", { a: a.a })).r); break; }
+    case "tzintuk": { if (!(a.list === "members" ? wide() : ok())) return false; const r = await api("tzintuk", { list: a.list }); toast(r.deferred ? "שבת/חג: יישלח במוצאי שבת/חג" : r.ok ? "הצינתוק נשלח" : "ימות לא אישרו", !r.ok && !r.deferred); break; }
+    case "tz_phones": { if (!ok()) return false; const r = await api("tz_phones", { phones: a.phones }); toast(r.deferred ? "יישלח במוצאי שבת/חג" : `נשלח ל-${r.count}`); break; }
+    case "pm": {
+      toast("יוצר את הקול…"); const t = await api("tts", { text: a.text });
+      const au = new Audio(API_BASE + "preview?id=" + encodeURIComponent(t.id) + tokq()); au.play().catch(() => {});
+      const msg = `${a.desc}\n\n(הקול מתנגן עכשיו, ${t.seconds} שניות) לשלוח?`;
+      if (!(a.list === "members" ? wide(msg) : ok(msg))) { au.pause(); return false; }
+      const r = await api("send_pm", a.list ? { id: t.id, list: a.list } : { id: t.id, phones: a.phones }); toast(`ההודעה תגיע ל-${r.count} תיבות`); break;
+    }
+    case "schedule2": { if (!ok()) return false; const { kind, desc, ...body } = a; await api("schedule2", body); toast("התזמון נקבע"); break; }
+    case "block": { if (!ok()) return false; await api("block", { phone: a.phone, on: a.on }); toast("עודכן"); break; }
+    case "lists": { if (!ok()) return false; await api("lists", { list: a.list, phone: a.phone, on: a.on }); toast("עודכן"); break; }
+    case "event": { if (!(a.op === "tz_missing" ? wide() : ok())) return false; await api("event", { op: a.op, title: a.title, desc: a.details, phone: a.phone, name: a.name }); toast("בוצע"); break; }
+    case "unsched": { if (!ok()) return false; await api("unsched", { id: a.id }); toast("התזמון בוטל"); break; }
+    default: return false;
+  }
+  state.data = {}; show(state.tab, true);
+}
+$("#aif").addEventListener("submit", e => { e.preventDefault(); const q = $("#aiq").value; $("#aiq").value = ""; aiSend(q); });
+
+// ---------- הפעלה ----------
+async function startApp() {
+  show(state.tab);
+  api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
+  try { const me = await api("whoami"); state.ro = me.ro; document.body.classList.toggle("ro", me.ro); $("#rob").hidden = !me.ro; } catch {}
+  pulse();
+}
+
+$("#login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = e.currentTarget.querySelector("button");
+  try { btn.disabled = true; $("#login-err").textContent = ""; await createSession($("#login-pass").value); $("#login-pass").value = ""; hideLogin(); state.data = {}; await startApp(); }
+  catch (err) { showLogin(err.message); }
+  finally { btn.disabled = false; }
+});
+$("#logout").addEventListener("click", () => {
+  if (!REMOTE) { const f = document.createElement("form"); f.method = "post"; f.action = "/admin/logout"; document.body.append(f); f.submit(); return; }
+  state.data = {}; $("#main").innerHTML = ""; dropSession();
+});
+if (!REMOTE || adminToken) { hideLogin(); startApp(); } else showLogin();
+</script>
+</body>
+</html>
