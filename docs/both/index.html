@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניהול הקווים</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1d2433;--muted:#667085;--card:#fff;--line:#e3e6ec;--acc:#2f5bd3}
+@media (prefers-color-scheme:dark){:root{--bg:#121417;--fg:#e8eaee;--muted:#9aa3b2;--card:#1b1e23;--line:#2b2f36;--acc:#7b9cff}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--card);border-bottom:1px solid var(--line);height:52px}
+header h1{font-size:16px;margin:0;font-weight:600;white-space:nowrap}
+.tabs{display:flex;gap:6px;margin-inline-start:auto}
+.tabs button{border:1px solid var(--line);background:transparent;color:var(--fg);padding:7px 14px;border-radius:999px;font-size:14px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--acc);border-color:var(--acc);color:#fff}
+.tabs small{opacity:.75;margin-inline-start:6px}
+main{position:relative;height:calc(100% - 52px)}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+iframe[hidden]{display:none}
+@media (max-width:520px){header h1{display:none}.tabs{margin:0 auto}.tabs small{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ניהול הקווים</h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-k="shim" aria-selected="false">שימחס<small>073-351-2880</small></button>
+    <button role="tab" data-k="daat" aria-selected="false">דעת תורה<small>079-494-7582</small></button>
+  </nav>
+</header>
+<main>
+  <iframe id="f-shim" title="ניהול שימחס" hidden></iframe>
+  <iframe id="f-daat" title="ניהול דעת תורה" hidden></iframe>
+</main>
+<script>
+const SRC = { shim: "../", daat: "../daattorah/" };
+function show(k) {
+  for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", b.dataset.k === k);
+  for (const key of Object.keys(SRC)) {
+    const f = document.getElementById("f-" + key);
+    if (key === k && !f.src) f.src = SRC[key];
+    f.hidden = key !== k;
+  }
+  try { localStorage.setItem("bothTab", k); } catch (e) {}
+  if (location.hash !== "#" + k) history.replaceState(null, "", "#" + k);
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.k)));
+let first = location.hash.slice(1);
+if (!SRC[first]) { try { first = localStorage.getItem("bothTab"); } catch (e) {} }
+show(SRC[first] ? first : "shim");
+</script>
+</body>
+</html>
