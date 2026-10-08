@@ -257,10 +257,10 @@ const KIND_ACTS = { // מקשים כמו בשלוחה 7-4: 1 חשובה, 2 רג�
 const REMOTE = !location.pathname.startsWith("/admin");
 const API_BASE = REMOTE ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" : "/admin/api/";
 let adminToken = "";
-try { if (REMOTE) adminToken = sessionStorage.getItem("adminToken") || ""; } catch {}
+try { if (REMOTE) adminToken = sessionStorage.getItem("adminToken_daat") || ""; } catch {}
 { // קישור לצפייה בלבד: .../07/#t=<אסימון>
   const m = /^#t=([\w.-]+)$/.exec(location.hash);
-  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem("adminToken", adminToken); } catch {} history.replaceState(null, "", location.pathname); state.tab = "home"; }
+  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem("adminToken_daat", adminToken); } catch {} history.replaceState(null, "", location.pathname); state.tab = "home"; }
 }
 const tokq = (sep = "&") => REMOTE && adminToken ? sep + "token=" + encodeURIComponent(adminToken) : "";
 const apiUrl = name => API_BASE + name + tokq(name.includes("?") ? "&" : "?");
@@ -276,9 +276,9 @@ async function createSession(password) {
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
   if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
   adminToken = j.token;
-  try { sessionStorage.setItem("adminToken", adminToken); } catch {}
+  try { sessionStorage.setItem("adminToken_daat", adminToken); } catch {}
 }
-function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem("adminToken"); } catch {} showLogin(msg); }
+function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem("adminToken_daat"); } catch {} showLogin(msg); }
 async function apiRaw(name, body) {
   if (REMOTE && !adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
   const opt = body ? { method: "POST", body: JSON.stringify(body) } : {};

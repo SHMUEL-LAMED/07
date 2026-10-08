@@ -2648,6 +2648,22 @@ function findPersons(query, nm) {
 __name(findPersons, "findPersons");
 var STOP = new Set("\u05DE\u05D4 \u05E9\u05DC \u05D0\u05EA \u05E2\u05DC \u05E2\u05DD \u05D6\u05D4 \u05D6\u05D0\u05EA \u05D4\u05D5\u05D0 \u05D4\u05D9\u05D0 \u05D4\u05DD \u05D0\u05E0\u05D9 \u05D0\u05EA\u05D4 \u05D0\u05EA\u05DD \u05D9\u05E9 \u05D0\u05D9\u05DF \u05DB\u05DC \u05D2\u05DD \u05DC\u05D0 \u05DB\u05DF \u05D0\u05D5 \u05D0\u05DD \u05DE\u05D9 \u05D0\u05D9\u05DA \u05DC\u05DE\u05D4 \u05DE\u05EA\u05D9 \u05D0\u05D9\u05E4\u05D4 \u05DB\u05DE\u05D4 \u05E9\u05DC\u05D5 \u05E9\u05DC\u05D4 \u05E9\u05DC\u05D9 \u05DC\u05D9 \u05DC\u05DA \u05DC\u05D5 \u05D4\u05D9\u05D4 \u05D4\u05D9\u05D5 \u05D0\u05DE\u05E8 \u05D0\u05DE\u05E8\u05D5 \u05EA\u05D2\u05D9\u05D3 \u05EA\u05E1\u05E4\u05E8 \u05EA\u05D2\u05D9\u05D3\u05D5 \u05E1\u05E4\u05E8 \u05D4\u05E9\u05D1\u05D5\u05E2 \u05D4\u05D9\u05D5\u05DD \u05D0\u05EA\u05DE\u05D5\u05DC \u05D1\u05E7\u05D5 \u05D4\u05E7\u05D5 \u05D4\u05D5\u05D3\u05E2\u05D4 \u05D4\u05D5\u05D3\u05E2\u05D5\u05EA \u05DE\u05E9\u05D4\u05D5 \u05E2\u05D5\u05D3 \u05E8\u05E7 \u05DB\u05D1\u05E8 \u05D0\u05D1\u05DC \u05D0\u05D6 \u05D8\u05D5\u05D1 \u05E0\u05E9\u05DE\u05E2".split(" "));
 var PREFIX = /^[ובלמשהכ]{1,2}(?=[א-ת]{3,})/;
+function timeWindow(query) {
+  const q = " " + normHe(query) + " ";
+  const base = new Date(nowIL().replace(" ", "T").slice(0, 19) + "Z");
+  const fmt = (d) => d.toISOString().slice(0, 16).replace("T", " ");
+  const day0 = (n) => { const d = new Date(base); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - n); return d; };
+  const end = fmt(new Date(base.getTime() + 6e4));
+  if (/ (?:ה)?יום /.test(q) && !/ יום (?:ראשון|שני|שלישי|רביעי|חמישי|שישי) /.test(q)) return [fmt(day0(0)), end];
+  if (/ אתמול /.test(q)) return [fmt(day0(1)), fmt(day0(0))];
+  if (/ שלשום /.test(q)) return [fmt(day0(2)), fmt(day0(1))];
+  if (/ (?:ב)?שבוע (?:ש)?עבר /.test(q)) return [fmt(day0(14)), fmt(day0(7))];
+  if (/ (?:ב|מ)?(?:ה)?שבוע /.test(q)) return [fmt(day0(7)), end];
+  if (/ (?:ב|מ)?(?:ה)?חודש /.test(q)) return [fmt(day0(30)), end];
+  if (/ (?:ל)?אחרונה | חדש | חדשות /.test(q)) return [fmt(day0(3)), end];
+  return null;
+}
+__name(timeWindow, "timeWindow");
 function retrieveContext(line, query, nm, limit = 26e3, compact = false) {
   const q = normHe(query);
   const words = [...new Set(q.trim().split(" ").filter((w) => w.length >= 3 && !STOP.has(w)).map((w) => w.length >= 5 ? w.replace(PREFIX, "") : w))];
@@ -2660,12 +2676,14 @@ function retrieveContext(line, query, nm, limit = 26e3, compact = false) {
     size += m.t.length + 40;
   }, "add");
   for (const ph of persons) for (const m of line.msgs.filter((m2) => m2.p === ph).reverse()) add(m);
+  const win = timeWindow(query);
+  if (win) for (const m of line.msgs.filter((m2) => { const k = sortable(m2.d); return k >= win[0] && k < win[1]; }).reverse().slice(0, 60)) add(m);
   line.msgs.map((m) => {
     const t = normHe(m.t);
     let sc = 0;
     for (const w of words) if (t.includes(w)) sc++;
     return [sc, m];
-  }).filter((x) => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 25).forEach(([, m]) => add(m));
+  }).filter((x) => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 40).forEach(([, m]) => add(m));
   for (const m of line.msgs.slice(compact ? -15 : -30).reverse()) add(m);
   const msgs = [...chosen.values()].sort((a, b) => sortable(a.d) < sortable(b.d) ? -1 : 1);
   const prof = profilesText(line, compact);
