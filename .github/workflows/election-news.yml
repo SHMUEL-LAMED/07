@@ -1,0 +1,51 @@
+name: סקרים וכתבות — שלוחה 1
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    branches: [main]
+    paths: ['election-news/**', '.github/workflows/election-news.yml']
+  pull_request:
+    paths: ['election-news/**', '.github/workflows/election-news.yml']
+permissions:
+  contents: read
+concurrency:
+  group: election-news-collector
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s election-news -p 'test_*.py'
+      - run: node --test election-news/*.test.mjs
+  collect:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install yt-dlp==2026.8.19
+      - name: כלי אודיו
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y ffmpeg
+          fi
+      - name: איסוף קובצי המקור והעלאה מאומתת לשלוחה
+        run: >-
+          python election-news/collector.py
+          --endpoint https://election-news-ivr.smwlyqswkwt232.workers.dev
+          --max-files 16 --deadline-seconds 540
