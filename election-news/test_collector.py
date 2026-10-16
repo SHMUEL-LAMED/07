@@ -59,3 +59,17 @@ class RecoveryTests(unittest.TestCase):
     def test_current_election_year_is_not_limited_to_thirty_days(self):
         self.assertTrue(collector.recent(str(collector.dt.datetime.now().year)+'-01-01T00:00:00Z'))
         self.assertEqual(collector.error_code(collector.urllib.error.HTTPError('https://example.org',403,'blocked',{},None)),'http_403')
+
+class ReshetRecoveryTests(unittest.TestCase):
+    def test_reshet_alternate_official_host(self):
+        error=collector.urllib.error.HTTPError('https://13tv.co.il',403,'blocked',{},None)
+        body=collector.json.dumps({'PageMeta':{'title':'סקרים'},'Content':{'Item':{'title':'סקר'}}}).encode()
+        with patch.object(collector,'fetch',side_effect=[error,body]) as fetch:
+            self.assertEqual(collector.reshet_data('https://13tv.co.il/tags/survey/')['PageMeta']['title'],'סקרים')
+            self.assertIn('https://www.13tv.co.il/qdata/',fetch.call_args.args[0])
+
+    def test_reshet_html_fallback_uses_only_page_data(self):
+        error=collector.urllib.error.URLError('blocked')
+        body=('<script id="__NEXT_DATA__">'+collector.json.dumps({'props':{'pageProps':{'page':{'PageMeta':{'title':'סקר'},'Content':{'Item':{'video':{'kalturaId':'editorial'}}}},'liveSources':{'kalturaId':'live'}}}})+'</script>').encode()
+        with patch.object(collector,'fetch',side_effect=[error,error,body]):
+            self.assertEqual(collector.reshet_data('https://13tv.co.il/item/news/poll-12345/')['Content']['Item']['video']['kalturaId'],'editorial')

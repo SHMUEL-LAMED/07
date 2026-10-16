@@ -10,6 +10,7 @@ UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrom
 HOSTS={'mako.co.il':'n12','13tv.co.il':'reshet','kan.org.il':'kan','c14.co.il':'c14','i24news.tv':'i24'}
 PUBLIC_CACHE={}
 ENDPOINT=None
+RESHET_ITEMS={}
 
 def public_url(url):
     u=urllib.parse.urlsplit(url)
@@ -33,7 +34,12 @@ OPENER=urllib.request.build_opener(Redirect)
 def direct_fetch(url,headers=None,data=None,timeout=30):
     public_url(url)
     req=urllib.request.Request(url,data=data,headers={'User-Agent':UA,**(headers or {})})
-    with OPENER.open(req,timeout=timeout) as r:
+    try:response=OPENER.open(req,timeout=timeout)
+    except urllib.error.HTTPError as error:
+        if error.code!=403 or data is not None or not source(url):raise
+        error.close()
+        response=OPENER.open(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0',**(headers or {})}),timeout=timeout)
+    with response as r:
         b=r.read(8*1024*1024+1)
         if len(b)>8*1024*1024: raise ValueError('response_too_large')
         return b
@@ -107,7 +113,17 @@ class Links(HTMLParser):
         if tag=='a' and self.current:self.links.append(self.current);self.current=None
 
 def reshet_data(url):
-    return get_json('https://13tv.co.il/qdata'+urllib.parse.urlsplit(url).path+'?qdata=json')
+    path=urllib.parse.urlsplit(url).path
+    last=None
+    for candidate in ['https://13tv.co.il/qdata'+path+'?qdata=json','https://www.13tv.co.il/qdata'+path+'?qdata=json','https://13tv.co.il'+path]:
+        try:
+            body=fetch(candidate).decode()
+            try:value=json.loads(body)
+            except ValueError:value=next_data(body).get('props',{}).get('pageProps',{}).get('page',{})
+            if not value.get('PageMeta') or not value.get('Content'):raise ValueError('invalid_reshet_data')
+            return value
+        except (urllib.error.URLError,ValueError,TimeoutError) as error:last=error
+    raise last
 def discover():
     candidates={}
     def add(url,title):
@@ -123,7 +139,9 @@ def discover():
     for path in ['/tags/survey/','/news/politics/politics/']:
         try:
             for item in walk(reshet_data('https://13tv.co.il'+path).get('Content',{})):
-                if item.get('link') and item.get('title') and recent(item.get('publishDate')):add(urllib.parse.urljoin('https://13tv.co.il',item['link']),item['title']+' '+item.get('secondaryTitle',''))
+                if item.get('link') and item.get('title') and recent(item.get('publishDate')):
+                    link=urllib.parse.urljoin('https://13tv.co.il',item['link']);add(link,item['title']+' '+item.get('secondaryTitle',''))
+                    if source(link)=='reshet' and canonical(link) in candidates:RESHET_ITEMS[canonical(link)]=item
         except Exception as e:print('source_failed','reshet',error_code(e),flush=True)
     try:
         for cat in [483,487]:
@@ -163,7 +181,12 @@ def article(url):
         media=[x['sourceUrl'] for x in walk(j.get('parsedBody',[])) if x.get('type')=='immergoVideo' and not x.get('isLive') and x.get('sourceUrl')]
         return j['title'],list(dict.fromkeys(media))
     if kind=='reshet':
-        j=reshet_data(url);x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
+        try:j=reshet_data(url)
+        except (urllib.error.URLError,ValueError,TimeoutError):
+            item=RESHET_ITEMS.get(canonical(url))
+            if not item or not item.get('video',{}).get('kalturaId'):raise
+            j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
+        x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
         if not recent(info.get('datePublished')):raise ValueError('old_article')
         title=x.get('title') or j['PageMeta']['title']
         if not relevant(title+' '+x.get('secondaryTitle','')):return title,[]
