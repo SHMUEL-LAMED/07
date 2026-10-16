@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET
 UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 HOSTS={'mako.co.il':'n12','13tv.co.il':'reshet','kan.org.il':'kan','c14.co.il':'c14','i24news.tv':'i24'}
 PUBLIC_CACHE={}
+ENDPOINT=None
 
 def public_url(url):
     u=urllib.parse.urlsplit(url)
@@ -29,13 +30,34 @@ class Redirect(urllib.request.HTTPRedirectHandler):
         return redirected
 OPENER=urllib.request.build_opener(Redirect)
 
-def fetch(url,headers=None,data=None,timeout=30):
+def direct_fetch(url,headers=None,data=None,timeout=30):
     public_url(url)
     req=urllib.request.Request(url,data=data,headers={'User-Agent':UA,**(headers or {})})
     with OPENER.open(req,timeout=timeout) as r:
         b=r.read(8*1024*1024+1)
         if len(b)>8*1024*1024: raise ValueError('response_too_large')
         return b
+
+def source_failure(body):
+    sample=body[:10000].decode('utf-8',errors='ignore').lower()
+    return any(x in sample for x in ['access denied','we are sorry','request rejected','verify you are human','incapsula incident'])
+
+def fetch(url,headers=None,data=None,timeout=30):
+    try:
+        body=direct_fetch(url,headers,data,timeout)
+        if data is None and source(url) and source_failure(body):raise ValueError('source_access_error')
+        return body
+    except (urllib.error.URLError,TimeoutError,ValueError):
+        if not ENDPOINT or data is not None or not source(url):raise
+        # A second network location reads only the allowlisted official source.
+        return direct_fetch(ENDPOINT+'/collector/source?'+urllib.parse.urlencode({'url':url}),
+                            {'Authorization':'Bearer '+authorization(ENDPOINT)},timeout=timeout)
+
+def error_code(error):
+    if isinstance(error,urllib.error.HTTPError):return 'http_'+str(error.code)
+    if isinstance(error,subprocess.CalledProcessError):return 'media_process_failed'
+    if isinstance(error,ValueError):return str(error)[:100]
+    return type(error).__name__
 
 def get_json(url,headers=None): return json.loads(fetch(url,headers))
 def clean(s): return re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',s or ''))).strip()
@@ -47,6 +69,7 @@ def canonical(url):
     if not source(url): raise ValueError('unknown_source')
     host=u.hostname
     if source(url)=='n12': host='www.mako.co.il'
+    if source(url)=='c14': host='www.c14.co.il'
     return urllib.parse.urlunsplit(('https',host,u.path,'',''))
 def relevant(title):
     return bool(re.search('סקר|מנדטים|בחירות|אחוז החסימה|קמפיין|פריימריז',title)) and not re.search(r'בחירות (בארה[״"]ב|בארצות הברית|בצרפת|בבריטניה|לרשות הפלסטינית)',title)
@@ -56,7 +79,7 @@ def recent(date):
         date=re.sub(r'([+-]\d\d)(\d\d)$',r'\1:\2',date)
         value=dt.datetime.fromisoformat(date.replace('Z','+00:00'))
         if value.tzinfo is None:value=value.replace(tzinfo=dt.timezone.utc)
-        return (dt.datetime.now(dt.timezone.utc)-value).days<=30
+        return value.year>=dt.datetime.now(dt.timezone.utc).year
     except (ValueError,TypeError):return True
 
 def walk(value):
@@ -91,22 +114,22 @@ def discover():
         if source(url) and relevant(clean(title)):
             try:candidates[canonical(url)]=clean(title)
             except ValueError:pass
-    for url in ['https://www.mako.co.il/news-israel-elections','https://www.kan.org.il/content/kan-news/politic/','https://www.c14.co.il/']:
+    for url in ['https://mobile.mako.co.il/news-israel-elections','https://www.kan.org.il/content/kan-news/politic/','https://www.c14.co.il/']:
         try:
             parser=Links(url);parser.feed(fetch(url).decode())
             for link,title in parser.links:
                 if re.search(r'Article-[a-f0-9]+|/article/\d+|/content/kan-news/[^/]+/\d+',link):add(link,title)
-        except Exception as e:print('source_failed',source(url),type(e).__name__,flush=True)
-    try:
-        for path in ['/tags/survey/','/news/politics/politics/']:
+        except Exception as e:print('source_failed',source(url),error_code(e),flush=True)
+    for path in ['/tags/survey/','/news/politics/politics/']:
+        try:
             for item in walk(reshet_data('https://13tv.co.il'+path).get('Content',{})):
                 if item.get('link') and item.get('title') and recent(item.get('publishDate')):add(urllib.parse.urljoin('https://13tv.co.il',item['link']),item['title']+' '+item.get('secondaryTitle',''))
-    except Exception as e:print('source_failed','reshet',type(e).__name__,flush=True)
+        except Exception as e:print('source_failed','reshet',error_code(e),flush=True)
     try:
         for cat in [483,487]:
             for item in get_json('https://api.i24news.tv/v2/he/contents?'+urllib.parse.urlencode({'category':cat,'page':1,'limit':12,'countable':1,'inSlider':0,'sort':'-sortDate'})):
                 if recent(item.get('publishedAt')):add(item['frontendUrl'],item.get('title','')+' בחירות')
-    except Exception as e:print('source_failed','i24',type(e).__name__,flush=True)
+    except Exception as e:print('source_failed','i24',error_code(e),flush=True)
     return candidates
 
 def kaltura(entry):
@@ -145,16 +168,20 @@ def article(url):
         title=x.get('title') or j['PageMeta']['title']
         if not relevant(title+' '+x.get('secondaryTitle','')):return title,[]
         entry=x.get('video',{}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
-    try:page=fetch(url).decode()
-    except urllib.error.HTTPError:
-        if kind!='n12':raise
-        page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il')).decode()
-    if kind=='n12' and ('We are sorry' in page or 'Access Denied' in page):page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il')).decode()
-    objects=list(ld(page));news=next((x for x in objects if x.get('@type')=='NewsArticle'),{})
+    page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il') if kind=='n12' else url).decode()
+    objects=list(ld(page))
+    news=next((x for x in objects if any(t in ['NewsArticle','OpinionNewsArticle','Article'] for t in ([x.get('@type')] if isinstance(x.get('@type'),str) else x.get('@type',[])))),{})
     title=clean(news.get('headline') or next(iter(re.findall(r'<h1\b[^>]*>([\s\S]*?)</h1>',page,re.I)),''))
-    if not relevant(title+' '+news.get('description','')) or not recent(news.get('datePublished')):return title,[]
+    if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
+    if not recent(news.get('datePublished')):raise ValueError('old_article')
+    # The official election section is an editorial relevance signal too.
+    if not relevant(title+' '+news.get('description','')) and not (kind=='n12' and '/news-israel-elections/' in url):raise ValueError('not_election_article')
     if kind=='n12':
         video=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{}).get('header',{}).get('mainVideo')
+        if not video:
+            embed=next((x.get('embedUrl','') for x in objects if x.get('@type')=='VideoObject' and 'mako.co.il/player-embed/' in x.get('embedUrl','')),'')
+            q=urllib.parse.parse_qs(urllib.parse.urlsplit(embed).query)
+            if all(q.get(k) for k in ['vid','cid','galleryCid']):video={'videoVcmId':q['vid'][0],'videoChannelId':q['cid'][0],'videoGalleryChannelId':q['galleryCid'][0]}
         if not video:return title,[]
         params={'jspName':'playlist12.jsp','vcmid':video['videoVcmId'],'videoChannelId':video['videoChannelId'],'galleryChannelId':video['videoGalleryChannelId'],'consumer':'responsive'}
         raw=fetch('https://www.mako.co.il/AjaxPage?'+urllib.parse.urlencode(params))
@@ -169,7 +196,7 @@ def article(url):
         u=urllib.parse.urlsplit(html.unescape(embed));match=re.match(r'/embed/([A-Za-z0-9_-]{11})$',u.path)
         if kind=='kan' and u.hostname in ['www.youtube.com','www.youtube-nocookie.com','youtube.com'] and match:media.append('https://www.youtube.com/watch?v='+match[1])
     for obj in objects:
-        if obj.get('@type') in ['VideoObject','AudioObject']:
+        if any(t in ['VideoObject','AudioObject'] for t in ([obj.get('@type')] if isinstance(obj.get('@type'),str) else obj.get('@type',[]))):
             if obj.get('contentUrl'):media.append(obj['contentUrl'])
             elif kind=='c14' and str(obj.get('embedUrl','')).startswith('https://snippet.univtec.com/'):media.extend(immergo(obj['embedUrl']))
     for block in re.findall(r'<(?:audio|video)\b[^>]*>[\s\S]*?</(?:audio|video)>',page,re.I):media.extend(html.unescape(x) for x in re.findall(r'\bsrc=["\']([^"\']+)',block))
@@ -220,7 +247,8 @@ def worker(endpoint,path,body=None,headers=None):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--endpoint',required=True);parser.add_argument('--max-files',type=int,default=16);parser.add_argument('--deadline-seconds',type=int,default=540);parser.add_argument('--dry-run',action='store_true');args=parser.parse_args()
-    endpoint=args.endpoint.rstrip('/');start=time.monotonic();state=worker(endpoint,'/collector/state');uploaded=set(state['uploaded']);seen=set(state['seen']);candidates=discover()
+    global ENDPOINT
+    endpoint=args.endpoint.rstrip('/');ENDPOINT=endpoint;start=time.monotonic();state=worker(endpoint,'/collector/state');uploaded=set(state['uploaded']);seen=set(state['seen']);candidates=discover()
     for url in state['todo']:
         try:candidates.setdefault(canonical(url),'')
         except ValueError:pass
@@ -246,7 +274,7 @@ def main():
                             time.sleep(5)
                     uploaded.add(key);count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
             except Exception as e:
-                reports.append({'url':url,'status':'blocked','error':type(e).__name__});print('article_failed',source(url),type(e).__name__,flush=True)
+                reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})
     print('complete',count,'uploads',len(reports),'reports',flush=True)
 if __name__=='__main__':main()

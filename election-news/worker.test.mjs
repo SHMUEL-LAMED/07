@@ -54,3 +54,15 @@ test('retry of an existing i24 upload creates remaining clip jobs without upload
 });
 import {reshetCandidates} from './worker.mjs';
 test('Reshet discovers current election reports using subtitle and drops archive entries',()=>{const p={Content:{PageGrid:[{posts:[{link:'/item/news/politics/politics/one-12345/',title:'נתניהו נחלש',secondaryTitle:'סקר מנדטים',publishDate:new Date().toISOString()},{link:'/item/news/politics/politics/old-12345/',title:'סקר מנדטים ישן',publishDate:'2020-01-01'},{link:'https://foreign.example/item/news/1',title:'סקר מנדטים',publishDate:new Date().toISOString()}]}]}};assert.deepEqual(reshetCandidates(p),[['https://13tv.co.il/item/news/politics/politics/one-12345/','נתניהו נחלש']])});
+import handler from './worker.mjs';
+test('authenticated source relay rejects arbitrary hosts, credentials and non-source paths',async()=>{
+ for(const target of ['https://127.0.0.1/','https://www.mako.co.il.attacker.example/','https://www.mako.co.il/admin','https://user:pass@www.c14.co.il/','http://www.c14.co.il/']){
+  const request=new Request('https://ivr.example/collector/source?url='+encodeURIComponent(target),{headers:{Authorization:'Bearer test-admin'}});
+  const response=await handler.fetch(request,{ADMIN_TOKEN:'test-admin'},{});assert.equal(response.status,400,target);
+ }
+});
+test('source relay returns only bounded public source response and never forwards authorization',async()=>{
+ const original=globalThis.fetch;let headers;
+ globalThis.fetch=async(url,options)=>{headers=options.headers;assert.equal(url,'https://13tv.co.il/qdata/tags/survey/?qdata=json');return new Response('{"Content":{}}',{headers:{'Content-Type':'application/json'}})};
+ try{const request=new Request('https://ivr.example/collector/source?url='+encodeURIComponent('https://13tv.co.il/qdata/tags/survey/?qdata=json'),{headers:{Authorization:'Bearer test-admin'}});const response=await handler.fetch(request,{ADMIN_TOKEN:'test-admin'},{});assert.equal(response.status,200);assert.equal((await response.json()).Content.constructor,Object);assert.equal(headers.Authorization,undefined);}finally{globalThis.fetch=original;}
+});

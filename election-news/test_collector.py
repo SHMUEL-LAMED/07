@@ -21,3 +21,41 @@ class CollectorTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError,'private',collector.public_url,'https://untrusted.example/file')
 
 if __name__=='__main__':unittest.main()
+
+class RecoveryTests(unittest.TestCase):
+    def tearDown(self):collector.ENDPOINT=None
+
+    def test_soft_block_uses_authenticated_second_network(self):
+        collector.ENDPOINT='https://ivr.example'
+        with patch.object(collector,'direct_fetch',side_effect=[b'<h1>We Are Sorry</h1>',b'<h1>article</h1>']) as fetch,patch.object(collector,'authorization',return_value='short-lived'):
+            self.assertEqual(collector.fetch('https://mobile.mako.co.il/news-israel-elections'),b'<h1>article</h1>')
+            self.assertIn('/collector/source?',fetch.call_args.args[0])
+            self.assertEqual(fetch.call_args.args[1],{'Authorization':'Bearer short-lived'})
+
+    def test_cdn_and_non_get_requests_are_never_relayed(self):
+        collector.ENDPOINT='https://ivr.example'
+        for url,body in [('https://cdn.example/video.mp4',None),('https://www.mako.co.il/AjaxPage',b'body')]:
+            with patch.object(collector,'direct_fetch',side_effect=collector.urllib.error.URLError('failed')) as fetch:
+                self.assertRaises(collector.urllib.error.URLError,collector.fetch,url,None,body)
+                self.assertEqual(fetch.call_count,1)
+
+    def test_block_page_is_failure_not_no_media(self):
+        with patch.object(collector,'fetch',return_value=b'<h1>Request Rejected</h1>'):
+            self.assertRaisesRegex(ValueError,'invalid_source_page',collector.article,'https://www.mako.co.il/news-israel-elections/2026/Article-a.htm')
+
+    def test_public_election_opinion_without_media_has_a_title(self):
+        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'OpinionNewsArticle','headline':'מי באמת יגיע לקלפי בבחירות?'},ensure_ascii=False)+'</script>'
+        with patch.object(collector,'fetch',return_value=page.encode()):
+            title,media=collector.article('https://www.c14.co.il/article/1740992')
+            self.assertIn('בחירות',title);self.assertEqual(media,[])
+
+    def test_n12_embed_fallback_finds_public_original(self):
+        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'NewsArticle','headline':'סקר מנדטים','video':{'@type':'VideoObject','embedUrl':'https://www.mako.co.il/player-embed/?vid=v&cid=c&galleryCid=g'}})+'</script>'
+        result=type('Result',(),{'stdout':b'{"media":[{"url":"https://cdn.example/clip.m3u8"}]}'})()
+        with patch.object(collector,'fetch',side_effect=[page.encode(),b'encoded']),patch.object(collector.subprocess,'run',return_value=result):
+            title,media=collector.article('https://www.mako.co.il/news-israel-elections/2026/Article-a.htm')
+            self.assertEqual(media,['https://cdn.example/clip.m3u8'])
+
+    def test_current_election_year_is_not_limited_to_thirty_days(self):
+        self.assertTrue(collector.recent(str(collector.dt.datetime.now().year)+'-01-01T00:00:00Z'))
+        self.assertEqual(collector.error_code(collector.urllib.error.HTTPError('https://example.org',403,'blocked',{},None)),'http_403')

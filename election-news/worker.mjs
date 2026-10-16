@@ -108,7 +108,7 @@ async function yemot(env,command,values){const r=await fetch('https://www.call2a
 async function reshetData(url){const path=new URL(url).pathname;const data=await(await get('https://13tv.co.il/qdata'+path+'?qdata=json')).json();if(!data?.PageMeta||!data.Content)throw Error('invalid_reshet_data');return data;}
 export function reshetCandidates(data){
  const result=new Map();const walk=o=>{if(!o||typeof o!=='object')return;
-  if(o.link&&o.title&&typeof o.link==='string'&&relevant(o.title+' '+(o.secondaryTitle||''))){try{const u=new URL(o.link,'https://13tv.co.il');const date=Date.parse(o.publishDate||'');if(u.hostname==='13tv.co.il'&&u.pathname.startsWith('/item/news/')&&(!Number.isFinite(date)||Date.now()-date<=30*86400000)){u.search='';u.hash='';result.set(u.href,o.title);}}catch{}}
+  if(o.link&&o.title&&typeof o.link==='string'&&relevant(o.title+' '+(o.secondaryTitle||''))){try{const u=new URL(o.link,'https://13tv.co.il');const date=Date.parse(o.publishDate||'');if(u.hostname==='13tv.co.il'&&u.pathname.startsWith('/item/news/')&&(!Number.isFinite(date)||new Date(date).getUTCFullYear()>=new Date().getUTCFullYear())){u.search='';u.hash='';result.set(u.href,o.title);}}catch{}}
   for(const v of Object.values(o))if(typeof v==='object'){if(Array.isArray(v))v.forEach(walk);else walk(v);}
  };walk(data.Content);return [...result];
 }
@@ -128,7 +128,7 @@ async function scanI24(env){
  for(const category of [483,487]){
   const items=await(await get('https://api.i24news.tv/v2/he/contents?'+new URLSearchParams({category:String(category),page:'1',limit:'10',countable:'1',inSlider:'0',sort:'-sortDate'}))).json();
   if(!Array.isArray(items))throw Error('invalid_i24_feed');
-  for(const item of items){if(item.publishedAt&&Date.now()-Date.parse(item.publishedAt)>30*86400000)continue;try{const u=new URL(item.frontendUrl);if(u.hostname==='www.i24news.tv'&&u.pathname.startsWith('/he/news/'))candidates.set(u.href,item.title||'כתבת בחירות');}catch{}}
+  for(const item of items){if(item.publishedAt&&new Date(item.publishedAt).getUTCFullYear()<new Date().getUTCFullYear())continue;try{const u=new URL(item.frontendUrl);if(u.hostname==='www.i24news.tv'&&u.pathname.startsWith('/he/news/'))candidates.set(u.href,item.title||'כתבת בחירות');}catch{}}
  }
  const writes=[...candidates].map(([url,title])=>env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,'i24',?,'queued',?)").bind(url,title.slice(0,500),Date.now()));if(writes.length)await env.DB.batch(writes);
  await env.DB.prepare('INSERT INTO sources(id,last_ok,error) VALUES(?,?,NULL) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=NULL').bind('i24',Date.now()).run();return candidates.size;
@@ -158,11 +158,11 @@ export async function processItem(env,item){
    media=await reshetMedia(html);
   }else{
    let page;try{page=await get(item.url);}catch(e){if(item.source==='n12'&&e.message==='http_403'){const mobile=new URL(item.url);mobile.hostname='mobile.mako.co.il';page=await get(mobile.href);}else throw e;}html=await page.text();title=articleTitle(html,item.title);
-   if(!relevant(title))throw Error('not_election_article');
+   if(!relevant(title)&&!(item.source==='n12'&&new URL(item.url).pathname.startsWith('/news-israel-elections/')))throw Error('not_election_article');
    date=html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1];
    media=item.source==='reshet'?await reshetMedia(html):item.source==='n12'?await makoMedia(html):item.source==='c14'?await c14Media(html):mediaFrom(html);
   }
-  if(date&&Number.isFinite(Date.parse(date))&&Date.now()-Date.parse(date)>30*86400000)throw Error('older_than_30_days');
+  if(date&&Number.isFinite(Date.parse(date))&&new Date(date).getUTCFullYear()<new Date().getUTCFullYear())throw Error('older_election_year');
   if(!media.length)throw Error('needs_source_adapter');
   const clipIndex=Number(new URL(item.url).hash.match(/^#media=(\d+)$/)?.[1]||0);if(clipIndex>=media.length)throw Error('missing_clip');
   const downloaded=await downloadMedia(media[clipIndex]);const audio=downloaded.blob;
@@ -191,10 +191,17 @@ export async function run(env,sourceId){
  }finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
 }
 async function collectorRoute(request,env,path){
+ if(path==='/collector/source'&&request.method==='GET'){
+  let target;try{target=new URL(new URL(request.url).searchParams.get('url'));}catch{return Response.json({error:'invalid_source'},{status:400});}
+  const source=SOURCES.find(s=>target.hostname===s.host||target.hostname.endsWith('.'+s.host));
+  const allowed=source&&(source.article.test(target.pathname)||['/','/news-israel-elections','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp'));
+  if(target.protocol!=='https:'||target.username||target.password||!allowed)return Response.json({error:'unsupported_source'},{status:400});
+  try{const upstream=await get(target.href);const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
+ }
  if(path==='/collector/state'&&request.method==='GET'){
   const uploaded=await env.DB.prepare("SELECT url FROM items WHERE status='uploaded'").all();
-  const seen=await env.DB.prepare("SELECT url FROM collector_checks WHERE checked_at>? AND status='no_media'").bind(Date.now()-86400000).all();
-  const todo=await env.DB.prepare("SELECT url FROM items WHERE status='queued' ORDER BY id LIMIT 100").all();
+  const seen=await env.DB.prepare("SELECT url FROM collector_checks WHERE checked_at>? AND status='no_media'").bind(Date.now()-3600000).all();
+  const todo=await env.DB.prepare("SELECT url FROM items WHERE status IN ('queued','blocked','no_media') ORDER BY CASE status WHEN 'queued' THEN 0 ELSE 1 END,id DESC LIMIT 100").all();
   return Response.json({uploaded:uploaded.results.map(x=>x.url),seen:seen.results.map(x=>x.url),todo:todo.results.map(x=>x.url)});
  }
  if(path==='/collector/report'&&request.method==='POST'){
