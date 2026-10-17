@@ -28,9 +28,11 @@ export function reshetEntry(html){
  try{return JSON.parse(raw)?.props?.pageProps?.page?.Content?.Item?.video?.kalturaId||null;}catch{return null;}
 }
 export function selectPlayback(context){
- if(!context||context.objectType==='KalturaAPIException'||context.actions?.length||context.messages?.length)throw Error('playback_restricted');
- const source=context.sources?.find(s=>s.format==='url'&&!s.drm?.length);
+ if(!context||context.objectType==='KalturaAPIException'||context.messages?.length||(context.actions||[]).some(a=>a.objectType!=='KalturaAccessControlLimitDeliveryProfilesAction'))throw Error('playback_restricted');
+ const candidates=(context.sources||[]).filter(s=>['url','applehttp'].includes(s.format)&&!s.drm?.length).filter(s=>(context.actions||[]).every(a=>{const matches=String(a.deliveryProfileIds||'').split(',').includes(String(s.deliveryProfileId));return [true,1,'1'].includes(a.isBlockedList)?!matches:matches;}));
+ const source=candidates.find(s=>s.format==='url')||candidates.find(s=>s.format==='applehttp');
  if(!source)throw Error('no_public_download');
+ if(source.format==='applehttp'){safeURL(source.url);return source.url;}
  const permitted=new Set((source.flavorIds||'').split(','));
  const flavors=(context.flavorAssets||[]).filter(f=>permitted.has(f.id)&&f.status===2&&f.fileExt==='mp4'&&Number(f.sizeInBytes||f.size*1024)<=limit).sort((a,b)=>Number(a.sizeInBytes||a.size*1024)-Number(b.sizeInBytes||b.size*1024));
  if(!flavors.length)throw Error('file_too_large');
