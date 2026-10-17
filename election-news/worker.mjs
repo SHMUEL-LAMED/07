@@ -15,6 +15,21 @@ export function recordingName(date,files,previous){
  while(occupied.has(String(stamp)+'.wav'))stamp++;
  return String(stamp)+'.wav';
 }
+export function spokenIntro(item){
+ const channel={kan:'כאן חדשות',n12:'חדשות שתים עשרה',reshet:'חדשות שלוש עשרה',c14:'ערוץ ארבע עשרה',i24:'איי עשרים וארבע ניוז'}[item.source];
+ const date=typeof item.published_at==='number'?item.published_at:publicationMillis(item.published_at);if(!channel||!Number.isFinite(date))throw Error('intro_metadata_missing');
+ const title=decode(String(item.title||'')).replace(/^פורסם ב־[^—]+—\s*/,'').replace(/[\r\n=]/g,' ').replace(/\s+/g,' ').trim();
+ const day=new Intl.DateTimeFormat('he-IL',{timeZone:'Asia/Jerusalem',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(date);
+ const poll=/סקר|מנדטים|מפת הגושים/.test(title)&&!/בצל|בעקבות הסקר/.test(title);
+ return (poll?'האזינו לסקר של ':'האזינו לכתבה של ')+channel+', מיום '+day+'. '+title+'.';
+}
+export async function syncIntros(env){
+ const rows=await env.DB.prepare("SELECT i.source,i.title,i.file,d.published_at FROM items i JOIN article_dates d ON d.url=i.url WHERE i.status='uploaded' ORDER BY d.published_at DESC").all();
+ const lines=rows.results.filter(x=>/^\d+\.wav$/.test(x.file||'')).map(x=>x.file.replace(/\.wav$/,'')+'='+spokenIntro(x));
+ await yemot(env,'UploadTextFile',{what:'ivr2:1/TitleVoice.ini',contents:lines.join('\n')+'\n'});
+ await yemot(env,'UpdateExtension',{path:'ivr2:1',say_title_voice:'yes'});
+ return {ok:true,titles:lines.length};
+}
 const limit=24*1024*1024;
 function decode(s){return s.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');}
 function safeURL(s){const u=new URL(s); if(u.protocol!=='https:'||u.username||u.password||!/[a-z]/i.test(u.hostname)||/^(localhost|.*\.local|.*\.internal)$/.test(u.hostname)||u.hostname.includes(':'))throw Error('invalid_public_url'); return u;}
@@ -189,6 +204,7 @@ export async function processItem(env,item){
   const verify=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});const file=(verify.files||[]).find(f=>f.name===name&&Number(f.duration)>0);if(!file)throw Error('upload_not_verified');
   await env.DB.prepare('INSERT INTO article_dates(url,published_at) VALUES(?,?) ON CONFLICT(url) DO UPDATE SET published_at=excluded.published_at').bind(item.url,publicationMillis(date)).run();
   await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,uploaded_at=?,file=?,title=? WHERE id=?").bind(Date.now(),name,decode(title).replace(/\s+/g,' ').trim(),item.id).run();
+  await syncIntros(env);
   if(item.source==='i24'&&clipIndex===0&&media.length>1){const writes=media.slice(1).map((_,i)=>{const u=new URL(item.url);u.hash='media='+String(i+1);return env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,?,?,'queued',?)").bind(u.href,item.source,title+' — קטע '+String(i+2),Date.now());});await env.DB.batch(writes);}
  }catch(e){const retry=/http_5|http_429|timeout|fetch failed|upload_not_verified|yemot_/.test(e.message)&&item.attempts<3;await env.DB.prepare("UPDATE items SET status=?,error=?,attempts=attempts+1 WHERE id=?").bind(e.message==='needs_source_adapter'?'no_media':retry?'queued':'blocked',e.message,item.id).run();}
 }
@@ -199,7 +215,7 @@ export async function archiveExpired(env){
  const result=await yemot(env,'FileAction',{action:'move',target:'ivr2:1/_election_archive',...Object.fromEntries(rows.map((x,i)=>['what'+i,'ivr2:1/'+x.file]))});
  const writes=[];
  for(const row of rows){const report=(result.reports||[]).find(x=>x.success&&String(x.what).endsWith('/'+row.file));if(report)writes.push(env.DB.prepare("UPDATE items SET status='archived',file=? WHERE url=? AND status='uploaded'").bind(report.target,row.url));}
- if(writes.length)await env.DB.batch(writes);return writes.length;
+ if(writes.length){await env.DB.batch(writes);await syncIntros(env);}return writes.length;
 }
 export async function run(env,sourceId){
  const now=Date.now();const lease=await env.DB.prepare('UPDATE locks SET until=? WHERE id=1 AND until<?').bind(now+600000,now).run();if(!lease.meta.changes)return {busy:true};
@@ -255,6 +271,7 @@ async function collectorRoute(request,env,path){
    if(Number(meta.duration)>0&&Math.abs(Number(file.duration)-Number(meta.duration))>Math.max(2,Number(meta.duration)*0.02))throw Error('duration_mismatch');
    await env.DB.prepare('INSERT INTO article_dates(url,published_at) VALUES(?,?) ON CONFLICT(url) DO UPDATE SET published_at=excluded.published_at').bind(meta.url,Date.parse(meta.publishedAt)).run();
    await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,title=?,file=?,uploaded_at=? WHERE id=?").bind(meta.title,name,Date.now(),item.id).run();
+   await syncIntros(env);
    return Response.json({ok:true,file:name,duration:file.duration});
   }catch(e){await env.DB.prepare("UPDATE items SET status='blocked',error=? WHERE url=? AND status!='uploaded'").bind(e.message,meta.url).run();return Response.json({error:e.message},{status:502});}finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
  }
@@ -272,6 +289,7 @@ export default{
   const bearer=request.headers.get('Authorization')?.replace(/^Bearer /,'')||'';const isAdmin=bearer===env.ADMIN_TOKEN;
   if(u.pathname.startsWith('/collector/')){if(!isAdmin){try{await verifyCollectorToken(bearer,env,u.origin);}catch{return new Response('Unauthorized',{status:401});}}return collectorRoute(request,env,u.pathname);}
   if(!isAdmin)return new Response('Unauthorized',{status:401});
+  if(u.pathname==='/sync-intros'&&request.method==='POST')return Response.json(await syncIntros(env));
   if(u.pathname==='/run'&&request.method==='POST')return Response.json(await run(env,u.searchParams.get('source')));
   if(u.pathname==='/enqueue'&&request.method==='POST'){
    const b=await request.json();const source=SOURCES.find(s=>{try{const u=safeURL(b.url);return(u.hostname===s.host||u.hostname.endsWith('.'+s.host))&&s.article.test(u.pathname);}catch{return false;}});if(!source)return Response.json({error:'unsupported_source'},{status:400});

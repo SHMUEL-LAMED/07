@@ -39,7 +39,7 @@ import {processItem} from './worker.mjs';
 test('retry of an existing i24 upload creates remaining clip jobs without uploading twice',async()=>{
  const previous=globalThis.fetch;let uploads=0;const writes=[],batches=[];
  const env={YEMOT_TOKEN:'test',DB:{
-  prepare(sql){return{bind(...args){return{sql,args,async run(){writes.push({sql,args});return{};}};}};},
+  prepare(sql){return{all:async()=>({results:[]}),bind(...args){return{sql,args,async run(){writes.push({sql,args});return{};}};}};},
   async batch(statements){batches.push(...statements);return[];}
  }};
  globalThis.fetch=async(url,init)=>{
@@ -47,6 +47,7 @@ test('retry of an existing i24 upload creates remaining clip jobs without upload
   if(String(url).startsWith('https://i24israel.vod.immergo.tv/'))return new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'video/mp4'}});
   if(String(url).endsWith('/UploadFile')){uploads++;throw Error('duplicate_upload')}
   if(String(url).endsWith('/GetIVR2Dir'))return Response.json({responseStatus:'OK',files:[{name:'000004.wav',size:100,duration:10}]});
+  if(/UploadTextFile|UpdateExtension/.test(String(url)))return Response.json({responseStatus:'OK'});
   throw Error('unexpected_url');
  };
  try{await processItem(env,{id:4,url:'https://www.i24news.tv/he/news/israel-elections-2026/polls/artc-abcd',source:'i24',title:'test',attempts:0});}finally{globalThis.fetch=previous;}
@@ -83,7 +84,7 @@ test('upload endpoint rejects old or missing original publication date before re
 import {archiveExpired} from './worker.mjs';
 test('expired recordings move to archive and retain a recoverable database path',async()=>{
  const original=globalThis.fetch;const calls=[],writes=[];
- const env={YEMOT_TOKEN:'test',DB:{prepare(sql){return{bind(...args){return{all:async()=>({results:[{url:'https://13tv.co.il/item/news/poll-12345/',file:'000123.wav'}]}),sql,args};}}},batch:async statements=>{writes.push(...statements);}}};
+ const env={YEMOT_TOKEN:'test',DB:{prepare(sql){return{all:async()=>({results:[]}),bind(...args){return{all:async()=>({results:[{url:'https://13tv.co.il/item/news/poll-12345/',file:'000123.wav'}]}),sql,args};}}},batch:async statements=>{writes.push(...statements);}}};
  globalThis.fetch=async(url,options)=>{const fields=Object.fromEntries(options.body);calls.push({url,fields});return Response.json(url.endsWith('/FileAction')?{responseStatus:'OK',reports:[{success:true,what:'ivr2:1/000123.wav',target:'ivr2:1/_election_archive/000001.wav'}]}:{responseStatus:'OK'});};
  try{assert.equal(await archiveExpired(env),1);assert.equal(calls[1].fields.action,'move');assert.equal(calls[1].fields.what0,'ivr2:1/000123.wav');assert.equal(writes[0].args[0],'ivr2:1/_election_archive/000001.wav');}finally{globalThis.fetch=original;}
 });
