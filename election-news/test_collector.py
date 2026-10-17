@@ -94,3 +94,12 @@ class OfficialYoutubeTests(unittest.TestCase):
                 collector.make_audio('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id='+self.CHANNEL,destination)
                 command=run.call_args_list[0].args[0];self.assertIn('!is_live & !is_upcoming & channel_id = '+self.CHANNEL,command)
                 self.assertEqual(command[-1],'https://www.youtube.com/watch?v=RHmIAyFAlPo')
+
+class KalturaProfileTests(unittest.TestCase):
+    def test_allowed_hls_profile_is_used_without_rewriting_to_forbidden_mp4(self):
+        ctx={'actions':[{'objectType':'KalturaAccessControlLimitDeliveryProfilesAction','deliveryProfileIds':'18022'}],'sources':[{'format':'url','deliveryProfileId':999,'url':'https://cdn.example/forbidden.mp4'},{'format':'applehttp','deliveryProfileId':18022,'url':'https://cdn.example/allowed.m3u8'}]}
+        self.assertEqual(collector.select_playback(ctx),['https://cdn.example/allowed.m3u8'])
+        ctx['actions'][0]['isBlockedList']=True
+        self.assertEqual(collector.select_playback(ctx),[])
+        ctx['actions']=[{'objectType':'KalturaAccessControlBlockAction'}]
+        self.assertRaisesRegex(ValueError,'restricted',collector.select_playback,ctx)

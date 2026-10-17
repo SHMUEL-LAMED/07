@@ -71,3 +71,8 @@ test('YouTube fallback source accepts only the pinned broadcaster channel and va
  assert.equal(sourceFor('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew').id,'reshet');
  for(const url of ['https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=other','https://www.youtube.com/watch?v=bad&channel_id=UCvQmPpU20hw1Trss_CVwaew','https://www.youtube.com.attacker.example/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew'])assert.equal(sourceFor(url),undefined);
 });
+test('delivery profile restriction permits only its allowed unencrypted HLS source',()=>{
+ const context={actions:[{objectType:'KalturaAccessControlLimitDeliveryProfilesAction',deliveryProfileIds:'18022'}],sources:[{format:'url',deliveryProfileId:999,url:'https://cdn.example/forbidden.mp4'},{format:'applehttp',deliveryProfileId:18022,url:'https://cdn.example/allowed.m3u8'}]};
+ assert.equal(selectPlayback(context),'https://cdn.example/allowed.m3u8');
+ context.actions[0].isBlockedList=true;context.sources=context.sources.filter(s=>s.format==='applehttp');assert.throws(()=>selectPlayback(context),/no_public_download/);
+});

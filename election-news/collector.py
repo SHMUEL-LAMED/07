@@ -166,6 +166,12 @@ def discover():
                     if source(link)=='reshet' and canonical(link) in candidates:RESHET_ITEMS[canonical(link)]=item
         except Exception as e:print('source_failed','reshet',error_code(e),flush=True)
     if not reshet_ok:
+        catalog=Path(__file__).with_name('reshet-seed.json')
+        if catalog.exists():
+            for item in json.loads(catalog.read_text())['items']:
+                if source(item['url'])!='reshet' or not re.fullmatch(r'[A-Za-z0-9_]+',item['kalturaId']) or not recent(item['publishDate']):continue
+                url=canonical(item['url']);add(url,item['title']+' בחירות')
+                RESHET_ITEMS[url]={'title':item['title'],'secondaryTitle':'בחירות','publishDate':item['publishDate'],'video':{'kalturaId':item['kalturaId']}}
         for channel in YOUTUBE_CHANNELS:
             try:candidates.update(official_youtube(channel))
             except Exception as error:print('source_failed','reshet_youtube',error_code(error),flush=True)
@@ -176,17 +182,27 @@ def discover():
     except Exception as e:print('source_failed','i24',error_code(e),flush=True)
     return candidates
 
+def select_playback(context):
+    actions=context.get('actions',[])
+    if context.get('objectType')=='KalturaAPIException' or context.get('messages') or any(a.get('objectType')!='KalturaAccessControlLimitDeliveryProfilesAction' for a in actions):raise ValueError('playback_restricted')
+    sources=[s for s in context.get('sources',[]) if s.get('format') in ['url','applehttp'] and not s.get('drm')]
+    for action in actions:
+        ids=set(str(action.get('deliveryProfileIds','')).split(','));blocked=action.get('isBlockedList') in [True,1,'1']
+        sources=[s for s in sources if (str(s.get('deliveryProfileId')) in ids)!=blocked]
+    sources.sort(key=lambda s:s.get('format')!='url')
+    if not sources:return []
+    source=sources[0]
+    if source['format']=='applehttp':return [source['url']]
+    allowed=set(source.get('flavorIds','').split(','))
+    flavors=sorted([f for f in context.get('flavorAssets',[]) if f.get('id') in allowed and f.get('status')==2 and f.get('fileExt')=='mp4'],key=lambda f:int(f.get('sizeInBytes') or f.get('size',0)*1024))
+    return [re.sub(r'/flavorIds/[^/]+','/flavorIds/'+flavors[0]['id'],source['url'])] if flavors else []
+
 def kaltura(entry):
     data={'apiVersion':'3.3.0','clientTag':'html5:v3.1.0','format':1,'partnerId':2748741,
       '1':{'service':'session','action':'startWidgetSession','widgetId':'_2748741','expiry':3600},
       '2':{'service':'baseentry','action':'getPlaybackContext','entryId':entry,'ks':'{1:result:ks}','contextDataParams':{'objectType':'KalturaPlaybackContextOptions','referrer':'https://13tv.co.il/'}}}
     j=json.loads(fetch('https://cdnapisec.kaltura.com/api_v3/service/multirequest',{'Content-Type':'application/json'},json.dumps(data).encode()))[1]
-    if j.get('actions') or j.get('messages'):raise ValueError('playback_restricted')
-    sources=[s for s in j.get('sources',[]) if s.get('format')=='url' and not s.get('drm')]
-    if not sources:return []
-    s=sources[0];allowed=set(s.get('flavorIds','').split(','))
-    flavors=sorted([f for f in j.get('flavorAssets',[]) if f.get('id') in allowed and f.get('status')==2 and f.get('fileExt')=='mp4'],key=lambda f:int(f.get('sizeInBytes') or f.get('size',0)*1024))
-    return [re.sub(r'/flavorIds/[^/]+','/flavorIds/'+flavors[0]['id'],s['url'])] if flavors else []
+    return select_playback(j)
 
 def immergo(embed):
     u=urllib.parse.urlsplit(embed);query=urllib.parse.parse_qs(u.query)
@@ -212,11 +228,9 @@ def article(url):
         media=[x['sourceUrl'] for x in walk(j.get('parsedBody',[])) if x.get('type')=='immergoVideo' and not x.get('isLive') and x.get('sourceUrl')]
         return j['title'],list(dict.fromkeys(media))
     if kind=='reshet':
-        try:j=reshet_data(url)
-        except (urllib.error.URLError,ValueError,TimeoutError):
-            item=RESHET_ITEMS.get(canonical(url))
-            if not item or not item.get('video',{}).get('kalturaId'):raise
-            j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
+        item=RESHET_ITEMS.get(canonical(url))
+        if item and item.get('video',{}).get('kalturaId'):j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
+        else:j=reshet_data(url)
         x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
         if not recent(info.get('datePublished')):raise ValueError('old_article')
         title=x.get('title') or j['PageMeta']['title']
