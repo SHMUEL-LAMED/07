@@ -19,7 +19,7 @@ export function spokenIntro(item){
  const channel={kan:'כאן חדשות',n12:'חדשות שתים עשרה',reshet:'חדשות שלוש עשרה',c14:'ערוץ ארבע עשרה',i24:'איי עשרים וארבע ניוז'}[item.source];
  const date=typeof item.published_at==='number'?item.published_at:publicationMillis(item.published_at);if(!channel||!Number.isFinite(date))throw Error('intro_metadata_missing');
  const title=decode(String(item.title||'')).replace(/^פורסם ב־[^—]+—\s*/,'').replace(/[\r\n=]/g,' ').replace(/\s+/g,' ').trim();
- const day=new Intl.DateTimeFormat('he-IL',{timeZone:'Asia/Jerusalem',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(date);
+ const day=new Intl.DateTimeFormat('he-IL',{timeZone:'Asia/Jerusalem',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(date).replace(/^יום /,'');
  const poll=/סקר|מנדטים|מפת הגושים/.test(title)&&!/בצל|בעקבות הסקר/.test(title);
  return (poll?'האזינו לסקר של ':'האזינו לכתבה של ')+channel+', מיום '+day+'. '+title+'.';
 }
