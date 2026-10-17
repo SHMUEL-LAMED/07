@@ -103,3 +103,16 @@ class KalturaProfileTests(unittest.TestCase):
         self.assertEqual(collector.select_playback(ctx),[])
         ctx['actions']=[{'objectType':'KalturaAccessControlBlockAction'}]
         self.assertRaisesRegex(ValueError,'restricted',collector.select_playback,ctx)
+
+class DashTests(unittest.TestCase):
+    def test_only_static_unprotected_public_dash(self):
+        with patch.object(collector,'public_url',side_effect=lambda u:u),patch.object(collector,'fetch',return_value=b'<MPD type="static"><Period><AdaptationSet><BaseURL>https://cdn.example/audio/</BaseURL><SegmentTemplate media="$Number$.m4s" initialization="init.mp4"/></AdaptationSet></Period></MPD>'):
+            self.assertEqual(collector.dash_input('https://cdn.example/manifest.mpd'),'https://cdn.example/manifest.mpd')
+        for manifest,reason in [(b'<MPD type="dynamic"/>','live'),(b'<MPD><Period><ContentProtection schemeIdUri="urn:widevine"/></Period></MPD>','encrypted')]:
+            with patch.object(collector,'public_url',side_effect=lambda u:u),patch.object(collector,'fetch',return_value=manifest):self.assertRaisesRegex(ValueError,reason,collector.dash_input,'https://cdn.example/manifest.mpd')
+
+    def test_dash_selection_keeps_permitted_profile_and_rejects_drm(self):
+        ctx={'actions':[{'objectType':'KalturaAccessControlLimitDeliveryProfilesAction','deliveryProfileIds':'12972,18022'}],'sources':[{'format':'applehttp','deliveryProfileId':18022,'url':'https://cdn.example/a.m3u8'},{'format':'mpegdash','deliveryProfileId':12972,'url':'https://cdn.example/a.mpd','drm':[]}]}
+        self.assertEqual(collector.select_playback(ctx),['https://cdn.example/a.mpd'])
+        ctx['sources'][1]['drm']=[{'scheme':'widevine'}]
+        self.assertEqual(collector.select_playback(ctx),['https://cdn.example/a.m3u8'])

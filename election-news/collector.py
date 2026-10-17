@@ -185,14 +185,14 @@ def discover():
 def select_playback(context):
     actions=context.get('actions',[])
     if context.get('objectType')=='KalturaAPIException' or context.get('messages') or any(a.get('objectType')!='KalturaAccessControlLimitDeliveryProfilesAction' for a in actions):raise ValueError('playback_restricted')
-    sources=[s for s in context.get('sources',[]) if s.get('format') in ['url','applehttp'] and not s.get('drm')]
+    sources=[s for s in context.get('sources',[]) if s.get('format') in ['url','mpegdash','applehttp'] and not s.get('drm')]
     for action in actions:
         ids=set(str(action.get('deliveryProfileIds','')).split(','));blocked=action.get('isBlockedList') in [True,1,'1']
         sources=[s for s in sources if (str(s.get('deliveryProfileId')) in ids)!=blocked]
-    sources.sort(key=lambda s:s.get('format')!='url')
+    sources.sort(key=lambda s:{'url':0,'mpegdash':1,'applehttp':2}[s['format']])
     if not sources:return []
     source=sources[0]
-    if source['format']=='applehttp':return [source['url']]
+    if source['format'] in ['applehttp','mpegdash']:return [source['url']]
     allowed=set(source.get('flavorIds','').split(','))
     flavors=sorted([f for f in context.get('flavorAssets',[]) if f.get('id') in allowed and f.get('status')==2 and f.get('fileExt')=='mp4'],key=lambda f:int(f.get('sizeInBytes') or f.get('size',0)*1024))
     return [re.sub(r'/flavorIds/[^/]+','/flavorIds/'+flavors[0]['id'],source['url'])] if flavors else []
@@ -291,6 +291,19 @@ def hls_input(url,depth=0):
         if not line.startswith('#'):public_url(urllib.parse.urljoin(url,line))
     return url
 
+def dash_input(url):
+    public_url(url)
+    root=ET.fromstring(fetch(url))
+    if root.attrib.get('type','static')!='static':raise ValueError('live_media')
+    for element in root.iter():
+        name=element.tag.rsplit('}',1)[-1]
+        if name=='ContentProtection':raise ValueError('encrypted_media')
+        if name in ['BaseURL','Location'] and element.text:public_url(urllib.parse.urljoin(url,element.text.strip()))
+        for key,value in element.attrib.items():
+            if key.rsplit('}',1)[-1] in ['href','media','initialization','sourceURL']:
+                public_url(urllib.parse.urljoin(url,value))
+    return url
+
 def make_audio(url,destination):
     if urllib.parse.urlsplit(url).hostname=='www.youtube.com':
         original=destination.with_suffix('.input.m4a')
@@ -302,7 +315,7 @@ def make_audio(url,destination):
         subprocess.run(['ffmpeg','-nostdin','-v','error','-i',str(original),'-vn','-ac','1','-ar','8000','-codec:a','libmp3lame','-b:a','32k','-y',str(destination)],check=True,capture_output=True,timeout=180)
         original.unlink(missing_ok=True)
     else:
-        url=hls_input(url)
+        url=dash_input(url) if re.search(r"\.mpd(?:\?|$)",url,re.I) else hls_input(url)
         subprocess.run(['ffmpeg','-nostdin','-v','error','-user_agent',UA,'-protocol_whitelist','http,https,tcp,tls','-i',url,'-map','0:a:0','-vn','-ac','1','-ar','8000','-codec:a','libmp3lame','-b:a','32k','-y',str(destination)],check=True,capture_output=True,timeout=180)
     if not 0<destination.stat().st_size<=24*1024*1024:raise ValueError('audio_size')
     info=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','json',str(destination)]));duration=float(info['format']['duration'])
