@@ -76,3 +76,16 @@ test('delivery profile restriction permits only its allowed unencrypted HLS sour
  assert.equal(selectPlayback(context),'https://cdn.example/allowed.m3u8');
  context.actions[0].isBlockedList=true;context.sources=context.sources.filter(s=>s.format==='applehttp');assert.throws(()=>selectPlayback(context),/no_public_download/);
 });
+
+import {freshPublication} from './worker.mjs';
+test('publication date is required and archive entries never qualify as new',()=>{const now=Date.parse('2026-10-17T16:20:00Z');assert.equal(freshPublication('2026-07-29T20:30:00+03:00',now),false);assert.equal(freshPublication('2026-10-14T20:00:00+03:00',now),true);assert.equal(freshPublication(null,now),false);assert.equal(freshPublication('invalid',now),false);assert.equal(freshPublication('2026-10-20T00:00:00Z',now),false);});
+test('upload endpoint rejects old or missing original publication date before reading media',async()=>{for(const publishedAt of [undefined,'2026-07-29T00:00:00Z']){const meta={url:'https://13tv.co.il/item/news/politics/poll-12345/',title:'סקר מנדטים',publishedAt};const req=new Request('https://ivr.example/collector/ingest',{method:'POST',headers:{Authorization:'Bearer test-admin','X-Article-Meta':Buffer.from(JSON.stringify(meta)).toString('base64')},body:'audio'});const res=await handler.fetch(req,{ADMIN_TOKEN:'test-admin'},{});assert.equal(res.status,400);assert.equal((await res.json()).error,'stale_or_missing_publication_date');}});
+import {archiveExpired} from './worker.mjs';
+test('expired recordings move to archive and retain a recoverable database path',async()=>{
+ const original=globalThis.fetch;const calls=[],writes=[];
+ const env={YEMOT_TOKEN:'test',DB:{prepare(sql){return{bind(...args){return{all:async()=>({results:[{url:'https://13tv.co.il/item/news/poll-12345/',file:'000123.wav'}]}),sql,args};}}},batch:async statements=>{writes.push(...statements);}}};
+ globalThis.fetch=async(url,options)=>{const fields=Object.fromEntries(options.body);calls.push({url,fields});return Response.json(url.endsWith('/FileAction')?{responseStatus:'OK',reports:[{success:true,what:'ivr2:1/000123.wav',target:'ivr2:1/_election_archive/000001.wav'}]}:{responseStatus:'OK'});};
+ try{assert.equal(await archiveExpired(env),1);assert.equal(calls[1].fields.action,'move');assert.equal(calls[1].fields.what0,'ivr2:1/000123.wav');assert.equal(writes[0].args[0],'ivr2:1/_election_archive/000001.wav');}finally{globalThis.fetch=original;}
+});
+import {recordingName} from './worker.mjs';
+test('playback filenames sort by original publication time, not item insertion order',()=>{const older=recordingName('2026-10-12T21:00:00+03:00',[]);const newer=recordingName('2026-10-16T21:00:00+03:00',[]);assert.ok(Number(older.slice(0,-4))<Number(newer.slice(0,-4)));const next=recordingName('2026-10-16T21:00:00+03:00',[{name:newer}]);assert.equal(Number(next.slice(0,-4)),Number(newer.slice(0,-4))+1);assert.equal(recordingName('2026-10-16T21:00:00+03:00',[{name:'000004.wav',duration:10}],'000004.wav'),'000004.wav');});

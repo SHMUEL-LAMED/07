@@ -44,20 +44,23 @@ class RecoveryTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError,'invalid_source_page',collector.article,'https://www.mako.co.il/news-israel-elections/2026/Article-a.htm')
 
     def test_public_election_opinion_without_media_has_a_title(self):
-        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'OpinionNewsArticle','headline':'מי באמת יגיע לקלפי בבחירות?'},ensure_ascii=False)+'</script>'
+        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'OpinionNewsArticle','headline':'מי באמת יגיע לקלפי בבחירות?','datePublished':collector.dt.datetime.now(collector.dt.timezone.utc).isoformat()},ensure_ascii=False)+'</script>'
         with patch.object(collector,'fetch',return_value=page.encode()):
             title,media=collector.article('https://www.c14.co.il/article/1740992')
             self.assertIn('בחירות',title);self.assertEqual(media,[])
 
     def test_n12_embed_fallback_finds_public_original(self):
-        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'NewsArticle','headline':'סקר מנדטים','video':{'@type':'VideoObject','embedUrl':'https://www.mako.co.il/player-embed/?vid=v&cid=c&galleryCid=g'}})+'</script>'
+        page='<script type="application/ld+json">'+collector.json.dumps({'@type':'NewsArticle','headline':'סקר מנדטים','datePublished':collector.dt.datetime.now(collector.dt.timezone.utc).isoformat(),'video':{'@type':'VideoObject','embedUrl':'https://www.mako.co.il/player-embed/?vid=v&cid=c&galleryCid=g'}})+'</script>'
         result=type('Result',(),{'stdout':b'{"media":[{"url":"https://cdn.example/clip.m3u8"}]}'})()
         with patch.object(collector,'fetch',side_effect=[page.encode(),b'encoded']),patch.object(collector.subprocess,'run',return_value=result):
             title,media=collector.article('https://www.mako.co.il/news-israel-elections/2026/Article-a.htm')
             self.assertEqual(media,['https://cdn.example/clip.m3u8'])
 
-    def test_current_election_year_is_not_limited_to_thirty_days(self):
-        self.assertTrue(collector.recent(str(collector.dt.datetime.now().year)+'-01-01T00:00:00Z'))
+    def test_old_archive_item_and_missing_date_are_rejected(self):
+        self.assertFalse(collector.recent((collector.dt.datetime.now(collector.dt.timezone.utc)-collector.dt.timedelta(days=90)).isoformat()))
+        self.assertFalse(collector.recent(None))
+        self.assertFalse(collector.recent('not a date'))
+        self.assertTrue(collector.recent(collector.dt.datetime.now(collector.dt.timezone.utc).isoformat()))
         self.assertEqual(collector.error_code(collector.urllib.error.HTTPError('https://example.org',403,'blocked',{},None)),'http_403')
 
 class ReshetRecoveryTests(unittest.TestCase):
@@ -77,7 +80,7 @@ class ReshetRecoveryTests(unittest.TestCase):
 class OfficialYoutubeTests(unittest.TestCase):
     CHANNEL='UCvQmPpU20hw1Trss_CVwaew'
     def test_only_exact_publisher_feed_and_election_items(self):
-        feed=('''<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><yt:channelId>CHANNEL</yt:channelId><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>RHmIAyFAlPo</yt:videoId><title>סקר בחירות</title></entry><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>aaaaaaaaaaa</yt:videoId><title>ספורט</title></entry><entry><yt:channelId>other</yt:channelId><yt:videoId>bbbbbbbbbbb</yt:videoId><title>סקר בחירות</title></entry></feed>''').replace('CHANNEL',self.CHANNEL).encode()
+        feed=('''<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><yt:channelId>CHANNEL</yt:channelId><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>RHmIAyFAlPo</yt:videoId><title>סקר בחירות</title><published>NOW</published></entry><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>aaaaaaaaaaa</yt:videoId><title>ספורט</title></entry><entry><yt:channelId>other</yt:channelId><yt:videoId>bbbbbbbbbbb</yt:videoId><title>סקר בחירות</title><published>NOW</published></entry></feed>''').replace('CHANNEL',self.CHANNEL).replace('NOW',collector.dt.datetime.now(collector.dt.timezone.utc).isoformat()).encode()
         with patch.object(collector,'fetch',return_value=feed.replace(self.CHANNEL.encode(),self.CHANNEL[2:].encode(),1)):
             items=collector.official_youtube(self.CHANNEL);self.assertEqual(len(items),1)
             url=next(iter(items));self.assertEqual(collector.source(url),'reshet');self.assertEqual(collector.article(url),('סקר בחירות',[url]))

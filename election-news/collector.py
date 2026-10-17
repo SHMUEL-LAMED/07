@@ -13,6 +13,8 @@ ENDPOINT=None
 RESHET_ITEMS={}
 YOUTUBE_CHANNELS={"UCvQmPpU20hw1Trss_CVwaew":"reshet"}
 YOUTUBE_ITEMS={}
+PUBLICATION_DATES={}
+MAX_AGE_DAYS=7
 
 def public_url(url):
     u=urllib.parse.urlsplit(url)
@@ -86,14 +88,27 @@ def canonical(url):
     return urllib.parse.urlunsplit(('https',host,u.path,'',''))
 def relevant(title):
     return bool(re.search('סקר|מנדטים|בחירות|אחוז החסימה|קמפיין|פריימריז',title)) and not re.search(r'בחירות (בארה[״"]ב|בארצות הברית|בצרפת|בבריטניה|לרשות הפלסטינית)',title)
-def recent(date):
-    if not date:return True
+def publication_time(date):
+    if not date:return None
     try:
+        from zoneinfo import ZoneInfo
         date=re.sub(r'([+-]\d\d)(\d\d)$',r'\1:\2',date)
         value=dt.datetime.fromisoformat(date.replace('Z','+00:00'))
-        if value.tzinfo is None:value=value.replace(tzinfo=dt.timezone.utc)
-        return value.year>=dt.datetime.now(dt.timezone.utc).year
-    except (ValueError,TypeError):return True
+        if value.tzinfo is None:value=value.replace(tzinfo=ZoneInfo('Asia/Jerusalem'))
+        return value
+    except (ValueError,TypeError):return None
+
+def recent(date):
+    value=publication_time(date)
+    if value is None:return False
+    age=(dt.datetime.now(dt.timezone.utc)-value).total_seconds()
+    return -600<=age<=MAX_AGE_DAYS*86400
+
+def remember_date(url,date):
+    value=publication_time(date)
+    if not recent(date):raise ValueError('stale_or_missing_publication_date')
+    PUBLICATION_DATES[canonical(url)]=value.isoformat()
+
 
 def walk(value):
     if isinstance(value,dict):
@@ -141,7 +156,7 @@ def official_youtube(channel):
         title=clean(entry.findtext('atom:title',default='',namespaces=ns));vid=entry.findtext('yt:videoId',default='',namespaces=ns)
         if not relevant(title) or not recent(entry.findtext('atom:published',namespaces=ns)) or not re.fullmatch(r'[A-Za-z0-9_-]{11}',vid):continue
         url='https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':vid,'channel_id':channel})
-        YOUTUBE_ITEMS[url]=title;results[url]=title
+        YOUTUBE_ITEMS[url]=title;PUBLICATION_DATES[url]=entry.findtext('atom:published',namespaces=ns);results[url]=title
     return results
 
 def discover():
@@ -171,7 +186,7 @@ def discover():
             for item in json.loads(catalog.read_text())['items']:
                 if source(item['url'])!='reshet' or not re.fullmatch(r'[A-Za-z0-9_]+',item['kalturaId']) or not recent(item['publishDate']):continue
                 url=canonical(item['url']);add(url,item['title']+' בחירות')
-                RESHET_ITEMS[url]={'title':item['title'],'secondaryTitle':'בחירות','publishDate':item['publishDate'],'video':{'kalturaId':item['kalturaId']}}
+                RESHET_ITEMS.setdefault(url,{'title':item['title'],'secondaryTitle':'בחירות','publishDate':item['publishDate'],'video':{'kalturaId':item['kalturaId']}})
         for channel in YOUTUBE_CHANNELS:
             try:candidates.update(official_youtube(channel))
             except Exception as error:print('source_failed','reshet_youtube',error_code(error),flush=True)
@@ -221,10 +236,12 @@ def article(url):
         if not kind:raise ValueError('untrusted_publisher')
         title=YOUTUBE_ITEMS.get(canonical(url))
         if not title:raise ValueError('publisher_item_not_in_feed')
+        remember_date(url,PUBLICATION_DATES.get(canonical(url)))
         return title,[url]
     if kind=='i24':
         slug=urllib.parse.urlsplit(url).path.rstrip('/').split('/')[-1];j=get_json('https://api.i24news.tv/v2/he/contents/'+slug)
         if j.get('premium') or not recent(j.get('publishedAt')):raise ValueError('not_public_or_old')
+        remember_date(url,j.get('publishedAt'))
         media=[x['sourceUrl'] for x in walk(j.get('parsedBody',[])) if x.get('type')=='immergoVideo' and not x.get('isLive') and x.get('sourceUrl')]
         return j['title'],list(dict.fromkeys(media))
     if kind=='reshet':
@@ -232,7 +249,7 @@ def article(url):
         if item and item.get('video',{}).get('kalturaId'):j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
         else:j=reshet_data(url)
         x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
-        if not recent(info.get('datePublished')):raise ValueError('old_article')
+        remember_date(url,info.get('datePublished') or x.get('publishDate'))
         title=x.get('title') or j['PageMeta']['title']
         if not relevant(title+' '+x.get('secondaryTitle','')):return title,[]
         entry=x.get('video',{}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
@@ -241,7 +258,7 @@ def article(url):
     news=next((x for x in objects if any(t in ['NewsArticle','OpinionNewsArticle','Article'] for t in ([x.get('@type')] if isinstance(x.get('@type'),str) else x.get('@type',[])))),{})
     title=clean(news.get('headline') or next(iter(re.findall(r'<h1\b[^>]*>([\s\S]*?)</h1>',page,re.I)),''))
     if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
-    if not recent(news.get('datePublished')):raise ValueError('old_article')
+    remember_date(url,news.get('datePublished'))
     # The official election section is an editorial relevance signal too.
     if not relevant(title+' '+news.get('description','')) and not (kind=='n12' and '/news-israel-elections/' in url):raise ValueError('not_election_article')
     if kind=='n12':
@@ -333,7 +350,7 @@ def worker(endpoint,path,body=None,headers=None):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--endpoint',required=True);parser.add_argument('--max-files',type=int,default=16);parser.add_argument('--deadline-seconds',type=int,default=540);parser.add_argument('--dry-run',action='store_true');args=parser.parse_args()
     global ENDPOINT
-    endpoint=args.endpoint.rstrip('/');ENDPOINT=endpoint;start=time.monotonic();state=worker(endpoint,'/collector/state');uploaded=set(state['uploaded']);seen=set(state['seen']);candidates=discover()
+    endpoint=args.endpoint.rstrip('/');ENDPOINT=endpoint;start=time.monotonic();state=worker(endpoint,'/collector/state');uploaded=set(state['uploaded']);seen=set(state['seen']);RESHET_ITEMS.update(state.get('reshet_items',{}));candidates=discover();candidates={**{url:item['title'] for url,item in state.get('reshet_items',{}).items()},**candidates}
     for url in state['todo']:
         try:candidates.setdefault(canonical(url),'')
         except ValueError:pass
@@ -341,7 +358,7 @@ def main():
     with tempfile.TemporaryDirectory() as folder:
         for url in candidates:
             if time.monotonic()-start>args.deadline_seconds or count>=args.max_files:break
-            if url in seen or (urllib.parse.urlsplit(url).hostname=='www.youtube.com' and url in uploaded):continue
+            if url in seen or (source(url)=='reshet' and url in uploaded):continue
             try:
                 title,media=article(url)
                 if not media:reports.append({'url':url,'status':'no_media'});continue
@@ -351,7 +368,7 @@ def main():
                     if count>=args.max_files or time.monotonic()-start>args.deadline_seconds:break
                     if args.dry_run:print('discovered',source(url),title,index,flush=True);continue
                     dest=Path(folder)/'audio.mp3';duration=make_audio(clip,dest)
-                    meta=base64.b64encode(json.dumps({'url':key,'title':title+(' — קטע '+str(index+1) if index else ''),'duration':duration},ensure_ascii=False).encode()).decode()
+                    meta=base64.b64encode(json.dumps({'url':key,'title':'פורסם ב־'+publication_time(PUBLICATION_DATES[canonical(url)]).strftime('%d.%m.%Y')+' — '+title+(' — קטע '+str(index+1) if index else ''),'duration':duration,'publishedAt':PUBLICATION_DATES[canonical(url)]},ensure_ascii=False).encode()).decode()
                     for attempt in range(4):
                         try:result=worker(endpoint,'/collector/ingest',dest.read_bytes(),{'X-Article-Meta':meta,'Content-Type':'audio/mpeg'});break
                         except urllib.error.HTTPError as e:
