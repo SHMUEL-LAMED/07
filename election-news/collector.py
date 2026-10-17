@@ -11,6 +11,8 @@ HOSTS={'mako.co.il':'n12','13tv.co.il':'reshet','kan.org.il':'kan','c14.co.il':'
 PUBLIC_CACHE={}
 ENDPOINT=None
 RESHET_ITEMS={}
+YOUTUBE_CHANNELS={"UCvQmPpU20hw1Trss_CVwaew":"reshet"}
+YOUTUBE_ITEMS={}
 
 def public_url(url):
     u=urllib.parse.urlsplit(url)
@@ -68,12 +70,17 @@ def error_code(error):
 def get_json(url,headers=None): return json.loads(fetch(url,headers))
 def clean(s): return re.sub(r'\s+',' ',html.unescape(re.sub('<[^>]+>',' ',s or ''))).strip()
 def source(url):
-    host=urllib.parse.urlsplit(url).hostname or ''
+    u=urllib.parse.urlsplit(url);host=u.hostname or ''
+    if host=='www.youtube.com' and u.path=='/watch' and re.fullmatch(r'[A-Za-z0-9_-]{11}',urllib.parse.parse_qs(u.query).get('v',[''])[0]):
+        return YOUTUBE_CHANNELS.get(urllib.parse.parse_qs(u.query).get('channel_id',[''])[0])
     return next((v for k,v in HOSTS.items() if host==k or host.endswith('.'+k)),None)
 def canonical(url):
     u=urllib.parse.urlsplit(url)
     if not source(url): raise ValueError('unknown_source')
     host=u.hostname
+    if host=='www.youtube.com':
+        q=urllib.parse.parse_qs(u.query)
+        return 'https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':q['v'][0],'channel_id':q['channel_id'][0]})
     if source(url)=='n12': host='www.mako.co.il'
     if source(url)=='c14': host='www.c14.co.il'
     return urllib.parse.urlunsplit(('https',host,u.path,'',''))
@@ -124,6 +131,19 @@ def reshet_data(url):
             return value
         except (urllib.error.URLError,ValueError,TimeoutError) as error:last=error
     raise last
+def official_youtube(channel):
+    ns={'atom':'http://www.w3.org/2005/Atom','yt':'http://www.youtube.com/xml/schemas/2015'}
+    root=ET.fromstring(fetch('https://www.youtube.com/feeds/videos.xml?channel_id='+channel))
+    if root.findtext('yt:channelId',namespaces=ns)!=channel:raise ValueError('publisher_mismatch')
+    results={}
+    for entry in root.findall('atom:entry',ns):
+        if entry.findtext('yt:channelId',namespaces=ns)!=channel:continue
+        title=clean(entry.findtext('atom:title',default='',namespaces=ns));vid=entry.findtext('yt:videoId',default='',namespaces=ns)
+        if not relevant(title) or not recent(entry.findtext('atom:published',namespaces=ns)) or not re.fullmatch(r'[A-Za-z0-9_-]{11}',vid):continue
+        url='https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':vid,'channel_id':channel})
+        YOUTUBE_ITEMS[url]=title;results[url]=title
+    return results
+
 def discover():
     candidates={}
     def add(url,title):
@@ -136,13 +156,19 @@ def discover():
             for link,title in parser.links:
                 if re.search(r'Article-[a-f0-9]+|/article/\d+|/content/kan-news/[^/]+/\d+',link):add(link,title)
         except Exception as e:print('source_failed',source(url),error_code(e),flush=True)
+    reshet_ok=False
     for path in ['/tags/survey/','/news/politics/politics/']:
         try:
-            for item in walk(reshet_data('https://13tv.co.il'+path).get('Content',{})):
+            data=reshet_data('https://13tv.co.il'+path);reshet_ok=True
+            for item in walk(data.get('Content',{})):
                 if item.get('link') and item.get('title') and recent(item.get('publishDate')):
                     link=urllib.parse.urljoin('https://13tv.co.il',item['link']);add(link,item['title']+' '+item.get('secondaryTitle',''))
                     if source(link)=='reshet' and canonical(link) in candidates:RESHET_ITEMS[canonical(link)]=item
         except Exception as e:print('source_failed','reshet',error_code(e),flush=True)
+    if not reshet_ok:
+        for channel in YOUTUBE_CHANNELS:
+            try:candidates.update(official_youtube(channel))
+            except Exception as error:print('source_failed','reshet_youtube',error_code(error),flush=True)
     try:
         for cat in [483,487]:
             for item in get_json('https://api.i24news.tv/v2/he/contents?'+urllib.parse.urlencode({'category':cat,'page':1,'limit':12,'countable':1,'inSlider':0,'sort':'-sortDate'})):
@@ -175,6 +201,11 @@ def immergo(embed):
 
 def article(url):
     kind=source(url)
+    if urllib.parse.urlsplit(url).hostname=='www.youtube.com':
+        if not kind:raise ValueError('untrusted_publisher')
+        title=YOUTUBE_ITEMS.get(canonical(url))
+        if not title:raise ValueError('publisher_item_not_in_feed')
+        return title,[url]
     if kind=='i24':
         slug=urllib.parse.urlsplit(url).path.rstrip('/').split('/')[-1];j=get_json('https://api.i24news.tv/v2/he/contents/'+slug)
         if j.get('premium') or not recent(j.get('publishedAt')):raise ValueError('not_public_or_old')
@@ -249,7 +280,11 @@ def hls_input(url,depth=0):
 def make_audio(url,destination):
     if urllib.parse.urlsplit(url).hostname=='www.youtube.com':
         original=destination.with_suffix('.input.m4a')
-        subprocess.run([os.sys.executable,'-m','yt_dlp','--no-playlist','--no-warnings','--socket-timeout','20','-f','bestaudio/best','-o',str(original),url],check=True,capture_output=True,timeout=180)
+        params=urllib.parse.parse_qs(urllib.parse.urlsplit(url).query);channel=params.get('channel_id',[''])[0]
+        if channel and channel not in YOUTUBE_CHANNELS:raise ValueError('untrusted_publisher')
+        video_url='https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':params['v'][0]})
+        filters='!is_live & !is_upcoming'+(' & channel_id = '+channel if channel else '')
+        subprocess.run([os.sys.executable,'-m','yt_dlp','--no-playlist','--no-warnings','--socket-timeout','20','--match-filter',filters,'-f','bestaudio/best','-o',str(original),video_url],check=True,capture_output=True,timeout=180)
         subprocess.run(['ffmpeg','-nostdin','-v','error','-i',str(original),'-vn','-ac','1','-ar','8000','-codec:a','libmp3lame','-b:a','32k','-y',str(destination)],check=True,capture_output=True,timeout=180)
         original.unlink(missing_ok=True)
     else:
@@ -279,7 +314,7 @@ def main():
     with tempfile.TemporaryDirectory() as folder:
         for url in candidates:
             if time.monotonic()-start>args.deadline_seconds or count>=args.max_files:break
-            if url in seen:continue
+            if url in seen or (urllib.parse.urlsplit(url).hostname=='www.youtube.com' and url in uploaded):continue
             try:
                 title,media=article(url)
                 if not media:reports.append({'url':url,'status':'no_media'});continue

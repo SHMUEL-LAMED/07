@@ -73,3 +73,24 @@ class ReshetRecoveryTests(unittest.TestCase):
         body=('<script id="__NEXT_DATA__">'+collector.json.dumps({'props':{'pageProps':{'page':{'PageMeta':{'title':'סקר'},'Content':{'Item':{'video':{'kalturaId':'editorial'}}}},'liveSources':{'kalturaId':'live'}}}})+'</script>').encode()
         with patch.object(collector,'fetch',side_effect=[error,error,body]):
             self.assertEqual(collector.reshet_data('https://13tv.co.il/item/news/poll-12345/')['Content']['Item']['video']['kalturaId'],'editorial')
+
+class OfficialYoutubeTests(unittest.TestCase):
+    CHANNEL='UCvQmPpU20hw1Trss_CVwaew'
+    def test_only_exact_publisher_feed_and_election_items(self):
+        feed=('''<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><yt:channelId>CHANNEL</yt:channelId><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>RHmIAyFAlPo</yt:videoId><title>סקר בחירות</title></entry><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>aaaaaaaaaaa</yt:videoId><title>ספורט</title></entry><entry><yt:channelId>other</yt:channelId><yt:videoId>bbbbbbbbbbb</yt:videoId><title>סקר בחירות</title></entry></feed>''').replace('CHANNEL',self.CHANNEL).encode()
+        with patch.object(collector,'fetch',return_value=feed):
+            items=collector.official_youtube(self.CHANNEL);self.assertEqual(len(items),1)
+            url=next(iter(items));self.assertEqual(collector.source(url),'reshet');self.assertEqual(collector.article(url),('סקר בחירות',[url]))
+        with patch.object(collector,'fetch',return_value=feed.replace(self.CHANNEL.encode(),b'wrong',1)):
+            self.assertRaisesRegex(ValueError,'publisher_mismatch',collector.official_youtube,self.CHANNEL)
+        self.assertIsNone(collector.source('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=attacker'))
+
+    def test_downloader_checks_publisher_and_excludes_live(self):
+        from pathlib import Path
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            destination=Path(folder)/'audio.mp3';destination.write_bytes(b'audio')
+            with patch.object(collector.subprocess,'run') as run,patch.object(collector.subprocess,'check_output',return_value=b'{"format":{"duration":"5"}}'):
+                collector.make_audio('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id='+self.CHANNEL,destination)
+                command=run.call_args_list[0].args[0];self.assertIn('!is_live & !is_upcoming & channel_id = '+self.CHANNEL,command)
+                self.assertEqual(command[-1],'https://www.youtube.com/watch?v=RHmIAyFAlPo')
