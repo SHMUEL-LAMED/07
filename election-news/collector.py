@@ -134,7 +134,7 @@ def reshet_data(url):
 def official_youtube(channel):
     ns={'atom':'http://www.w3.org/2005/Atom','yt':'http://www.youtube.com/xml/schemas/2015'}
     root=ET.fromstring(fetch('https://www.youtube.com/feeds/videos.xml?channel_id='+channel))
-    if root.findtext('yt:channelId',namespaces=ns)!=channel:raise ValueError('publisher_mismatch')
+    if root.findtext('yt:channelId',namespaces=ns) not in [channel,channel.removeprefix('UC')]:raise ValueError('publisher_mismatch')
     results={}
     for entry in root.findall('atom:entry',ns):
         if entry.findtext('yt:channelId',namespaces=ns)!=channel:continue

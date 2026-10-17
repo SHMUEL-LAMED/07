@@ -78,7 +78,7 @@ class OfficialYoutubeTests(unittest.TestCase):
     CHANNEL='UCvQmPpU20hw1Trss_CVwaew'
     def test_only_exact_publisher_feed_and_election_items(self):
         feed=('''<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><yt:channelId>CHANNEL</yt:channelId><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>RHmIAyFAlPo</yt:videoId><title>סקר בחירות</title></entry><entry><yt:channelId>CHANNEL</yt:channelId><yt:videoId>aaaaaaaaaaa</yt:videoId><title>ספורט</title></entry><entry><yt:channelId>other</yt:channelId><yt:videoId>bbbbbbbbbbb</yt:videoId><title>סקר בחירות</title></entry></feed>''').replace('CHANNEL',self.CHANNEL).encode()
-        with patch.object(collector,'fetch',return_value=feed):
+        with patch.object(collector,'fetch',return_value=feed.replace(self.CHANNEL.encode(),self.CHANNEL[2:].encode(),1)):
             items=collector.official_youtube(self.CHANNEL);self.assertEqual(len(items),1)
             url=next(iter(items));self.assertEqual(collector.source(url),'reshet');self.assertEqual(collector.article(url),('סקר בחירות',[url]))
         with patch.object(collector,'fetch',return_value=feed.replace(self.CHANNEL.encode(),b'wrong',1)):
