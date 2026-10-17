@@ -66,3 +66,8 @@ test('source relay returns only bounded public source response and never forward
  globalThis.fetch=async(url,options)=>{headers=options.headers;assert.equal(url,'https://13tv.co.il/qdata/tags/survey/?qdata=json');return new Response('{"Content":{}}',{headers:{'Content-Type':'application/json'}})};
  try{const request=new Request('https://ivr.example/collector/source?url='+encodeURIComponent('https://13tv.co.il/qdata/tags/survey/?qdata=json'),{headers:{Authorization:'Bearer test-admin'}});const response=await handler.fetch(request,{ADMIN_TOKEN:'test-admin'},{});assert.equal(response.status,200);assert.equal((await response.json()).Content.constructor,Object);assert.equal(headers.Authorization,undefined);}finally{globalThis.fetch=original;}
 });
+import {sourceFor} from './worker.mjs';
+test('YouTube fallback source accepts only the pinned broadcaster channel and valid video ID',()=>{
+ assert.equal(sourceFor('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew').id,'reshet');
+ for(const url of ['https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=other','https://www.youtube.com/watch?v=bad&channel_id=UCvQmPpU20hw1Trss_CVwaew','https://www.youtube.com.attacker.example/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew'])assert.equal(sourceFor(url),undefined);
+});

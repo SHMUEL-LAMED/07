@@ -233,7 +233,7 @@ async function collectorRoute(request,env,path){
  }
  return new Response('Not found',{status:404});
 }
-function sourceFor(url){try{const u=safeURL(url);return SOURCES.find(s=>(u.hostname===s.host||u.hostname.endsWith('.'+s.host))&&s.article.test(u.pathname));}catch{return null;}}
+export function sourceFor(url){try{const u=safeURL(url);if(u.hostname==='www.youtube.com'&&u.pathname==='/watch'&&/^[A-Za-z0-9_-]{11}$/.test(u.searchParams.get('v')||'')&&u.searchParams.get('channel_id')==='UCvQmPpU20hw1Trss_CVwaew')return SOURCES.find(s=>s.id==='reshet');return SOURCES.find(s=>(u.hostname===s.host||u.hostname.endsWith('.'+s.host))&&s.article.test(u.pathname));}catch{return null;}}
 export default{
  async scheduled(event,env,ctx){ctx.waitUntil(run(env));},
  async fetch(request,env,ctx){
