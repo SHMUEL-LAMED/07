@@ -39,7 +39,8 @@ export async function mirrorPolls(env,rows,api,intro){
   existing.set(row.file,file);lines.push(row.file.replace(/\.wav$/,'')+'='+intro(row));copied++;
  }
  // Do not replace an existing title index while older copies are waiting in the batch.
- const current=await api(env,'GetTextFile',{what:'ivr2:2/TitleVoice.ini'}).catch(()=>({contents:''}));
+ const current=await api(env,'GetTextFile',{what:'ivr2:2/TitleVoice.ini'});
+ if(typeof current.contents!=='string')throw Error('poll_title_index_unreadable');
  const titles=new Map(String(current.contents||'').split('\n').filter(Boolean).map(line=>[line.split('=')[0],line]));for(const line of lines)titles.set(line.split('=')[0],line);
  await api(env,'UploadTextFile',{what:'ivr2:2/TitleVoice.ini',contents:[...titles.values()].join('\n')+'\n'});
  return {enabled:true,copied};
