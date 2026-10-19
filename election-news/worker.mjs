@@ -1,3 +1,4 @@
+import {mirrorPolls} from './poll-folder.mjs';
 import {verifyCollectorToken} from './collector-auth.mjs';
 import {cacheSourceFeed,publicationMillis} from './source-feed.mjs';
 const SOURCES = [
@@ -24,11 +25,12 @@ export function spokenIntro(item){
  return (poll?'האזינו לסקר של ':'האזינו לכתבה של ')+channel+', מיום '+day+'. '+title+'.';
 }
 export async function syncIntros(env){
- const rows=await env.DB.prepare("SELECT i.source,i.title,i.file,d.published_at FROM items i JOIN article_dates d ON d.url=i.url WHERE i.status='uploaded' ORDER BY d.published_at DESC").all();
+ const rows=await env.DB.prepare("SELECT i.url,i.source,i.title,i.file,d.published_at FROM items i JOIN article_dates d ON d.url=i.url WHERE i.status='uploaded' ORDER BY d.published_at DESC").all();
  const lines=rows.results.filter(x=>/^\d+\.wav$/.test(x.file||'')).map(x=>x.file.replace(/\.wav$/,'')+'='+spokenIntro(x));
  await yemot(env,'UploadTextFile',{what:'ivr2:1/TitleVoice.ini',contents:lines.join('\n')+'\n'});
  await yemot(env,'UpdateExtension',{path:'ivr2:1',say_title_voice:'yes'});
- return {ok:true,titles:lines.length};
+ let polls;try{polls=await mirrorPolls(env,rows.results,yemot,spokenIntro);}catch(error){polls={error:error.message};console.error('poll_sync_failed',error.message);}
+ return {ok:true,titles:lines.length,polls};
 }
 const limit=24*1024*1024;
 function decode(s){return s.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');}
@@ -233,7 +235,7 @@ async function collectorRoute(request,env,path){
  if(path==='/collector/source'&&request.method==='GET'){
   let target;try{target=new URL(new URL(request.url).searchParams.get('url'));}catch{return Response.json({error:'invalid_source'},{status:400});}
   const source=SOURCES.find(s=>target.hostname===s.host||target.hostname.endsWith('.'+s.host));
-  const allowed=source&&(source.article.test(target.pathname)||['/','/news-israel-elections','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp'));
+  const allowed=source&&(source.article.test(target.pathname)||['/','/news','/news/','/news-israel-elections','/content/kan-news/','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp'));
   if(target.protocol!=='https:'||target.username||target.password||!allowed)return Response.json({error:'unsupported_source'},{status:400});
   try{const upstream=await get(target.href);const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
  }
