@@ -13,3 +13,12 @@ class CollectionHealth(unittest.TestCase):
         self.assertFalse(collector.collection_failed(0,[]))
         self.assertFalse(collector.collection_failed(0,[{'status':'blocked','error':'stale_or_missing_publication_date'}]))
         self.assertFalse(collector.collection_failed(0,[{'status':'no_media'}]))
+
+    def test_media_failures_are_classified_without_private_urls(self):
+        import subprocess
+        failure=subprocess.CalledProcessError(1,['ffmpeg'],stderr=b'HTTP error 403: https://media.example/video?token=SECRET')
+        self.assertEqual(collector.error_code(failure),'media_http_403')
+        failure.stderr=b'Sign in to confirm you are not a bot'
+        self.assertEqual(collector.error_code(failure),'publisher_login_required')
+        failure.stderr=b'unknown failure https://media.example/?token=SECRET'
+        self.assertEqual(collector.error_code(failure),'media_process_failed')
