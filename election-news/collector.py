@@ -65,7 +65,24 @@ def fetch(url,headers=None,data=None,timeout=30):
 
 def error_code(error):
     if isinstance(error,urllib.error.HTTPError):return 'http_'+str(error.code)
-    if isinstance(error,subprocess.CalledProcessError):return 'media_process_failed'
+    if isinstance(error,subprocess.CalledProcessError):
+        # Classify known failures without exposing signed media URLs or raw stderr.
+        detail=error.stderr or b''
+        if isinstance(detail,bytes):detail=detail.decode('utf-8','replace')
+        detail=detail.lower()
+        for marker,code in [
+            ('sign in to confirm','publisher_login_required'),
+            ('requested format is not available','media_format_unavailable'),
+            ('http error 403','media_http_403'),
+            ('403 forbidden','media_http_403'),
+            ('http error 404','media_http_404'),
+            ('server returned 404','media_http_404'),
+            ('protocol not on whitelist','media_protocol_rejected'),
+            ('invalid data found','media_invalid_data'),
+            ('does not contain any stream','media_no_audio'),
+        ]:
+            if marker in detail:return code
+        return 'media_process_failed' 
     if isinstance(error,ValueError):return str(error)[:100]
     return type(error).__name__
 
