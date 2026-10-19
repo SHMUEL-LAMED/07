@@ -20,3 +20,16 @@ test('verified poll copies are reused and get Hebrew introductions',async()=>{
  };
  assert.equal((await mirrorPolls(env,[row],api,()=> 'סקר מתאריך עברי')).copied,0);assert.match(uploaded,/123=סקר מתאריך עברי/);
 });
+
+test('a failed title read never erases existing poll introductions',async()=>{
+ let writes=0;
+ const env={DB:{prepare(){return {run:async()=>({}),all:async()=>({results:[]})};}}};
+ const api=async(_,command)=>{
+  if(command==='GetIVR2Dir')return {extIni:{type:'playfile',title:'סקרים בלבד'},files:[]};
+  if(command==='GetTextFile')throw Error('temporary read failure');
+  if(command==='UploadTextFile'){writes++;return {};}
+  throw Error('unexpected '+command);
+ };
+ await assert.rejects(mirrorPolls(env,[],api,()=>''),/temporary read failure/);
+ assert.equal(writes,0);
+});
