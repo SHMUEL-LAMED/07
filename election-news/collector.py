@@ -88,6 +88,13 @@ def canonical(url):
     return urllib.parse.urlunsplit(('https',host,u.path,'',''))
 def relevant(title):
     return bool(re.search('סקר|מנדטים|בחירות|אחוז החסימה|קמפיין|פריימריז',title)) and not re.search(r'בחירות (בארה[״"]ב|בארצות הברית|בצרפת|בבריטניה|לרשות הפלסטינית)',title)
+def collectible(title):
+    return isinstance(title,str) and len(clean(title))>=4
+
+def collection_failed(count,reports):
+    ignored={'stale_or_missing_publication_date','not_election_article','not_public_or_old'}
+    return count==0 and any(x.get('status')=='blocked' and x.get('error') not in ignored for x in reports)
+
 def publication_time(date):
     if not date:return None
     try:
@@ -154,7 +161,7 @@ def official_youtube(channel):
     for entry in root.findall('atom:entry',ns):
         if entry.findtext('yt:channelId',namespaces=ns)!=channel:continue
         title=clean(entry.findtext('atom:title',default='',namespaces=ns));vid=entry.findtext('yt:videoId',default='',namespaces=ns)
-        if not relevant(title) or not recent(entry.findtext('atom:published',namespaces=ns)) or not re.fullmatch(r'[A-Za-z0-9_-]{11}',vid):continue
+        if not collectible(title) or not recent(entry.findtext('atom:published',namespaces=ns)) or not re.fullmatch(r'[A-Za-z0-9_-]{11}',vid):continue
         url='https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':vid,'channel_id':channel})
         YOUTUBE_ITEMS[url]=title;PUBLICATION_DATES[url]=entry.findtext('atom:published',namespaces=ns);results[url]=title
     return results
@@ -162,17 +169,17 @@ def official_youtube(channel):
 def discover():
     candidates={}
     def add(url,title):
-        if source(url) and relevant(clean(title)):
+        if source(url) and collectible(clean(title)):
             try:candidates[canonical(url)]=clean(title)
             except ValueError:pass
-    for url in ['https://mobile.mako.co.il/news-israel-elections','https://www.kan.org.il/content/kan-news/politic/','https://www.c14.co.il/']:
+    for url in ['https://mobile.mako.co.il/news','https://mobile.mako.co.il/news-israel-elections','https://www.kan.org.il/content/kan-news/','https://www.c14.co.il/']:
         try:
             parser=Links(url);parser.feed(fetch(url).decode())
             for link,title in parser.links:
                 if re.search(r'Article-[a-f0-9]+|/article/\d+|/content/kan-news/[^/]+/\d+',link):add(link,title)
         except Exception as e:print('source_failed',source(url),error_code(e),flush=True)
     reshet_ok=False
-    for path in ['/tags/survey/','/news/politics/politics/']:
+    for path in ['/news/','/news/politics/politics/','/tags/survey/']:
         try:
             data=reshet_data('https://13tv.co.il'+path);reshet_ok=True
             for item in walk(data.get('Content',{})):
@@ -191,8 +198,8 @@ def discover():
             try:candidates.update(official_youtube(channel))
             except Exception as error:print('source_failed','reshet_youtube',error_code(error),flush=True)
     try:
-        for cat in [483,487]:
-            for item in get_json('https://api.i24news.tv/v2/he/contents?'+urllib.parse.urlencode({'category':cat,'page':1,'limit':12,'countable':1,'inSlider':0,'sort':'-sortDate'})):
+        for cat in [None,483,487]:
+            for item in get_json('https://api.i24news.tv/v2/he/contents?'+urllib.parse.urlencode({**({'category':cat} if cat is not None else {}),'page':1,'limit':12,'countable':1,'inSlider':0,'sort':'-sortDate'})):
                 if recent(item.get('publishedAt')):add(item['frontendUrl'],item.get('title','')+' בחירות')
     except Exception as e:print('source_failed','i24',error_code(e),flush=True)
     return candidates
@@ -251,7 +258,7 @@ def article(url):
         x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
         remember_date(url,info.get('datePublished') or x.get('publishDate'))
         title=x.get('title') or j['PageMeta']['title']
-        if not relevant(title+' '+x.get('secondaryTitle','')):return title,[]
+        if not collectible(title):return title,[]
         entry=x.get('video',{}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
     page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il') if kind=='n12' else url).decode()
     objects=list(ld(page))
@@ -260,7 +267,7 @@ def article(url):
     if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
     remember_date(url,news.get('datePublished'))
     # The official election section is an editorial relevance signal too.
-    if not relevant(title+' '+news.get('description','')) and not (kind=='n12' and '/news-israel-elections/' in url):raise ValueError('not_election_article')
+    if not collectible(title):raise ValueError('missing_article_title')
     if kind=='n12':
         video=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{}).get('header',{}).get('mainVideo')
         if not video:
@@ -376,7 +383,8 @@ def main():
                             time.sleep(5)
                     uploaded.add(key);count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
             except Exception as e:
-                reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),flush=True)
+                reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})
     print('complete',count,'uploads',len(reports),'reports',flush=True)
+    if collection_failed(count,reports):raise SystemExit('collection_failed: no uploads and unresolved media/source errors; see article_failed records')
 if __name__=='__main__':main()
