@@ -398,7 +398,9 @@ def main():
                         except urllib.error.HTTPError as e:
                             if e.code!=409 or attempt==3:raise
                             time.sleep(5)
-                    uploaded.add(key);count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
+                    uploaded.add(key)
+                    if result.get('existing'):print('existing',source(url),result.get('file'),round(duration),flush=True)
+                    else:count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
             except Exception as e:
                 reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})
