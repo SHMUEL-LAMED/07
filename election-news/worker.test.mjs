@@ -67,7 +67,26 @@ test('source relay returns only bounded public source response and never forward
  globalThis.fetch=async(url,options)=>{headers=options.headers;assert.equal(url,'https://13tv.co.il/qdata/tags/survey/?qdata=json');return new Response('{"Content":{}}',{headers:{'Content-Type':'application/json'}})};
  try{const request=new Request('https://ivr.example/collector/source?url='+encodeURIComponent('https://13tv.co.il/qdata/tags/survey/?qdata=json'),{headers:{Authorization:'Bearer test-admin'}});const response=await handler.fetch(request,{ADMIN_TOKEN:'test-admin'},{});assert.equal(response.status,200);assert.equal((await response.json()).Content.constructor,Object);assert.equal(headers.Authorization,undefined);}finally{globalThis.fetch=original;}
 });
+test('N12 relay generates official player headers and never forwards caller headers',async()=>{
+ const original=globalThis.fetch;let outgoing,calls=0;
+ globalThis.fetch=async(url,options)=>{calls++;outgoing=options.headers;return new Response('public-player-metadata');};
+ try{
+  const url='https://www.mako.co.il/AjaxPage?jspName=playlist12.jsp&vcmid=v&videoChannelId=c&galleryChannelId=g';
+  const request=new Request('https://ivr.example/collector/source?url='+encodeURIComponent(url),{headers:{Authorization:'Bearer test-admin',Referer:'https://attacker.example/',Origin:'https://attacker.example'}});
+  const response=await handler.fetch(request,{ADMIN_TOKEN:'test-admin'},{});assert.equal(response.status,200);assert.equal(outgoing.Referer,'https://www.mako.co.il/player-embed/?vid=v&cid=c&galleryCid=g');assert.equal(outgoing.Origin,'https://www.mako.co.il');assert.equal(outgoing.Authorization,undefined);
+  const invalid=new Request('https://ivr.example/collector/source?url='+encodeURIComponent(url.replace('vcmid=v','vcmid=bad%0D%0Avalue')),{headers:{Authorization:'Bearer test-admin'}});
+  assert.equal((await handler.fetch(invalid,{ADMIN_TOKEN:'test-admin'},{})).status,400);assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
 import {sourceFor} from './worker.mjs';
+import {makoMedia} from './worker.mjs';
+test('scheduled N12 player uses official headers and still refuses protected media',async()=>{
+ const original=globalThis.fetch;let metadata={media:[{url:'https://cdn.example/clip.m3u8'}]};
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode('LTf7r/zM2VndHwP+4So6bw=='),{name:'AES-CBC'},false,['encrypt']);
+ globalThis.fetch=async(url,options)=>{assert.equal(options.headers.Referer,'https://www.mako.co.il/player-embed/?vid=v&cid=c&galleryCid=g');const encoded=await crypto.subtle.encrypt({name:'AES-CBC',iv:new TextEncoder().encode('theExact16Chars=')},key,new TextEncoder().encode(JSON.stringify(metadata)));return new Response(Buffer.from(encoded).toString('base64'));};
+ const html='<script id="__NEXT_DATA__" type="application/json">'+JSON.stringify({props:{pageProps:{pageData:{header:{mainVideo:{videoVcmId:'v',videoChannelId:'c',videoGalleryChannelId:'g'}}}}}})+'</script>';
+ try{assert.deepEqual(await makoMedia(html),['https://cdn.example/clip.m3u8']);metadata.videoDetails={extraParams:{protectedContent:true}};await assert.rejects(makoMedia(html),/playback_restricted/);}finally{globalThis.fetch=original;}
+});
 test('YouTube fallback source accepts only the pinned broadcaster channel and valid video ID',()=>{
  assert.equal(sourceFor('https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew').id,'reshet');
  for(const url of ['https://www.youtube.com/watch?v=RHmIAyFAlPo&channel_id=other','https://www.youtube.com/watch?v=bad&channel_id=UCvQmPpU20hw1Trss_CVwaew','https://www.youtube.com.attacker.example/watch?v=RHmIAyFAlPo&channel_id=UCvQmPpU20hw1Trss_CVwaew'])assert.equal(sourceFor(url),undefined);
