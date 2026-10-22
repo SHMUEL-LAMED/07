@@ -187,6 +187,8 @@ def article_page(url,kind):
             if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
             if kind=='n12' and publication_time(date) is None:
                 # An HTTP 200 homepage/redirect is not a successfully fetched article.
+                types=sorted({str(x.get('@type')) for x in objects if x.get('@type')})
+                print('n12_page_shape',urllib.parse.urlsplit(variant).hostname,'bytes',len(page),'page_type',data.get('pageType'),'schemas',','.join(types),'title',title[:100],flush=True)
                 raise ValueError('stale_or_missing_publication_date')
             return page,title,date,objects,data
         except (urllib.error.URLError,ValueError,TimeoutError) as caught:
