@@ -1,7 +1,175 @@
 {
-  "verifiedAt": "2026-10-17",
-  "source": "https://13tv.co.il/qdata/tags/survey/?qdata=json",
+  "verifiedAt": "2026-10-22",
+  "source": "https://13tv.co.il/news/politics/politics/",
   "items": [
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/elections-2-905414295/",
+      "title": "מאחורי המספרים: כמה ישראלים חוששים מפגיעה בטוהר הבחירות?",
+      "publishDate": "2026-10-22 20:45:30",
+      "kalturaId": "1_2cgcp4ro"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/deri-905414463/",
+      "title": "הקלטות דרעי נגד הקואליציה: \"חוק הגיוס לא מזיז להם\"",
+      "publishDate": "2026-10-22 20:28:34",
+      "kalturaId": "1_i4aplsds"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/elections-905414478/",
+      "title": "ברקע מחלוקת על מועמד: התוכנית של גוש השינוי לתפקיד יו\"ר הכנסת",
+      "publishDate": "2026-10-22 20:11:41",
+      "kalturaId": "1_qei7ps6y"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/vj7w7-905412498/",
+      "title": "הודעת כ\"ץ - והמתקפה באופוזיציה: \"מכין את הקרקע לאסון הבא\"",
+      "publishDate": "2026-10-22 10:05:32",
+      "kalturaId": "1_t1m5urf6"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/kdm2x-905412006/",
+      "title": "לא יושלם לפני 2031: העיכובים בפתיחת הקו הירוק של הרק\"ל בת\"א",
+      "publishDate": "2026-10-21 21:07:31",
+      "kalturaId": "1_1b27gxjn"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/lcu1r-905411946/",
+      "title": "\"שומעים בקול הרבנים\": התפיסה החרדית, רגע לפני הבחירות",
+      "publishDate": "2026-10-21 21:00:02",
+      "kalturaId": "1_h9csgmss"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/ksgoq-905411865/",
+      "title": "וינטר לא עובר את אחוז החסימה - ומשנה את תמונת הגושים",
+      "publishDate": "2026-10-21 20:55:56",
+      "kalturaId": "1_1b27gxjn"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/xmx8e-905411511/",
+      "title": "וינטר לא פורש - ודוחה את הצעת סמוטריץ': \"לא באנו בשביל ג'וב\"",
+      "publishDate": "2026-10-21 16:50:51",
+      "kalturaId": "1_zchdv8mt"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/eisenkot-905411145/",
+      "title": "איזנקוט מתחייב: \"לא אשב תחת נתניהו, גם לא ברוטציה\"",
+      "publishDate": "2026-10-21 13:35:32",
+      "kalturaId": "1_4sn9zngh"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/elections-905410923/",
+      "title": "6 ימים לבחירות: 7.3 מיליון מצביעים - וכמה יחזרו מחו\"ל?",
+      "publishDate": "2026-10-21 12:59:05",
+      "kalturaId": "1_91piwv4c"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/liberman-5-905410410/",
+      "title": "איזנקוט וליברמן נפגשו: \"המאמץ החשוב - הגדלת אחוז ההצבעה\"",
+      "publishDate": "2026-10-21 08:52:34",
+      "kalturaId": "1_hj0acfyd"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/votes-905409462/",
+      "title": "\"עברנו צד\": הישראלים שמשנים את ההצבעה שלהם אחרי עשרות שנים",
+      "publishDate": "2026-10-20 21:00:53",
+      "kalturaId": "1_2mg1j2vk"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/elections-905409471/",
+      "title": "שבוע לפתיחת הקלפיות: המספרים שיכריעו - והיום שאחרי הבחירות",
+      "publishDate": "2026-10-20 20:30:54",
+      "kalturaId": "1_vvakyec7"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/bardugo-905409900/",
+      "title": "בעיצומו של הקמפיין: ברדוגו טס לפגישה עם מרטין שלאף בווינה",
+      "publishDate": "2026-10-20 20:14:30",
+      "kalturaId": "1_1exkcj8k"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/netanyahu-905409909/",
+      "title": "צה\"ל פנה ליועמ\"שית: חשש מתעמולה של נתניהו בטקס בבה\"ד 1",
+      "publishDate": "2026-10-20 20:01:12",
+      "kalturaId": "1_8mbqm992"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/winter-2-905409777/",
+      "title": "וינטר תוקף את נתניהו וסמוטריץ': \"עם ישראל מאס בקמפיין המכוער\"",
+      "publishDate": "2026-10-20 17:55:30",
+      "kalturaId": "1_f42mex6h"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/netanyahu-905408190/",
+      "title": "עשרות עריקים חרדים נעצרו בנתב\"ג; נתניהו: \"זה לא מקובל\"",
+      "publishDate": "2026-10-20 10:01:30",
+      "kalturaId": "1_y8u99mys"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/my1j8-905407533/",
+      "title": "\"מלחיץ מאוד\": איומים על תומכי \"הציבור החרדי\" של מוטי לייטנר",
+      "publishDate": "2026-10-19 20:56:26",
+      "kalturaId": "1_enwuusea"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/jw3wm-905406894/",
+      "title": "בנט מזנק, וינטר והנדל עוברים - וגוש איזנקוט חוזר להוביל",
+      "publishDate": "2026-10-19 20:25:30",
+      "kalturaId": "1_lsc0c1j0"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/onlsn-905407371/",
+      "title": "\"לא הצלחתי לשכנע את העם בדרכנו\": גנץ הודיע רשמית על פרישה",
+      "publishDate": "2026-10-19 19:57:38",
+      "kalturaId": "1_k9iegkh5"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/kdlg4-905407188/",
+      "title": "איזנקוט: \"החלטה גנץ נכונה אחראית\"; סמוטריץ' עקץ את וינטר",
+      "publishDate": "2026-10-19 16:14:45",
+      "kalturaId": "1_mbf5oepo"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/vlybj-905407071/",
+      "title": "גנץ פורש: \"לא אתמודד בבחירות הקרובות\"",
+      "publishDate": "2026-10-19 15:45:56",
+      "kalturaId": "1_c574dbug"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/w3eei-905406474/",
+      "title": "נתניהו צפוי להגיע לטדי; איזנקוט: \"למנוע שידור תעמולת בחירות\"",
+      "publishDate": "2026-10-19 14:18:45",
+      "kalturaId": "1_etsp9bwy"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/lmklj-905404548/",
+      "title": "דרעי במתקפה על סמוטריץ': \"לא נשב בממשלה בה הוא שר האוצר\"",
+      "publishDate": "2026-10-18 20:19:22",
+      "kalturaId": "1_uzm6oki4"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/magal-2-905402316/",
+      "title": "נתניהו על ההשתלחות הגזענית של מגל באיזנקוט: \"אמירה לא ראויה\"",
+      "publishDate": "2026-10-18 11:33:57",
+      "kalturaId": "1_95axd51x"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/g0rii-905401548/",
+      "title": "ינון מגל על איזנקוט: \"קוף מזרחי שמאחוריו אשכנזים אליטיסטים\"",
+      "publishDate": "2026-10-17 22:12:16",
+      "kalturaId": "1_f73vyt7p"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/shas-905401092/",
+      "title": "הכל נשאר במשפחה: כך השתלטה ש\"ס על מינוי רבני הערים",
+      "publishDate": "2026-10-17 21:00:18",
+      "kalturaId": "1_w9dydxmt"
+    },
+    {
+      "url": "https://13tv.co.il/item/news/politics/politics/eisenkot-905401086/",
+      "title": "איזנקוט: לא אשב עם נתניהו בשום תרחיש, החרדים יצטרכו להתגייס",
+      "publishDate": "2026-10-17 20:14:57",
+      "kalturaId": "1_otpwudes"
+    },
     {
       "url": "https://13tv.co.il/item/news/politics/politics/d6zwx-905400609/",
       "title": "סקר המתלבטים: מה חושבים בגושים על מצב המדינה?",
@@ -9,28 +177,16 @@
       "kalturaId": "1_1y5za1dk"
     },
     {
+      "url": "https://13tv.co.il/item/news/politics/politics/t5vjz-905400450/",
+      "title": "הסכסוך על הובלת גוש השינוי - והירי בנגמ\"ש הקואליציה",
+      "publishDate": "2026-10-16 22:30:25",
+      "kalturaId": "1_nz3xzide"
+    },
+    {
       "url": "https://13tv.co.il/item/news/politics/politics/vcity-905400564/",
       "title": "הטרדת מצביעים ודיכוי הצבעה: התוכניות הסודיות ליום הבחירות",
       "publishDate": "2026-10-16 22:09:28",
       "kalturaId": "1_35yvf16z"
-    },
-    {
-      "url": "https://13tv.co.il/item/news/politics/politics/survey-905396904/",
-      "title": "נתניהו נחלש, הנדל וזליכה עוברים - ומפת הגושים שוב משתנה",
-      "publishDate": "2026-10-14 20:25:14",
-      "kalturaId": "1_fwu425if"
-    },
-    {
-      "url": "https://13tv.co.il/item/news/politics/politics/ybgqc-905392928/",
-      "title": "מי יהיה הפתעת הבחירות? בחזרה לתוצאות שהדהימו את הסוקרים",
-      "publishDate": "2026-10-12 21:15:09",
-      "kalturaId": "1_p8pyunjt"
-    },
-    {
-      "url": "https://13tv.co.il/item/news/politics/politics/xc9ye-905393081/",
-      "title": "ביקור פילבר בסיעת הליכוד - והסקר המפתיע שהציג",
-      "publishDate": "2026-10-12 20:39:51",
-      "kalturaId": "1_ldq600mu"
     }
   ]
 }
