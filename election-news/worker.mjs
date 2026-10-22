@@ -46,7 +46,7 @@ export function mediaFrom(html){
  }
  return [...new Set(result)].filter(u=>/^https:\/\//.test(u)&&/\.(mp3|wav|m4a|mp4)(\?|$)/i.test(u));
 }
-async function get(url){for(let i=0;i<5;i++){safeURL(url);const r=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'Mozilla/5.0'}});if(r.status>=300&&r.status<400){url=new URL(r.headers.get('location'),url).href;continue;}if(!r.ok)throw Error('http_'+r.status);return r;}throw Error('redirect_limit');}
+async function get(url,headers={}){for(let i=0;i<5;i++){safeURL(url);const r=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'Mozilla/5.0',...headers}});if(r.status>=300&&r.status<400){url=new URL(r.headers.get('location'),url).href;continue;}if(!r.ok)throw Error('http_'+r.status);return r;}throw Error('redirect_limit');}
 export function reshetEntry(html){
  const raw=html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)?.[1];
  if(!raw)return null;
@@ -96,10 +96,11 @@ async function c14Media(html){
  return [c14Download(await r.json())];
 }
 export function nextData(html){const raw=html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)?.[1];try{return raw?JSON.parse(raw):null;}catch{return null;}}
+function makoPlayerHeaders(video,channel,gallery){return {Referer:'https://www.mako.co.il/player-embed/?'+new URLSearchParams({vid:video,cid:channel,galleryCid:gallery}),Origin:'https://www.mako.co.il'};}
 export async function makoMedia(html){
  const video=nextData(html)?.props?.pageProps?.pageData?.header?.mainVideo;if(!video?.videoVcmId)return [];
  const params=new URLSearchParams({jspName:'playlist12.jsp',vcmid:video.videoVcmId,videoChannelId:video.videoChannelId,galleryChannelId:video.videoGalleryChannelId,consumer:'responsive'});
- const raw=await(await get('https://www.mako.co.il/AjaxPage?'+params)).text();
+ const raw=await(await get('https://www.mako.co.il/AjaxPage?'+params,makoPlayerHeaders(video.videoVcmId,video.videoChannelId,video.videoGalleryChannelId))).text();
  // Public player metadata encoding, as implemented by Mako's published player SDK.
  // This decodes the playlist, not the media. Protected content and encrypted HLS are rejected below.
  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode('LTf7r/zM2VndHwP+4So6bw=='),{name:'AES-CBC'},false,['decrypt']);
@@ -237,7 +238,13 @@ async function collectorRoute(request,env,path){
   const source=SOURCES.find(s=>target.hostname===s.host||target.hostname.endsWith('.'+s.host));
   const allowed=source&&(source.article.test(target.pathname)||['/','/news','/news/','/news-israel-elections','/content/kan-news/','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp'));
   if(target.protocol!=='https:'||target.username||target.password||!allowed)return Response.json({error:'unsupported_source'},{status:400});
-  try{const upstream=await get(target.href);const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
+  const headers={};
+  if(source.id==='n12'&&target.pathname==='/AjaxPage'){
+   const video=target.searchParams.get('vcmid'),channel=target.searchParams.get('videoChannelId'),gallery=target.searchParams.get('galleryChannelId');
+   if(![video,channel,gallery].every(x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,120}$/.test(x)))return Response.json({error:'invalid_player_ids'},{status:400});
+   Object.assign(headers,makoPlayerHeaders(video,channel,gallery));
+  }
+  try{const upstream=await get(target.href,headers);const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
  }
  if(path==='/collector/state'&&request.method==='GET'){
   const uploaded=await env.DB.prepare("SELECT url FROM items WHERE status IN ('uploaded','archived')").all();
