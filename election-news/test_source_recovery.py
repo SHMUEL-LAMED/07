@@ -28,6 +28,14 @@ class SourceRecoveryTests(unittest.TestCase):
         with patch.object(collector,'fetch',return_value=page.encode()):
             self.assertRaisesRegex(ValueError,'stale_or_missing_publication_date',collector.article,self.url)
 
+    def test_n12_http_200_homepage_does_not_hide_working_desktop_article(self):
+        homepage='<h1>חדשות</h1>'+next_page({'pageType':'home','lastUpdate':self.now})
+        article=next_page({'seo':{'schema':{'@type':'NewsArticle','headline':'סקר בחירות','datePublished':self.now}}})
+        with patch.object(collector,'fetch',side_effect=[homepage.encode(),article.encode()]) as fetch:
+            self.assertEqual(collector.article(self.url),('סקר בחירות',[]))
+            self.assertEqual(fetch.call_args.args[0],self.url)
+            self.assertEqual(fetch.call_count,2)
+
     def test_old_original_date_is_not_replaced_by_new_modified_or_header_date(self):
         page=next_page({'seo':{'schema':{'@type':'NewsArticle','headline':'סקר בחירות','datePublished':'2020-01-01T00:00:00Z','dateModified':self.now}},'header':{'publishDate':{'datetime':self.now}}})
         with patch.object(collector,'fetch',return_value=page.encode()):

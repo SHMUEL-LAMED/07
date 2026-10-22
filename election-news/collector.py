@@ -174,6 +174,26 @@ def article_metadata(page,kind):
         date=page_data.get('header',{}).get('publishDate',{}).get('datetime') or page_data.get('seo',{}).get('publishedTime')
     return title,date,objects,page_data
 
+def article_page(url,kind):
+    variants=[url]
+    if kind=='n12':
+        path=urllib.parse.urlsplit(url).path
+        variants=['https://'+host+path for host in ['mobile.mako.co.il','www.mako.co.il','www.n12.co.il']]
+    error=None
+    for variant in variants:
+        try:
+            page=fetch(variant).decode()
+            title,date,objects,data=article_metadata(page,kind)
+            if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
+            if kind=='n12' and publication_time(date) is None:
+                # An HTTP 200 homepage/redirect is not a successfully fetched article.
+                raise ValueError('stale_or_missing_publication_date')
+            return page,title,date,objects,data
+        except (urllib.error.URLError,ValueError,TimeoutError) as caught:
+            error=caught
+            if kind=='n12':print('article_variant_failed','n12',urllib.parse.urlsplit(variant).hostname,error_code(caught),flush=True)
+    raise error
+
 def mako_videos(page_data,objects):
     videos=[];seen=set()
     # Only this article's main video and body, never recommendations or navigation.
@@ -255,8 +275,8 @@ def discover():
                 data=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{})
                 teasers=[x for x in walk(data) if isinstance(x.get('itemUrl'),dict) and isinstance(x.get('title'),dict)]
                 for x in teasers:
-                    link=x['itemUrl'].get('url','');date=x.get('date',{}).get('datetime')
-                    if 'Article-' in link and recent(date):add(link,x['title'].get('text',''))
+                    link=x['itemUrl'].get('url','');date=(x.get('date') or {}).get('datetime')
+                    if 'Article-' in link and (not date or recent(date)):add(link,x['title'].get('text',''))
                 if teasers:continue
             parser=Links(url);parser.feed(page)
             for link,title in parser.links:
@@ -344,9 +364,7 @@ def article(url):
         title=x.get('title') or j['PageMeta']['title']
         if not collectible(title):return title,[]
         entry=(x.get('video') or {}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
-    page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il') if kind=='n12' else url).decode()
-    title,date,objects,page_data=article_metadata(page,kind)
-    if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
+    page,title,date,objects,page_data=article_page(url,kind)
     remember_date(url,date)
     # The official election section is an editorial relevance signal too.
     if not collectible(title):raise ValueError('missing_article_title')
