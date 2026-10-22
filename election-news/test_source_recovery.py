@@ -55,8 +55,16 @@ class SourceRecoveryTests(unittest.TestCase):
         with patch.object(collector,'fetch',return_value=json.dumps(playlist).encode()):
             self.assertEqual(collector.mako_media(video),['https://cdn.example/clip.mp4'])
         playlist['videoDetails']={'extraParams':{'protectedContent':True}}
-        with patch.object(collector,'fetch',return_value=json.dumps(playlist).encode()):
+        with patch.object(collector,'fetch',return_value=json.dumps(playlist).encode()) as fetch:
             self.assertRaisesRegex(ValueError,'playback_restricted',collector.mako_media,video)
+            self.assertEqual(fetch.call_count,1)
+
+    def test_player_http_200_html_is_retried_as_metadata_failure(self):
+        video={'videoVcmId':'v','videoChannelId':'c','videoGalleryChannelId':'g'}
+        playlist={'media':[{'url':'https://cdn.example/clip.mp4'}]}
+        with patch.object(collector,'fetch',side_effect=[b'<!DOCTYPE html><h1>homepage</h1>',json.dumps(playlist).encode()]) as fetch:
+            self.assertEqual(collector.mako_media(video),['https://cdn.example/clip.mp4'])
+            self.assertTrue(fetch.call_args.args[0].startswith('https://mobile.mako.co.il/AjaxPage?'))
 
     def test_reshet_reads_public_html_before_qdata(self):
         page='<script id="__NEXT_DATA__" type="application/json">'+json.dumps({'props':{'pageProps':{'page':{'PageMeta':{'title':'סקר'},'Content':{'Item':{'title':'סקר'}}}}}})+'</script>'

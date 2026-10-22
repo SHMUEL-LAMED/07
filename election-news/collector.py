@@ -3,6 +3,7 @@
 import argparse, base64, concurrent.futures, datetime as dt, html, ipaddress, json
 import os, re, socket, subprocess, tempfile, time, urllib.error, urllib.parse, urllib.request
 from html.parser import HTMLParser
+from http.cookiejar import CookieJar
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -33,7 +34,7 @@ class Redirect(urllib.request.HTTPRedirectHandler):
         if redirected and urllib.parse.urlsplit(req.full_url).netloc!=urllib.parse.urlsplit(newurl).netloc:
             redirected.remove_header('Authorization')
         return redirected
-OPENER=urllib.request.build_opener(Redirect)
+OPENER=urllib.request.build_opener(Redirect,urllib.request.HTTPCookieProcessor(CookieJar()))
 
 def direct_fetch(url,headers=None,data=None,timeout=30):
     public_url(url)
@@ -214,17 +215,33 @@ def mako_videos(page_data,objects):
             videos.append({'videoVcmId':q['vid'][0],'videoChannelId':q['cid'][0],'videoGalleryChannelId':q['galleryCid'][0]});seen.add(q['vid'][0])
     return videos
 
+def decode_mako_playlist(raw):
+    if raw.lstrip().startswith(b'<'):raise ValueError('player_metadata_html_response')
+    try:j=json.loads(raw)
+    except (ValueError,UnicodeDecodeError):
+        j=None
+    if isinstance(j,str):raw=j.encode();j=None
+    if j is None:
+        # Public player metadata packaging; encrypted/protected media is rejected below.
+        key='LTf7r/zM2VndHwP+4So6bw==';iv='theExact16Chars='
+        try:decoded=subprocess.run(['openssl','enc','-d','-aes-192-cbc','-a','-A','-K',key.encode().hex(),'-iv',iv.encode().hex()],input=raw.strip(),capture_output=True,check=True).stdout
+        except subprocess.CalledProcessError:raise ValueError('invalid_player_metadata') from None
+        j=json.loads(decoded)
+    if not isinstance(j,dict):raise ValueError('invalid_player_metadata')
+    return j
+
 def mako_media(video):
     params={'jspName':'playlist12.jsp','vcmid':video['videoVcmId'],'videoChannelId':video['videoChannelId'],'galleryChannelId':video['videoGalleryChannelId'],'consumer':'responsive'}
     embed='https://www.mako.co.il/player-embed/?'+urllib.parse.urlencode({'vid':video['videoVcmId'],'cid':video['videoChannelId'],'galleryCid':video['videoGalleryChannelId']})
-    raw=fetch('https://www.mako.co.il/AjaxPage?'+urllib.parse.urlencode(params),{'Referer':embed,'Origin':'https://www.mako.co.il'})
-    try:j=json.loads(raw)
-    except (ValueError,UnicodeDecodeError):
-        # Public player metadata packaging; encrypted/protected media is rejected below.
-        key='LTf7r/zM2VndHwP+4So6bw==';iv='theExact16Chars='
-        decoded=subprocess.run(['openssl','enc','-d','-aes-192-cbc','-a','-A','-K',key.encode().hex(),'-iv',iv.encode().hex()],input=raw,capture_output=True,check=True).stdout
-        j=json.loads(decoded)
-    if not isinstance(j,dict):raise ValueError('invalid_player_metadata')
+    last=None
+    for host in ['www.mako.co.il','mobile.mako.co.il','www.n12.co.il']:
+        try:
+            raw=fetch('https://'+host+'/AjaxPage?'+urllib.parse.urlencode(params),{'Referer':embed,'Origin':'https://www.mako.co.il'})
+            j=decode_mako_playlist(raw)
+            break
+        except (urllib.error.URLError,ValueError,TimeoutError) as error:
+            last=error;print('player_metadata_failed','n12',host,error_code(error),'bytes',len(raw) if 'raw' in locals() else 0,flush=True)
+    else:raise last
     if j.get('videoDetails',{}).get('extraParams',{}).get('protectedContent') or j.get('videoDetails',{}).get('isLive'):raise ValueError('playback_restricted')
     return [m['url'] for m in j.get('media',[]) if m.get('url') and not m.get('ssai')][:1]
 
