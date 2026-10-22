@@ -50,7 +50,10 @@ def direct_fetch(url,headers=None,data=None,timeout=30):
         return b
 
 def source_failure(body):
-    sample=body[:10000].decode('utf-8',errors='ignore').lower()
+    text=body.decode('utf-8',errors='ignore')
+    # Blocking pages can place their visible title after a large inline script.
+    headings=re.findall(r'<(?:title|h1)\b[^>]*>([\s\S]*?)</(?:title|h1)>',text,re.I)
+    sample=(text[:10000]+' '+' '.join(clean(x) for x in headings)).lower()
     return any(x in sample for x in ['access denied','we are sorry','request rejected','verify you are human','incapsula incident'])
 
 def fetch(url,headers=None,data=None,timeout=30):
@@ -61,8 +64,10 @@ def fetch(url,headers=None,data=None,timeout=30):
     except (urllib.error.URLError,TimeoutError,ValueError):
         if not ENDPOINT or data is not None or not source(url):raise
         # A second network location reads only the allowlisted official source.
-        return direct_fetch(ENDPOINT+'/collector/source?'+urllib.parse.urlencode({'url':url}),
-                            {'Authorization':'Bearer '+authorization(ENDPOINT)},timeout=timeout)
+        body=direct_fetch(ENDPOINT+'/collector/source?'+urllib.parse.urlencode({'url':url}),
+                          {'Authorization':'Bearer '+authorization(ENDPOINT)},timeout=timeout)
+        if source_failure(body):raise ValueError('source_access_error')
+        return body
 
 def error_code(error):
     if isinstance(error,urllib.error.HTTPError):return 'http_'+str(error.code)

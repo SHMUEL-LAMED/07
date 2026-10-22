@@ -15,6 +15,20 @@ class SourceRecoveryTests(unittest.TestCase):
         self.now=dt.datetime.now(dt.timezone.utc).isoformat()
         self.url='https://www.mako.co.il/news-israel-elections/2026/Article-a.htm'
 
+    def test_blocking_title_after_large_script_is_not_an_article_with_missing_date(self):
+        blocked=b'<html><head><script>'+b'x'*15000+b'</script><title>We are sorry...</title></head></html>'
+        self.assertTrue(collector.source_failure(blocked))
+        with patch.object(collector,'direct_fetch',return_value=blocked):
+            old=collector.ENDPOINT;collector.ENDPOINT=None
+            try:self.assertRaisesRegex(ValueError,'source_access_error',collector.fetch,self.url)
+            finally:collector.ENDPOINT=old
+
+    def test_relay_block_page_is_also_reported_as_access_failure(self):
+        with patch.object(collector,'direct_fetch',side_effect=[b'<h1>Access denied</h1>',b'<h1>We are sorry</h1>']),patch.object(collector,'authorization',return_value='test'):
+            old=collector.ENDPOINT;collector.ENDPOINT='https://ivr.example'
+            try:self.assertRaisesRegex(ValueError,'source_access_error',collector.fetch,self.url)
+            finally:collector.ENDPOINT=old
+
     def test_n12_schema_in_next_data_supplies_original_publication(self):
         page=next_page({'seo':{'schema':{'@type':'NewsArticle','headline':'סקר בחירות','datePublished':self.now}}})
         with patch.object(collector,'fetch',return_value=page.encode()):
