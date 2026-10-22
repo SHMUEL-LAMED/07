@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-HOSTS={'mako.co.il':'n12','13tv.co.il':'reshet','kan.org.il':'kan','c14.co.il':'c14','i24news.tv':'i24'}
+HOSTS={'mako.co.il':'n12','n12.co.il':'n12','13tv.co.il':'reshet','kan.org.il':'kan','c14.co.il':'c14','i24news.tv':'i24'}
 PUBLIC_CACHE={}
 ENDPOINT=None
 RESHET_ITEMS={}
@@ -112,6 +112,13 @@ def collection_failed(count,reports):
     ignored={'stale_or_missing_publication_date','not_election_article','not_public_or_old'}
     return count==0 and any(x.get('status')=='blocked' and x.get('error') not in ignored for x in reports)
 
+def fair_candidates(candidates):
+    groups={}
+    for url in candidates:groups.setdefault(source(url),[]).append(url)
+    for index in range(max((len(g) for g in groups.values()),default=0)):
+        for group in groups.values():
+            if index<len(group):yield group[index]
+
 def publication_time(date):
     if not date:return None
     try:
@@ -130,7 +137,10 @@ def recent(date):
 
 def remember_date(url,date):
     value=publication_time(date)
-    if not recent(date):raise ValueError('stale_or_missing_publication_date')
+    if not recent(date):
+        reason='missing_or_invalid' if value is None else 'future' if value>dt.datetime.now(dt.timezone.utc) else 'older_than_window'
+        print('publication_rejected',source(url),reason,str(date)[:40],flush=True)
+        raise ValueError('stale_or_missing_publication_date')
     PUBLICATION_DATES[canonical(url)]=value.isoformat()
 
 
@@ -149,6 +159,53 @@ def next_data(page):
     match=re.search(r'<script\b[^>]*id=["\']__NEXT_DATA__["\'][^>]*>([\s\S]*?)</script>',page,re.I)
     return json.loads(match[1]) if match else {}
 
+def article_metadata(page,kind):
+    objects=list(ld(page))
+    page_data=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{}) if kind=='n12' else {}
+    # Some N12 responses publish the article schema only in Next's page data.
+    # Never use navigation dates, dateModified, or today's date as publication.
+    schema=page_data.get('seo',{}).get('schema',{})
+    if isinstance(schema,dict):objects.extend(walk(schema))
+    articles=[x for x in objects if any(t in ['NewsArticle','OpinionNewsArticle','Article'] for t in ([x.get('@type')] if isinstance(x.get('@type'),str) else x.get('@type',[])))]
+    news=next((x for x in articles if x.get('datePublished')),next(iter(articles),{}))
+    title=clean(news.get('headline') or page_data.get('header',{}).get('title',{}).get('text') or next(iter(re.findall(r'<h1\b[^>]*>([\s\S]*?)</h1>',page,re.I)),''))
+    date=news.get('datePublished')
+    if not date and kind=='n12':
+        date=page_data.get('header',{}).get('publishDate',{}).get('datetime') or page_data.get('seo',{}).get('publishedTime')
+    return title,date,objects,page_data
+
+def mako_videos(page_data,objects):
+    videos=[];seen=set()
+    # Only this article's main video and body, never recommendations or navigation.
+    header=page_data.get('header',{})
+    for x in [header.get('mainVideo')]+list(walk(page_data.get('content',{}))):
+        if not isinstance(x,dict) or not all(x.get(k) for k in ['videoVcmId','videoChannelId','videoGalleryChannelId']):continue
+        if x.get('isLive'):continue
+        if x['videoVcmId'] not in seen:videos.append(x);seen.add(x['videoVcmId'])
+    for x in objects:
+        embed=x.get('embedUrl','')
+        if x.get('@type')!='VideoObject' or not isinstance(embed,str):continue
+        u=urllib.parse.urlsplit(embed)
+        if u.hostname not in ['www.mako.co.il','mobile.mako.co.il'] or u.path!='/player-embed/':continue
+        q=urllib.parse.parse_qs(u.query)
+        if all(q.get(k) for k in ['vid','cid','galleryCid']) and q['vid'][0] not in seen:
+            videos.append({'videoVcmId':q['vid'][0],'videoChannelId':q['cid'][0],'videoGalleryChannelId':q['galleryCid'][0]});seen.add(q['vid'][0])
+    return videos
+
+def mako_media(video):
+    params={'jspName':'playlist12.jsp','vcmid':video['videoVcmId'],'videoChannelId':video['videoChannelId'],'galleryChannelId':video['videoGalleryChannelId'],'consumer':'responsive'}
+    embed='https://www.mako.co.il/player-embed/?'+urllib.parse.urlencode({'vid':video['videoVcmId'],'cid':video['videoChannelId'],'galleryCid':video['videoGalleryChannelId']})
+    raw=fetch('https://www.mako.co.il/AjaxPage?'+urllib.parse.urlencode(params),{'Referer':embed,'Origin':'https://www.mako.co.il'})
+    try:j=json.loads(raw)
+    except (ValueError,UnicodeDecodeError):
+        # Public player metadata packaging; encrypted/protected media is rejected below.
+        key='LTf7r/zM2VndHwP+4So6bw==';iv='theExact16Chars='
+        decoded=subprocess.run(['openssl','enc','-d','-aes-192-cbc','-a','-A','-K',key.encode().hex(),'-iv',iv.encode().hex()],input=raw,capture_output=True,check=True).stdout
+        j=json.loads(decoded)
+    if not isinstance(j,dict):raise ValueError('invalid_player_metadata')
+    if j.get('videoDetails',{}).get('extraParams',{}).get('protectedContent') or j.get('videoDetails',{}).get('isLive'):raise ValueError('playback_restricted')
+    return [m['url'] for m in j.get('media',[]) if m.get('url') and not m.get('ssai')][:1]
+
 class Links(HTMLParser):
     def __init__(self,base):super().__init__();self.base=base;self.current=None;self.links=[]
     def handle_starttag(self,tag,attrs):
@@ -161,7 +218,8 @@ class Links(HTMLParser):
 def reshet_data(url):
     path=urllib.parse.urlsplit(url).path
     last=None
-    for candidate in ['https://13tv.co.il/qdata'+path+'?qdata=json','https://www.13tv.co.il/qdata'+path+'?qdata=json','https://13tv.co.il'+path]:
+    # The public HTML still carries __NEXT_DATA__; qdata often returns 502.
+    for candidate in ['https://13tv.co.il'+path,'https://www.13tv.co.il'+path,'https://13tv.co.il/qdata'+path+'?qdata=json','https://www.13tv.co.il/qdata'+path+'?qdata=json']:
         try:
             body=fetch(candidate).decode()
             try:value=json.loads(body)
@@ -191,7 +249,16 @@ def discover():
             except ValueError:pass
     for url in ['https://mobile.mako.co.il/news','https://mobile.mako.co.il/news-israel-elections','https://www.kan.org.il/content/kan-news/','https://www.c14.co.il/']:
         try:
-            parser=Links(url);parser.feed(fetch(url).decode())
+            page=fetch(url).decode()
+            if source(url)=='n12':
+                # Read dated editorial teasers instead of footer/legal/archive links.
+                data=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{})
+                teasers=[x for x in walk(data) if isinstance(x.get('itemUrl'),dict) and isinstance(x.get('title'),dict)]
+                for x in teasers:
+                    link=x['itemUrl'].get('url','');date=x.get('date',{}).get('datetime')
+                    if 'Article-' in link and recent(date):add(link,x['title'].get('text',''))
+                if teasers:continue
+            parser=Links(url);parser.feed(page)
             for link,title in parser.links:
                 if re.search(r'Article-[a-f0-9]+|/article/\d+|/content/kan-news/[^/]+/\d+',link):add(link,title)
         except Exception as e:print('source_failed',source(url),error_code(e),flush=True)
@@ -270,36 +337,27 @@ def article(url):
         return j['title'],list(dict.fromkeys(media))
     if kind=='reshet':
         item=RESHET_ITEMS.get(canonical(url))
-        if item and item.get('video',{}).get('kalturaId'):j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
+        if item and (item.get('video') or {}).get('kalturaId'):j={'Content':{'Item':item},'PageMeta':{'title':item['title']}}
         else:j=reshet_data(url)
         x=j.get('Content',{}).get('Item',{});info=j.get('SEO',{}).get('schema',{}).get('newsArticle',{})
         remember_date(url,info.get('datePublished') or x.get('publishDate'))
         title=x.get('title') or j['PageMeta']['title']
         if not collectible(title):return title,[]
-        entry=x.get('video',{}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
+        entry=(x.get('video') or {}).get('kalturaId');return clean(title),kaltura(entry) if entry else []
     page=fetch(url.replace('www.mako.co.il','mobile.mako.co.il') if kind=='n12' else url).decode()
-    objects=list(ld(page))
-    news=next((x for x in objects if any(t in ['NewsArticle','OpinionNewsArticle','Article'] for t in ([x.get('@type')] if isinstance(x.get('@type'),str) else x.get('@type',[])))),{})
-    title=clean(news.get('headline') or next(iter(re.findall(r'<h1\b[^>]*>([\s\S]*?)</h1>',page,re.I)),''))
+    title,date,objects,page_data=article_metadata(page,kind)
     if not title or source_failure(page.encode()):raise ValueError('invalid_source_page')
-    remember_date(url,news.get('datePublished'))
+    remember_date(url,date)
     # The official election section is an editorial relevance signal too.
     if not collectible(title):raise ValueError('missing_article_title')
     if kind=='n12':
-        video=next_data(page).get('props',{}).get('pageProps',{}).get('pageData',{}).get('header',{}).get('mainVideo')
-        if not video:
-            embed=next((x.get('embedUrl','') for x in objects if x.get('@type')=='VideoObject' and 'mako.co.il/player-embed/' in x.get('embedUrl','')),'')
-            q=urllib.parse.parse_qs(urllib.parse.urlsplit(embed).query)
-            if all(q.get(k) for k in ['vid','cid','galleryCid']):video={'videoVcmId':q['vid'][0],'videoChannelId':q['cid'][0],'videoGalleryChannelId':q['galleryCid'][0]}
-        if not video:return title,[]
-        params={'jspName':'playlist12.jsp','vcmid':video['videoVcmId'],'videoChannelId':video['videoChannelId'],'galleryChannelId':video['videoGalleryChannelId'],'consumer':'responsive'}
-        raw=fetch('https://www.mako.co.il/AjaxPage?'+urllib.parse.urlencode(params))
-        # The same public metadata packaging used by Mako's player; not media DRM.
-        key='LTf7r/zM2VndHwP+4So6bw==';iv='theExact16Chars='
-        decoded=subprocess.run(['openssl','enc','-d','-aes-192-cbc','-a','-A','-K',key.encode().hex(),'-iv',iv.encode().hex()],input=raw,capture_output=True,check=True).stdout
-        j=json.loads(decoded)
-        if j.get('videoDetails',{}).get('extraParams',{}).get('protectedContent') or j.get('videoDetails',{}).get('isLive'):raise ValueError('playback_restricted')
-        return title,[m['url'] for m in j.get('media',[]) if not m.get('ssai')][:1]
+        media=[]
+        for video in mako_videos(page_data,objects):
+            try:media.append(next(iter(mako_media(video)),None))
+            except Exception as error:
+                media.append(None)
+                print('clip_failed','n12',error_code(error),flush=True)
+        return title,media
     media=[]
     for embed in re.findall(r'<iframe\b[^>]*src=[\"\']([^\"\']+)[\"\']',page,re.I):
         u=urllib.parse.urlsplit(html.unescape(embed));match=re.match(r'/embed/([A-Za-z0-9_-]{11})$',u.path)
@@ -352,7 +410,7 @@ def make_audio(url,destination):
         if channel and channel not in YOUTUBE_CHANNELS:raise ValueError('untrusted_publisher')
         video_url='https://www.youtube.com/watch?'+urllib.parse.urlencode({'v':params['v'][0]})
         filters='!is_live & !is_upcoming'+(' & channel_id = '+channel if channel else '')
-        subprocess.run([os.sys.executable,'-m','yt_dlp','--no-playlist','--no-warnings','--socket-timeout','20','--match-filter',filters,'-f','bestaudio/best','-o',str(original),video_url],check=True,capture_output=True,timeout=180)
+        subprocess.run([os.sys.executable,'-m','yt_dlp','--no-playlist','--no-warnings','--socket-timeout','20','--js-runtimes','node','--match-filter',filters,'-f','bestaudio/best','-o',str(original),video_url],check=True,capture_output=True,timeout=180)
         subprocess.run(['ffmpeg','-nostdin','-v','error','-i',str(original),'-vn','-ac','1','-ar','8000','-codec:a','libmp3lame','-b:a','32k','-y',str(destination)],check=True,capture_output=True,timeout=180)
         original.unlink(missing_ok=True)
     else:
@@ -380,7 +438,7 @@ def main():
         except ValueError:pass
     count=0;reports=[]
     with tempfile.TemporaryDirectory() as folder:
-        for url in candidates:
+        for url in fair_candidates(candidates):
             if time.monotonic()-start>args.deadline_seconds or count>=args.max_files:break
             if url in seen or (source(url)=='reshet' and url in uploaded):continue
             try:
@@ -390,17 +448,24 @@ def main():
                     key=url+('#media='+str(index) if index else '')
                     if key in uploaded:continue
                     if count>=args.max_files or time.monotonic()-start>args.deadline_seconds:break
+                    if not clip:
+                        reports.append({'url':key,'status':'blocked','error':'source_clip_unavailable'})
+                        continue
                     if args.dry_run:print('discovered',source(url),title,index,flush=True);continue
-                    dest=Path(folder)/'audio.mp3';duration=make_audio(clip,dest)
-                    meta=base64.b64encode(json.dumps({'url':key,'title':'פורסם ב־'+publication_time(PUBLICATION_DATES[canonical(url)]).strftime('%d.%m.%Y')+' — '+title+(' — קטע '+str(index+1) if index else ''),'duration':duration,'publishedAt':PUBLICATION_DATES[canonical(url)]},ensure_ascii=False).encode()).decode()
-                    for attempt in range(4):
-                        try:result=worker(endpoint,'/collector/ingest',dest.read_bytes(),{'X-Article-Meta':meta,'Content-Type':'audio/mpeg'});break
-                        except urllib.error.HTTPError as e:
-                            if e.code!=409 or attempt==3:raise
-                            time.sleep(5)
-                    uploaded.add(key)
-                    if result.get('existing'):print('existing',source(url),result.get('file'),round(duration),flush=True)
-                    else:count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
+                    try:
+                        dest=Path(folder)/'audio.mp3';duration=make_audio(clip,dest)
+                        meta=base64.b64encode(json.dumps({'url':key,'title':'פורסם ב־'+publication_time(PUBLICATION_DATES[canonical(url)]).strftime('%d.%m.%Y')+' — '+title+(' — קטע '+str(index+1) if index else ''),'duration':duration,'publishedAt':PUBLICATION_DATES[canonical(url)]},ensure_ascii=False).encode()).decode()
+                        for attempt in range(4):
+                            try:result=worker(endpoint,'/collector/ingest',dest.read_bytes(),{'X-Article-Meta':meta,'Content-Type':'audio/mpeg'});break
+                            except urllib.error.HTTPError as e:
+                                if e.code!=409 or attempt==3:raise
+                                time.sleep(5)
+                        uploaded.add(key)
+                        if result.get('existing'):print('existing',source(url),result.get('file'),round(duration),flush=True)
+                        else:count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
+                    except Exception as error:
+                        reports.append({'url':key,'status':'blocked','error':error_code(error)})
+                        print('clip_failed',source(url),error_code(error),canonical(url),index,flush=True)
             except Exception as e:
                 reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})

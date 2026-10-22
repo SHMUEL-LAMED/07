@@ -28,7 +28,7 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -37,13 +37,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install yt-dlp==2026.8.19
+      - run: python -m pip install 'yt-dlp[default]==2026.10.21'
       - name: כלי אודיו
+        timeout-minutes: 7
         run: |
-          if ! command -v ffmpeg >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y ffmpeg
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            if ! timeout 150 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg; then
+              tool_dir="$RUNNER_TEMP/election-audio-tools"
+              mkdir -p "$tool_dir"
+              curl --fail --location --retry 1 --connect-timeout 10 --max-time 90 \
+                https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+                -o "$RUNNER_TEMP/election-ffmpeg.tar.xz"
+              tar -xJf "$RUNNER_TEMP/election-ffmpeg.tar.xz" --strip-components=2 \
+                -C "$tool_dir" --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
+              export PATH="$tool_dir:$PATH"
+              echo "$tool_dir" >> "$GITHUB_PATH"
+            fi
           fi
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
       - name: איסוף קובצי המקור והעלאה מאומתת לשלוחה
         run: >-
           python election-news/collector.py

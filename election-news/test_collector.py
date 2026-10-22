@@ -69,7 +69,7 @@ class ReshetRecoveryTests(unittest.TestCase):
         body=collector.json.dumps({'PageMeta':{'title':'סקרים'},'Content':{'Item':{'title':'סקר'}}}).encode()
         with patch.object(collector,'fetch',side_effect=[error,body]) as fetch:
             self.assertEqual(collector.reshet_data('https://13tv.co.il/tags/survey/')['PageMeta']['title'],'סקרים')
-            self.assertIn('https://www.13tv.co.il/qdata/',fetch.call_args.args[0])
+            self.assertEqual('https://www.13tv.co.il/tags/survey/',fetch.call_args.args[0])
 
     def test_reshet_html_fallback_uses_only_page_data(self):
         error=collector.urllib.error.URLError('blocked')
