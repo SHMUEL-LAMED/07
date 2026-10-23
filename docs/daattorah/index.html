@@ -1964,19 +1964,23 @@ $("#login-form").addEventListener("submit", e => { if (!$("#login-pass").value) 
 // כרטיס החשבונות המורשים בלשונית "מערכת"
 {
   const baseSystem = RENDER.system;
-  RENDER.system = d => { setTimeout(drawEmails); return baseSystem(d) + '<div class="card w-only" id="gauth"><h2>כניסה עם גוגל <small>טוען…</small></h2></div>'; };
+  RENDER.system = d => { setTimeout(drawEmails); return baseSystem(d) + '<div class="card w-only" id="gauth"><h2>מנהלי הדף <small>טוען…</small></h2></div>'; };
 }
-async function drawEmails(op, email) {
+async function drawEmails(op, email, role) {
   const el = $("#gauth"); if (!el) return;
+  const RN = { owner: "בעלים", admin: "מנהל", viewer: "צפייה בלבד" };
   try {
-    const d = await api("emails", op ? { op, email } : undefined);
-    el.innerHTML = `<h2>כניסה עם גוגל <small>${d.enabled ? "פעיל – רק החשבונות כאן יכולים להיכנס" : "עוד לא הוגדר מזהה גוגל (GOOGLE_CLIENT_ID) ב-Cloudflare"}</small></h2>
-      <ul class="list glist">${d.owner ? `<li><span>${esc(d.owner)}</span><span class="pill acc">בעל הקו</span></li>` : '<li class="mut small">לא הוגדר מייל בעל הקו (OWNER_EMAIL)</li>'}${d.emails.map(m => `<li><span>${esc(m)}</span><button class="btn s d" type="button" data-gdel="${esc(m)}">הסרה</button></li>`).join("")}</ul>
-      <form class="row" id="gadd" style="margin-top:12px"><input type="email" name="email" placeholder="name@gmail.com" required style="flex:1;direction:ltr"><button class="btn p">הוספת חשבון</button></form>`;
-  } catch (e) { el.innerHTML = `<h2>כניסה עם גוגל</h2><div class="err">${esc(e.message)}</div>`; }
+    const d = await api("emails", op ? { op, email, role } : undefined);
+    const list = d.managers || (d.emails || []).map(e => ({ e, role: "admin" }));
+    el.innerHTML = `<h2>מנהלי הדף <small>${d.enabled ? "נכנסים עם גוגל – רק החשבונות כאן" : "כניסה עם גוגל עוד לא הוגדרה (GOOGLE_CLIENT_ID)"}</small></h2>
+      <ul class="list glist">${d.owner ? `<li><span>${esc(d.owner)}</span><span class="pill acc">${RN.owner}</span></li>` : '<li class="mut small">לא הוגדר מייל בעל הקו (OWNER_EMAIL)</li>'}${list.map(m => `<li><span>${esc(m.e)}</span><select data-grole="${esc(m.e)}">${["admin", "viewer"].map(r => `<option value="${r}" ${m.role === r ? "selected" : ""}>${RN[r]}</option>`).join("")}</select><button class="btn s d" type="button" data-gdel="${esc(m.e)}">הסרה</button></li>`).join("")}</ul>
+      <form class="row" id="gadd" style="margin-top:12px"><input type="email" name="email" placeholder="name@gmail.com" required style="flex:1;direction:ltr"><select name="role"><option value="admin">מנהל</option><option value="viewer">צפייה בלבד</option></select><button class="btn p">הוספת מנהל</button></form>
+      <div class="mut small" style="margin-top:8px">מנהל – כל הפעולות. צפייה בלבד – רואה הכול ולא יכול לשנות. בעלים – תמיד מורשה. כל קו מנהל רשימה משלו.</div>`;
+  } catch (e) { el.innerHTML = `<h2>מנהלי הדף</h2><div class="err">${esc(e.message)}</div>`; }
 }
 document.addEventListener("click", async e => { const b = e.target.closest("[data-gdel]"); if (b && confirm("להסיר את " + b.dataset.gdel + "?")) drawEmails("remove", b.dataset.gdel); });
-document.addEventListener("submit", e => { if (e.target.id !== "gadd") return; e.preventDefault(); drawEmails("add", e.target.email.value); });
+document.addEventListener("change", e => { const s = e.target.closest("[data-grole]"); if (s) drawEmails("role", s.dataset.grole, s.value); });
+document.addEventListener("submit", e => { if (e.target.id !== "gadd") return; e.preventDefault(); drawEmails("add", e.target.email.value, e.target.role.value); });
 
 // ---------- מפתחות API (לשונית מערכת) ----------
 const KEY_TPL = [

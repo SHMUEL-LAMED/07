@@ -116,24 +116,28 @@ async function keyAuth(env, ctx, tok) {
   return { key: true, id: k.id, name: k.name, scopes: k.scopes, ro: !k.scopes.includes("write"), exp: k.exp || 0 };
 }
 const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
-const allowedEmails = async env => { try { return (await env.KV.get("dash_emails", "json")) || []; } catch { return []; } };
-// בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר את המייל או זורק שגיאה בעברית
+// מנהלי הדף: [{e, role}] – role: "admin" (כל הפעולות) או "viewer" (צפייה בלבד). רשומה ישנה (מחרוזת) = מנהל
+const ROLES = ["admin", "viewer"];
+const managers = async env => { try { return ((await env.KV.get("dash_emails", "json")) || []).map(x => typeof x === "string" ? { e: x, role: "admin" } : x); } catch { return []; } };
+const roleOf = async (env, email) => email === ownerEmail(env) ? "owner" : ((await managers(env)).find(m => m.e === email) || {}).role || "";
+// בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר {email, role} או זורק שגיאה בעברית
 async function googleLogin(env, ip, cred, D) {
   if (!env.GOOGLE_CLIENT_ID) throw new Error("כניסה עם גוגל עוד לא הוגדרה");
   const f = await fails(env, ip);
   if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
-  let email = "";
+  let email = "", role = "";
   try {
     email = await googleEmail(env, cred);
-    if (email !== ownerEmail(env) && !(await allowedEmails(env)).includes(email)) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
+    role = await roleOf(env, email);
+    if (!role) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
   } catch (e) {
     await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
     await D.log(env, `ניסיון כניסה עם גוגל נדחה${email ? " (" + email + ")" : ""} (${ip})`).catch(() => {});
     throw e;
   }
   if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
-  await D.log(env, `כניסה לדף הניהול עם גוגל: ${email}`).catch(() => {});
-  return email;
+  await D.log(env, `כניסה לדף הניהול עם גוגל: ${email}${role === "viewer" ? " (צפייה בלבד)" : ""}`).catch(() => {});
+  return { email, role };
 }
 
 async function adminApp(req, env, ctx, u, parts, D) {
@@ -154,9 +158,10 @@ async function adminApp(req, env, ctx, u, parts, D) {
     if (req.method !== "POST") return redirect("/admin");
     if ((req.headers.get("Origin") || "") !== u.origin) return json({ error: "מקור לא מורשה" }, 403);
     const body = await req.json().catch(() => ({}));
-    try { await googleLogin(env, ip, String(body.credential || ""), D); }
+    let g;
+    try { g = await googleLogin(env, ip, String(body.credential || ""), D); }
     catch (e) { return json({ error: String(e.message || e) }, 401); }
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env)) } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer")) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
@@ -166,9 +171,10 @@ async function adminApp(req, env, ctx, u, parts, D) {
     if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
     const body = await req.json().catch(() => ({}));
     if (body.google) {
-      try { await googleLogin(env, ip, String(body.google), D); }
+      let g;
+      try { g = await googleLogin(env, ip, String(body.google), D); }
       catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
-      return withCors(json({ token: await newToken(env) }), req);
+      return withCors(json({ token: await newToken(env, g.role === "viewer") }), req);
     }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
@@ -759,16 +765,17 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     });
     case "emails": {
       const owner = ownerEmail(env);
-      let list = await allowedEmails(env);
+      let list = await managers(env);
       if (req.method === "POST") {
-        const email = String(body.email || "").trim().toLowerCase();
+        const email = String(body.email || "").trim().toLowerCase(), role = ROLES.includes(body.role) ? body.role : "admin";
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "כתובת מייל לא תקינה" }, 400);
-        if (body.op === "add" && !list.includes(email) && email !== owner) list = [...list, email];
-        else if (body.op === "remove") { if (email === owner) return json({ error: "אי אפשר להסיר את בעל הקו" }, 400); list = list.filter(e => e !== email); }
+        if (email === owner) return json({ error: "בעל הקו תמיד מורשה ולא ניתן לשנות אותו" }, 400);
+        if (body.op === "add" || body.op === "role") list = [...list.filter(m => m.e !== email), { e: email, role }];
+        else if (body.op === "remove") list = list.filter(m => m.e !== email);
         await env.KV.put("dash_emails", JSON.stringify(list));
-        await D.log(env, `${body.op === "remove" ? "הוסר" : "נוסף"} חשבון גוגל מורשה לדף הניהול: ${email} (${VIA})`).catch(() => {});
+        await D.log(env, `${body.op === "remove" ? "הוסר מנהל" : body.op === "role" ? "שונה תפקיד ל" + (role === "viewer" ? "צפייה בלבד" : "מנהל") + " –" : "נוסף מנהל (" + (role === "viewer" ? "צפייה בלבד" : "מנהל") + ")"} בדף הניהול: ${email} (${VIA})`).catch(() => {});
       }
-      return json({ owner, emails: list, enabled: !!env.GOOGLE_CLIENT_ID });
+      return json({ owner, managers: list, emails: list.map(m => m.e), enabled: !!env.GOOGLE_CLIENT_ID });
     }
     case "whoami":
       return json({ ro: !!auth.ro, exp: auth.exp || 0, owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
