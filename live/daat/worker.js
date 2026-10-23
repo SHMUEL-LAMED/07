@@ -2314,7 +2314,8 @@ async function speak(env, ctx, text, { cache = false, budget = 8e3, voice = "Cha
     return fallback;
   }
   const t0 = Date.now();
-  let pcm = await geminiTTS(env, text, Math.max(1500, budget - 3500), voice);
+  let pcm = budget >= 5e3 ? await geminiTTS(env, text, Math.min(4e3, budget - 2500), voice) : null;
+  if (!pcm) pcm = await azureTTS(env, text, Math.max(2500, budget - (Date.now() - t0)));
   if (!pcm) pcm = await elevenTTS(env, text, budget - (Date.now() - t0), el);
   if (!pcm) return fallback;
   const name = "a" + Date.now().toString(36) + Math.floor(Math.random() * 1e3);
@@ -3015,6 +3016,37 @@ async function bingNews(q) {
   return rssItems(await getText(`https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss&setlang=he&cc=IL`));
 }
 __name(bingNews, "bingNews");
+async function serperWeb(env, q) {
+  if (!env.SERPER_KEY) return [];
+  const j = await fetch("https://google.serper.dev/search", { method: "POST", headers: { "Content-Type": "application/json", "X-API-KEY": env.SERPER_KEY }, body: JSON.stringify({ q, gl: "il", hl: "iw", location: "Israel", num: 8 }), signal: AbortSignal.timeout(7e3) }).then((r) => r.json()).catch(() => null);
+  aiTrace.push("serper " + (j && j.organic ? j.organic.length : "err"));
+  if (!j) return [];
+  const out = [];
+  if (j.answerBox) out.push({ t: j.answerBox.title || "", s: String(j.answerBox.answer || j.answerBox.snippet || "").slice(0, 500), l: j.answerBox.link || "", d: 0 });
+  if (j.knowledgeGraph) out.push({ t: j.knowledgeGraph.title || "", s: [j.knowledgeGraph.description, ...Object.entries(j.knowledgeGraph.attributes || {}).map(([k, v]) => k + ": " + v)].filter(Boolean).join(". ").slice(0, 500), l: "", d: 0 });
+  for (const x of j.organic || []) out.push({ t: x.title || "", s: String(x.snippet || "").slice(0, 400), l: x.link, d: 0 });
+  return out;
+}
+__name(serperWeb, "serperWeb");
+async function tavilyWeb(env, q) {
+  if (env.SERPER_KEY) return serperWeb(env, q);
+  if (!env.TAVILY_KEY) return [];
+  const j = await fetch("https://api.tavily.com/search", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.TAVILY_KEY }, body: JSON.stringify({ query: q, max_results: 6, search_depth: "basic", country: "israel" }), signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).catch(() => null);
+  aiTrace.push("tavily " + (j && j.results ? j.results.length : "err"));
+  return (j && j.results || []).map((x) => ({ t: x.title || "", s: String(x.content || "").slice(0, 500), l: x.url, d: 0 }));
+}
+__name(tavilyWeb, "tavilyWeb");
+async function ddgWeb(q) {
+  const h = await fetch("https://html.duckduckgo.com/html/", { method: "POST", headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, body: "q=" + encodeURIComponent(q) + "&kl=il-he", signal: AbortSignal.timeout(6e3) }).then((r) => r.text()).catch(() => "");
+  const out = [];
+  for (const m of h.matchAll(/class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)) {
+    out.push({ t: unxml(m[2]), s: unxml(m[3]).slice(0, 300), l: m[1], d: 0 });
+    if (out.length >= 8) break;
+  }
+  aiTrace.push("ddg " + h.length + " " + out.length);
+  return out;
+}
+__name(ddgWeb, "ddgWeb");
 async function bingWeb(q) {
   return rssItems(await getText(`https://www.bing.com/search?q=${encodeURIComponent(q)}&format=rss`));
 }
@@ -3071,7 +3103,7 @@ async function osrm(mode, a, b) {
   return { km: Math.round(r.distance / 100) / 10, min: Math.round(r.duration / 60), steps: steps.slice(0, 9) };
 }
 __name(osrm, "osrm");
-async function routeAnswer(a) {
+async function routeAnswer(a, env) {
   const [A, B] = await Promise.all([geoFind(a.from || "", a.from_lat, a.from_lon), geoFind(a.to || "", a.to_lat, a.to_lon)]);
   if (!A || !B) return `\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05DE\u05E6\u05D5\u05D0 \u05E2\u05DC \u05D4\u05DE\u05E4\u05D4 \u05D0\u05EA ${!A ? a.from || "\u05E0\u05E7\u05D5\u05D3\u05EA \u05D4\u05D9\u05E6\u05D9\u05D0\u05D4" : a.to || "\u05D4\u05D9\u05E2\u05D3"}. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05D2\u05D9\u05D3 \u05E9\u05DD \u05E9\u05DC \u05E8\u05D7\u05D5\u05D1 \u05D0\u05D5 \u05DE\u05E7\u05D5\u05DD \u05DE\u05D5\u05DB\u05E8.`;
   const [foot, car] = await Promise.all([osrm("foot", A, B), osrm("car", A, B)]);
@@ -3083,7 +3115,7 @@ async function routeAnswer(a) {
   else {
     if (car) t += `\u05D1\u05E8\u05DB\u05D1 \u05D0\u05D5 \u05D1\u05DE\u05D5\u05E0\u05D9\u05EA \u05D1\u05E2\u05E8\u05DA ${car.min} \u05D3\u05E7\u05D5\u05EA, ${car.km} \u05E7\u05D9\u05DC\u05D5\u05DE\u05D8\u05E8, \u05D3\u05E8\u05DA ${car.steps.join(", ")}.`;
     if (foot && foot.min > 40) t += ` \u05D1\u05E8\u05D2\u05DC \u05D6\u05D4 \u05D1\u05E2\u05E8\u05DA ${foot.min} \u05D3\u05E7\u05D5\u05EA, \u05E8\u05D7\u05D5\u05E7 \u05DE\u05D3\u05D9 \u05DC\u05DC\u05DB\u05EA, \u05D0\u05D6 \u05E2\u05D3\u05D9\u05E3 \u05D0\u05D5\u05D8\u05D5\u05D1\u05D5\u05E1 \u05D0\u05D5 \u05DE\u05D5\u05E0\u05D9\u05EA.`;
-    t += " \u05E2\u05DC \u05E7\u05D5\u05D5\u05D9 \u05D0\u05D5\u05D8\u05D5\u05D1\u05D5\u05E1 \u05D0\u05D9\u05DF \u05DC\u05D9 \u05DE\u05D9\u05D3\u05E2 \u05DE\u05D3\u05D5\u05D9\u05E7, \u05D0\u05D6 \u05DB\u05D3\u05D0\u05D9 \u05DC\u05D1\u05D3\u05D5\u05E7 \u05D1\u05D0\u05E4\u05DC\u05D9\u05E7\u05E6\u05D9\u05D4 \u05D0\u05D5 \u05D1\u05E7\u05D5 \u05D4\u05DE\u05D9\u05D3\u05E2 \u05E9\u05DC \u05D4\u05EA\u05D7\u05D1\u05D5\u05E8\u05D4 \u05D4\u05E6\u05D9\u05D1\u05D5\u05E8\u05D9\u05EA.";
+    { const b = env ? await busAnswer(env, { from: a.from, to: a.to }).catch(() => "") : ""; if (b) t += " \u05D1\u05EA\u05D7\u05D1\u05D5\u05E8\u05D4 \u05E6\u05D9\u05D1\u05D5\u05E8\u05D9\u05EA: " + b; }
   }
   return t;
 }
@@ -3097,30 +3129,104 @@ async function wikiHe(q) {
 }
 __name(wikiHe, "wikiHe");
 async function snippetAnswer(env, query, queryEn = "") {
-  const [news, web, webEn, wiki] = await Promise.all([bingNews(query).catch(() => []), bingWeb(query).catch(() => []), queryEn ? bingWeb(queryEn).catch(() => []) : [], wikiHe(query)]);
+  const [news, web, webEn, wiki] = await Promise.all([bingNews(query).catch(() => []), tavilyWeb(env, query).then((x) => x.length ? x : ddgWeb(query)).then((x) => x.length ? x : bingWeb(query)).catch(() => []), queryEn ? bingWeb(queryEn).catch(() => []) : [], wikiHe(query)]);
   const fmt = /* @__PURE__ */ __name((arr, n) => arr.slice(0, n).map((i) => `${i.t}${i.s ? ": " + i.s : ""}`).join(" | "), "fmt");
   const facts = [wiki, web.length ? "\u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05D7\u05D9\u05E4\u05D5\u05E9: " + fmt(web, 6) : "", webEn.length ? "\u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05D7\u05D9\u05E4\u05D5\u05E9 \u05D1\u05D0\u05E0\u05D2\u05DC\u05D9\u05EA: " + fmt(webEn, 6) : "", news.length ? "\u05DB\u05D5\u05EA\u05E8\u05D5\u05EA \u05D7\u05D3\u05E9\u05D5\u05EA \u05D0\u05D7\u05E8\u05D5\u05E0\u05D5\u05EA: " + fmt(news.sort((a, b) => b.d - a.d), 8) : ""].filter(Boolean).join("\n");
   if (!facts) return "";
   const r = await aiText(env, { system: `\u05E2\u05E0\u05D4 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA \u05E4\u05E9\u05D5\u05D8\u05D4 \u05D5\u05D1\u05E7\u05E6\u05E8\u05D4 (\u05E2\u05D3 3 \u05DE\u05E9\u05E4\u05D8\u05D9\u05DD, \u05D6\u05D4 \u05DE\u05D5\u05E7\u05E8\u05D0 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF) \u05E2\u05DC \u05D4\u05E9\u05D0\u05DC\u05D4, \u05E8\u05E7 \u05DC\u05E4\u05D9 \u05D4\u05DE\u05D9\u05D3\u05E2 \u05E9\u05DE\u05E6\u05D5\u05E8\u05E3. \u05D0\u05DD \u05D4\u05DE\u05D9\u05D3\u05E2 \u05DC\u05D0 \u05E2\u05D5\u05E0\u05D4 \u05E2\u05DC \u05D4\u05E9\u05D0\u05DC\u05D4, \u05EA\u05D2\u05D9\u05D3 \u05E9\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA. \u05EA\u05D0\u05E8\u05D9\u05DA \u05D4\u05D9\u05D5\u05DD: ${nowIL().slice(0, 10)}. \u05D4\u05D7\u05D6\u05E8 JSON: {"answer":"\u05D4\u05EA\u05E9\u05D5\u05D1\u05D4"}`, contents: [{ role: "user", parts: [{ text: `\u05D4\u05E9\u05D0\u05DC\u05D4: ${query}
 
+טמפרטורות: בתוצאות החיפוש הן לפעמים בפרנהייט (מספרים כמו 70 או 85). תמיד תמיר לצלזיוס לפי (F-32)*5/9 ותגיד רק מעלות צלזיוס. בישראל כמעט אף פעם לא חם מ-45 מעלות צלזיוס.
 \u05D4\u05DE\u05D9\u05D3\u05E2 \u05E9\u05E0\u05DE\u05E6\u05D0:
 ${facts}` }] }], timeout: 3500, deadline: 5e3 }).catch(() => ({}));
   return String(r.answer || "").trim();
 }
 __name(snippetAnswer, "snippetAnswer");
+var SEARCH_MODELS = ["gemini-3.8-flash", "gemini-flash-lite-latest"];
+async function geminiSearch(env, sys, prompt, budget = 9e3) {
+  const start = Date.now();
+  for (const model of SEARCH_MODELS) for (const key of geminiKeys(env)) {
+    const id = "gs" + key.slice(-4) + "|" + model;
+    const left = budget - (Date.now() - start);
+    if (isDead(id) || left < 1500) continue;
+    const t0 = Date.now();
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], tools: [{ google_search: {} }] }),
+        signal: AbortSignal.timeout(left)
+      });
+      used++;
+      aiTrace.push(`${id} ${r.status} ${Date.now() - t0}ms`);
+      if (r.ok) {
+        const j = await r.json();
+        const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((x) => x.text || "").join(" ").replace(/【[^】]*】|\[\d+(,\s*\d+)*\]|https?:\S+/g, "").replace(/[*#_|]/g, "").replace(/\s+/g, " ").trim();
+        if (t) return t;
+      } else {
+        aiTrace.push((await r.text()).slice(0, 160));
+        if (r.status === 429) dead.set(id, Date.now() + 6e4);
+        else if (r.status >= 500) dead.set(id, Date.now() + 2 * 6e4);
+      }
+    } catch (e) {
+      aiTrace.push(`${id} ${e.message}`);
+    }
+  }
+  return "";
+}
+__name(geminiSearch, "geminiSearch");
+var SEARCH_SYS = "טמפרטורות תמיד במעלות צלזיוס. אתה עוזר קולי בקו טלפוני של בחורי ישיבה. חפש בגוגל וענה בעברית פשוטה, קצר (עד 4 משפטים, זה מוקרא בטלפון), בלי קישורים, כוכביות או רשימות. מספרים ושעות כתוב בספרות. אם לא מצאת תשובה בטוחה, תגיד ביושר שלא מצאת ואל תמציא. אל תעסוק ברכילות, ידוענים, ספורט, סרטים או תוכן שאינו מתאים לציבור החרדי.";
+var BUS_SYS = SEARCH_SYS + " השאלה היא על תחבורה ציבורית בישראל. חפש במוביט, באתר משרד התחבורה ובאתרי המפעילים (אגד, דן, קווים, אקסטרה, אלקטרה אפיקים ועוד). תן: מספר הקו והמפעיל, מאיפה עולים (תחנה או רחוב), בערך כמה זמן נסיעה וכל כמה זמן יש אוטובוס, ואם שאלו על שעה מסוימת את היציאות הקרובות. בסוף הוסף שזמנים כדאי לוודא במוקד התחבורה הציבורית כוכבית 8787.";
+async function stopArrivals(code) {
+  const j = await fetch(`https://curlbus.app/${code}`, { headers: { ...UA, Accept: "application/json" }, signal: AbortSignal.timeout(5e3) }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  const v = j && j.visits && Object.values(j.visits)[0];
+  if (!Array.isArray(v) || !v.length) return "";
+  const now = Date.now(), by = {};
+  for (const x of v) {
+    const ln = x.line_name || x.route_id, eta = Math.round((Date.parse(x.eta) - now) / 6e4);
+    if (!ln || !(eta >= 0) || eta > 90) continue;
+    (by[ln] = by[ln] || []).push(eta);
+  }
+  const parts = Object.entries(by).sort((a, b) => Math.min(...a[1]) - Math.min(...b[1])).slice(0, 6).map(([ln, e]) => `קו ${ln} בעוד ${e.sort((a, b) => a - b).slice(0, 2).join(" ובעוד ")} דקות`);
+  return parts.length ? `בתחנה ${code} לפי הזמן האמתי: ${parts.join(", ")}.` : "";
+}
+__name(stopArrivals, "stopArrivals");
+async function busAnswer(env, a) {
+  const stop = String(a.stop || "").replace(/\D/g, "");
+  if (stop.length >= 3) {
+    const live = await stopArrivals(stop).catch(() => "");
+    if (live) return live;
+  }
+  const now = new Date(Date.now() + 3 * 36e5).toISOString().slice(0, 16).replace("T", " ");
+  const q = [a.line ? `קו ${a.line}` : "", a.from ? `מ${a.from}` : "", a.to ? `ל${a.to}` : "", stop ? `תחנה ${stop}` : "", a.when ? `בזמן: ${a.when}` : "", a.question || ""].filter(Boolean).join(" ");
+  const prompt = `עכשיו (שעון ישראל): ${now}. שאלת אוטובוסים: ${q}`;
+  if (env.SERPER_KEY || env.TAVILY_KEY) {
+    const t = await snippetAnswer(env, (a.question || q) + " \u05D0\u05D5\u05D8\u05D5\u05D1\u05D5\u05E1").catch(() => "");
+    if (t && !/\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9/.test(t)) return t + " \u05DB\u05D3\u05D0\u05D9 \u05DC\u05D5\u05D5\u05D3\u05D0 \u05D1\u05DB\u05D5\u05DB\u05D1\u05D9\u05EA 8787.";
+  }
+  return await webAnswer(env, prompt + ". חפש במוביט ובאתרי חברות האוטובוסים. תן מספר קו, מפעיל ומאיפה עולים, רק מה שמצאת בחיפוש. בסוף תגיד שכדאי לוודא בכוכבית 8787.", "").catch(() => "");
+}
+__name(busAnswer, "busAnswer");
 async function webAnswer(env, query, context = "", queryEn = "") {
+  {
+    const g = await geminiSearch(env, SEARCH_SYS, (context ? context + "\n\n" : "") + query, 9e3).catch(() => "");
+    if (g) return g;
+    if (env.TAVILY_KEY || env.SERPER_KEY) {
+      const t = await snippetAnswer(env, query, queryEn).catch(() => "");
+      if (t && !/\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9/.test(t)) return t;
+    }
+  }
   const sys = `\u05D0\u05EA\u05D4 \u05E2\u05D5\u05D6\u05E8 \u05E7\u05D5\u05DC\u05D9 \u05D1\u05E7\u05D5 \u05D8\u05DC\u05E4\u05D5\u05E0\u05D9 \u05E9\u05DC \u05D1\u05D7\u05D5\u05E8\u05D9 \u05D9\u05E9\u05D9\u05D1\u05D4 \u05DE\u05D4\u05E6\u05D9\u05D1\u05D5\u05E8 \u05D4\u05D7\u05E8\u05D3\u05D9. \u05D7\u05E4\u05E9 \u05D1\u05D2\u05D5\u05D2\u05DC \u05D5\u05E2\u05E0\u05D4 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA \u05E4\u05E9\u05D5\u05D8\u05D4, \u05E7\u05E6\u05E8: \u05E2\u05D3 4 \u05DE\u05E9\u05E4\u05D8\u05D9\u05DD, \u05DB\u05D9 \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05DE\u05D5\u05E7\u05E8\u05D0\u05EA \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF. \u05D1\u05DC\u05D9 \u05E7\u05D9\u05E9\u05D5\u05E8\u05D9\u05DD, \u05D1\u05DC\u05D9 \u05E8\u05E9\u05D9\u05DE\u05D5\u05EA, \u05D1\u05DC\u05D9 \u05DB\u05D5\u05DB\u05D1\u05D9\u05D5\u05EA \u05D5\u05D1\u05DC\u05D9 \u05D0\u05D9\u05DE\u05D5\u05D2'\u05D9. \u05EA\u05D0\u05E8\u05D9\u05DA \u05D5\u05E9\u05E2\u05D4 \u05E2\u05DB\u05E9\u05D9\u05D5: ${nowIL()}. \u05D0\u05DD \u05D4\u05DE\u05D9\u05D3\u05E2 \u05DC\u05D0 \u05D5\u05D3\u05D0\u05D9 \u05D0\u05D5 \u05E9\u05D4\u05DE\u05E7\u05D5\u05E8\u05D5\u05EA \u05E1\u05D5\u05EA\u05E8\u05D9\u05DD, \u05EA\u05D2\u05D9\u05D3 \u05D0\u05EA \u05D6\u05D4. \u05E9\u05DE\u05D5\u05E8 \u05E2\u05DC \u05DC\u05E9\u05D5\u05DF \u05E0\u05E7\u05D9\u05D9\u05D4 \u05D5\u05EA\u05D5\u05DB\u05DF \u05E9\u05DE\u05EA\u05D0\u05D9\u05DD \u05DC\u05E6\u05D9\u05D1\u05D5\u05E8 \u05D4\u05D7\u05E8\u05D3\u05D9: \u05D1\u05DC\u05D9 \u05EA\u05DB\u05E0\u05D9\u05DD \u05DC\u05D0 \u05E6\u05E0\u05D5\u05E2\u05D9\u05DD, \u05D1\u05DC\u05D9 \u05E8\u05DB\u05D9\u05DC\u05D5\u05EA \u05D5\u05D1\u05DC\u05D9 \u05E0\u05D5\u05E9\u05D0\u05D9\u05DD \u05E9\u05DC\u05D0 \u05DE\u05EA\u05D0\u05D9\u05DE\u05D9\u05DD \u05DC\u05D1\u05D7\u05D5\u05E8\u05D9 \u05D9\u05E9\u05D9\u05D1\u05D4. \u05D0\u05DD \u05D4\u05E9\u05D0\u05DC\u05D4 \u05D1\u05E0\u05D5\u05E9\u05D0 \u05DB\u05D6\u05D4, \u05EA\u05D2\u05D9\u05D3 \u05D1\u05E2\u05D3\u05D9\u05E0\u05D5\u05EA \u05E9\u05E2\u05DC \u05D6\u05D4 \u05D0\u05EA\u05D4 \u05DC\u05D0 \u05E2\u05D5\u05E0\u05D4. \u05DB\u05E9\u05DE\u05D3\u05D1\u05E8\u05D9\u05DD \u05E2\u05DC \u05D4\u05E7\u05D3\u05D5\u05E9 \u05D1\u05E8\u05D5\u05DA \u05D4\u05D5\u05D0 \u05D0\u05D5\u05DE\u05E8\u05D9\u05DD "\u05D4\u05E9\u05DD", \u05DC\u05D0 "\u05D0\u05DC\u05D5\u05D4\u05D9\u05DD".`;
   const start = Date.now();
-  if (env.GROQ_KEY) for (const model of ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]) {
+  if (env.GROQ_KEY) for (const model of ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]) {
     const id = "web|" + model;
-    if (isDead(id) || Date.now() - start > 3e3) continue;
+    if (isDead(id) || Date.now() - start > 9e3) continue;
     const t0 = Date.now();
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        signal: AbortSignal.timeout(7e3 - (Date.now() - start)),
+        signal: AbortSignal.timeout(15e3),
         headers: { Authorization: "Bearer " + env.GROQ_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, tools: [{ type: "browser_search" }], tool_choice: "required", messages: [{ role: "system", content: sys }, { role: "user", content: (context ? context + "\n\n" : "") + query }] })
+        body: JSON.stringify({ model, ...model.startsWith("groq/") ? {} : { tools: [{ type: "browser_search" }], tool_choice: "required" }, messages: [{ role: "system", content: sys }, { role: "user", content: (context ? context + "\n\n" : "") + query }] })
       });
       aiTrace.push(`${id} ${r.status} ${Date.now() - t0}ms`);
       if (r.ok) {
@@ -3214,6 +3320,7 @@ var ACTIONS_USER = `- \u05E4\u05E2\u05D5\u05DC\u05D5\u05EA: \u05D1\u05E9\u05D3\u
   {"type":"learn_next"}: \u05D1\u05DC\u05D9\u05DE\u05D5\u05D3 \u05D1\u05D7\u05D1\u05E8\u05D5\u05EA\u05D0, \u05DB\u05E9\u05D4\u05D5\u05D0 \u05D0\u05D5\u05DE\u05E8 "\u05D4\u05DC\u05D0\u05D4", "\u05EA\u05DE\u05E9\u05D9\u05DA" \u05D0\u05D5 "\u05E7\u05D8\u05E2 \u05D4\u05D1\u05D0". {"type":"learn_stop"}: \u05DB\u05E9\u05D4\u05D5\u05D0 \u05E8\u05D5\u05E6\u05D4 \u05DC\u05D4\u05E4\u05E1\u05D9\u05E7 \u05DC\u05DC\u05DE\u05D5\u05D3.
   {"type":"web","query":"...","query_en":"..."}: query_en \u05D4\u05D5\u05D0 \u05D0\u05D5\u05EA\u05D4 \u05E9\u05D0\u05DC\u05D4 \u05D1\u05D0\u05E0\u05D2\u05DC\u05D9\u05EA, \u05E7\u05E6\u05E8\u05D4, \u05DC\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E0\u05D5\u05E1\u05E3. \u05D7\u05D5\u05D1\u05D4 \u05DC\u05D4\u05E9\u05EA\u05DE\u05E9 \u05D1\u05D6\u05D4 (\u05D5\u05DC\u05D0 \u05DC\u05E2\u05E0\u05D5\u05EA \u05DE\u05D4\u05D6\u05D9\u05DB\u05E8\u05D5\u05DF) \u05E2\u05DC \u05DB\u05DC \u05E9\u05D0\u05DC\u05D4 \u05E2\u05DC \u05DE\u05D9 \u05DE\u05DB\u05D4\u05DF \u05D4\u05D9\u05D5\u05DD \u05D1\u05EA\u05E4\u05E7\u05D9\u05D3 (\u05E8\u05D0\u05E9 \u05E2\u05D9\u05E8, \u05E9\u05E8, \u05E8\u05D1, \u05E8\u05D0\u05E9 \u05D9\u05E9\u05D9\u05D1\u05D4 \u05D5\u05DB\u05D5'), \u05D7\u05D3\u05E9\u05D5\u05EA, \u05DE\u05D7\u05D9\u05E8\u05D9\u05DD \u05D5\u05E9\u05E2\u05E8\u05D9\u05DD, \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA, \u05D5\u05DE\u05D4 \u05E7\u05D5\u05E8\u05D4 \u05E2\u05DB\u05E9\u05D9\u05D5 \u05D1\u05E2\u05D5\u05DC\u05DD, \u05DB\u05D9 \u05D4\u05D9\u05D3\u05E2 \u05E9\u05DC\u05DA \u05D9\u05E9\u05DF \u05D5\u05E2\u05DC\u05D5\u05DC \u05DC\u05D4\u05D9\u05D5\u05EA \u05E9\u05D2\u05D5\u05D9. \u05D5\u05D2\u05DD \u05DB\u05E9\u05D4\u05E9\u05D0\u05DC\u05D4 \u05E6\u05E8\u05D9\u05DB\u05D4 \u05DE\u05D9\u05D3\u05E2 \u05DE\u05D4\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05E9\u05D0\u05D9\u05DF \u05DC\u05DA \u05DC\u05DE\u05D8\u05D4 \u05D5\u05E9\u05D0\u05EA\u05D4 \u05DC\u05D0 \u05D9\u05D5\u05D3\u05E2 \u05D1\u05D5\u05D5\u05D3\u05D0\u05D5\u05EA: \u05D7\u05D3\u05E9\u05D5\u05EA \u05D5\u05D0\u05D9\u05E8\u05D5\u05E2\u05D9\u05DD \u05E2\u05D3\u05DB\u05E0\u05D9\u05D9\u05DD, \u05DE\u05D7\u05D9\u05E8\u05D9\u05DD, \u05E9\u05E2\u05D5\u05EA \u05E4\u05EA\u05D9\u05D7\u05D4, \u05DE\u05D9\u05D3\u05E2 \u05E2\u05DC \u05DE\u05E7\u05D5\u05DE\u05D5\u05EA, \u05D0\u05E0\u05E9\u05D9\u05DD, \u05DE\u05D5\u05E6\u05E8\u05D9\u05DD, \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05D5\u05E2\u05D5\u05D3. query \u05D4\u05D9\u05D0 \u05D4\u05E9\u05D0\u05DC\u05D4 \u05D4\u05DE\u05DC\u05D0\u05D4 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA, \u05E2\u05DD \u05DB\u05DC \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05D4\u05E9\u05D9\u05D7\u05D4. \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05EA\u05D7\u05E4\u05E9 \u05D1\u05D2\u05D5\u05D2\u05DC \u05D5\u05EA\u05E7\u05E8\u05D9\u05D0 \u05D0\u05EA \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05E9\u05E0\u05DE\u05E6\u05D0\u05D4 \u05D1\u05DE\u05E7\u05D5\u05DD \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05E9\u05DC\u05DA, \u05D0\u05D6 \u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 \u05EA\u05D2\u05D9\u05D3 \u05DE\u05E9\u05D4\u05D5 \u05E7\u05E6\u05E8 \u05DB\u05DE\u05D5 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7". \u05DC\u05D0 \u05DC\u05D6\u05DE\u05E0\u05D9\u05DD, \u05DC\u05DE\u05D6\u05D2 \u05D4\u05D0\u05D5\u05D5\u05D9\u05E8 \u05D0\u05D5 \u05DC\u05D4\u05D5\u05D3\u05E2\u05D5\u05EA \u05E9\u05DC \u05D4\u05E7\u05D5, \u05DB\u05D9 \u05D0\u05D5\u05EA\u05DD \u05D9\u05E9 \u05DC\u05DA \u05DB\u05D1\u05E8.
   {"type":"tell","to":"05...","text":"..."}: \u05DB\u05E9\u05D4\u05DE\u05D3\u05D1\u05E8 \u05DE\u05D1\u05E7\u05E9 \u05DC\u05D4\u05E2\u05D1\u05D9\u05E8 \u05D4\u05D5\u05D3\u05E2\u05D4 \u05DC\u05D7\u05D1\u05E8 ("\u05EA\u05D2\u05D9\u05D3 \u05DC\u05D2\u05D3\u05D9 \u05E9..."). to \u05D4\u05D5\u05D0 \u05DE\u05E1\u05E4\u05E8 \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05E9\u05DC \u05D4\u05D7\u05D1\u05E8 \u05DE\u05D4\u05E8\u05E9\u05D9\u05DE\u05D4, text \u05D4\u05D5\u05D0 \u05D4\u05D4\u05D5\u05D3\u05E2\u05D4 \u05D1\u05D2\u05D5\u05E3 \u05E8\u05D0\u05E9\u05D5\u05DF \u05E9\u05DC \u05D4\u05DE\u05D3\u05D1\u05E8, \u05D1\u05D3\u05D9\u05D5\u05E7 \u05DC\u05E4\u05D9 \u05DE\u05D4 \u05E9\u05D1\u05D9\u05E7\u05E9. \u05D4\u05D4\u05D5\u05D3\u05E2\u05D4 \u05EA\u05D7\u05DB\u05D4 \u05DC\u05D7\u05D1\u05E8 \u05D1\u05EA\u05D9\u05D1\u05D4 \u05D4\u05D0\u05D9\u05E9\u05D9\u05EA \u05E9\u05DC\u05D5, \u05E2\u05DD \u05D4\u05E9\u05DD \u05E9\u05DC \u05D4\u05DE\u05D3\u05D1\u05E8. \u05EA\u05D2\u05D9\u05D3 \u05DC\u05D5 \u05E9\u05D4\u05E2\u05D1\u05E8\u05EA. \u05E8\u05E7 \u05DC\u05D7\u05D1\u05E8\u05D9 \u05D4\u05E7\u05D1\u05D5\u05E6\u05D4.
+  {"type":"bus","from":"...","to":"...","line":"","stop":"","when":"","question":"..."}: כל שאלה על אוטובוסים ותחבורה ציבורית: איזה קו מגיע לאן, מתי יוצא אוטובוס, מתי מגיע הקו לתחנה, מאיפה עולים. line מספר הקו אם נאמר, stop מספר תחנה (ספרות) אם נאמר, when מתי רוצים לנסוע, question השאלה במלואה. לעולם אל תמציא קווים או זמנים מהזיכרון.
   {"type":"route","from":"\u05DE\u05E7\u05D5\u05DD \u05D4\u05D9\u05E6\u05D9\u05D0\u05D4","to":"\u05D4\u05D9\u05E2\u05D3","mode":"foot \u05D0\u05D5 car","from_lat":31.8,"from_lon":35.2,"to_lat":31.7,"to_lon":35.2}: \u05DB\u05E9\u05E9\u05D5\u05D0\u05DC\u05D9\u05DD \u05D0\u05D9\u05DA \u05DE\u05D2\u05D9\u05E2\u05D9\u05DD \u05DE\u05DE\u05E7\u05D5\u05DD \u05DC\u05DE\u05E7\u05D5\u05DD. from \u05D5-to \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA, \u05DB\u05DE\u05D4 \u05E9\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D5\u05D9\u05E7 (\u05E8\u05D7\u05D5\u05D1, \u05E9\u05DB\u05D5\u05E0\u05D4 \u05D5\u05E2\u05D9\u05E8). \u05EA\u05DF \u05D2\u05DD \u05E7\u05D5\u05D0\u05D5\u05E8\u05D3\u05D9\u05E0\u05D8\u05D5\u05EA \u05DE\u05E9\u05D5\u05E2\u05E8\u05D5\u05EA \u05E9\u05DC \u05E9\u05E0\u05D9 \u05D4\u05DE\u05E7\u05D5\u05DE\u05D5\u05EA, \u05DB\u05D3\u05D9 \u05DC\u05E2\u05D6\u05D5\u05E8 \u05DC\u05DE\u05E6\u05D5\u05D0 \u05D0\u05D5\u05EA\u05DD. \u05D0\u05DD \u05DC\u05D0 \u05D0\u05DE\u05E8\u05D5 \u05DE\u05D0\u05D9\u05E4\u05D4 \u05D9\u05D5\u05E6\u05D0\u05D9\u05DD, \u05EA\u05E9\u05D0\u05DC \u05D0\u05D5\u05EA\u05D5 \u05E7\u05D5\u05D3\u05DD \u05D5\u05D0\u05DC \u05EA\u05D7\u05D6\u05D9\u05E8 route. \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05EA\u05D7\u05E9\u05D1 \u05DE\u05E1\u05DC\u05D5\u05DC \u05D0\u05DE\u05D9\u05EA\u05D9 \u05D1\u05DE\u05E4\u05D4 \u05D5\u05EA\u05E7\u05E8\u05D9\u05D0 \u05D0\u05D5\u05EA\u05D5 \u05D1\u05DE\u05E7\u05D5\u05DD \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05E9\u05DC\u05DA, \u05D0\u05D6 \u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7 \u05DE\u05E1\u05DC\u05D5\u05DC". \u05D0\u05E1\u05D5\u05E8 \u05DC\u05D4\u05DE\u05E6\u05D9\u05D0 \u05DE\u05E1\u05DC\u05D5\u05DC\u05D9\u05DD \u05D1\u05E2\u05E6\u05DE\u05DA.
   {"type":"news","topic":""}: \u05DB\u05E9\u05DE\u05D1\u05E7\u05E9\u05D9\u05DD \u05D7\u05D3\u05E9\u05D5\u05EA \u05D0\u05D5 "\u05DE\u05D4 \u05E7\u05D5\u05E8\u05D4 \u05D1\u05E2\u05D5\u05DC\u05DD". topic \u05E8\u05D9\u05E7, \u05D0\u05D5 \u05E0\u05D5\u05E9\u05D0 \u05D0\u05DD \u05D1\u05D9\u05E7\u05E9\u05D5 (\u05DC\u05DE\u05E9\u05DC "\u05DB\u05DC\u05DB\u05DC\u05D4"). \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05EA\u05E7\u05E8\u05D9\u05D0 \u05DE\u05D1\u05D6\u05E7 \u05DE\u05D4\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05D1\u05DE\u05E7\u05D5\u05DD \u05D4\u05EA\u05E9\u05D5\u05D1\u05D4 \u05E9\u05DC\u05DA, \u05D0\u05D6 \u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7 \u05DE\u05D4 \u05D7\u05D3\u05E9".
   {"type":"speed","value":"slower"}, \u05D0\u05D5 "faster", \u05D0\u05D5 "normal": \u05DB\u05E9\u05D4\u05D5\u05D0 \u05DE\u05D1\u05E7\u05E9 \u05E9\u05EA\u05D3\u05D1\u05E8 \u05D9\u05D5\u05EA\u05E8 \u05DC\u05D0\u05D8, \u05D9\u05D5\u05EA\u05E8 \u05DE\u05D4\u05E8 \u05D0\u05D5 \u05E8\u05D2\u05D9\u05DC. \u05E0\u05E9\u05DE\u05E8 \u05DC\u05D5 \u05D2\u05DD \u05DC\u05E9\u05D9\u05D7\u05D5\u05EA \u05D4\u05D1\u05D0\u05D5\u05EA.`;
@@ -3256,6 +3363,7 @@ async function extrasFor(env, phone, callId, isAdmin, line) {
   if (rules.length) out.push("\u05DB\u05DC\u05DC\u05D9\u05DD \u05E7\u05D1\u05D5\u05E2\u05D9\u05DD \u05E9\u05DE\u05E0\u05D4\u05DC \u05D4\u05E7\u05D1\u05D5\u05E6\u05D4 \u05E7\u05D1\u05E2 \u05DC\u05DA (\u05D7\u05D5\u05D1\u05D4 \u05DC\u05E4\u05E2\u05D5\u05DC \u05DC\u05E4\u05D9\u05D4\u05DD): " + rules.map((r, i) => `${i + 1}. ${r}`).join(" "));
   out.push("[[H]]" + ACTIONS_USER + "[[/H]]");
   out.push(`\u05DE\u05E1\u05DC\u05D5\u05DC\u05D9\u05DD: \u05DB\u05E9\u05E9\u05D5\u05D0\u05DC\u05D9\u05DD \u05D0\u05D9\u05DA \u05DE\u05D2\u05D9\u05E2\u05D9\u05DD \u05DE\u05DE\u05E7\u05D5\u05DD \u05DC\u05DE\u05E7\u05D5\u05DD, \u05D0\u05DC \u05EA\u05DE\u05E6\u05D9\u05D0 \u05DE\u05E1\u05DC\u05D5\u05DC. \u05D4\u05D7\u05D6\u05E8 \u05D1\u05E9\u05D3\u05D4 do \u05D0\u05EA [{"type":"route","from":"...","to":"...","mode":"foot"}] \u05D5\u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7 \u05DE\u05E1\u05DC\u05D5\u05DC". \u05D0\u05DD \u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2 \u05DE\u05D0\u05D9\u05E4\u05D4 \u05D9\u05D5\u05E6\u05D0\u05D9\u05DD, \u05EA\u05E9\u05D0\u05DC.`);
+  out.push(`אוטובוסים: כששואלים על אוטובוס, קו, תחנה או זמני נסיעה, החזר בשדה do את [{"type":"bus",...}] ובשדה answer רק "שנייה, בודק את האוטובוסים".`);
   out.push(`\u05D7\u05D3\u05E9\u05D5\u05EA: \u05DB\u05E9\u05DE\u05D1\u05E7\u05E9\u05D9\u05DD \u05D7\u05D3\u05E9\u05D5\u05EA, \u05D4\u05D7\u05D6\u05E8 \u05D1\u05E9\u05D3\u05D4 do \u05D0\u05EA [{"type":"news","topic":""}] \u05D5\u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7 \u05DE\u05D4 \u05D7\u05D3\u05E9".`);
   out.push(`\u05D7\u05D9\u05E4\u05D5\u05E9 \u05D1\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8: \u05E2\u05DC \u05E9\u05D0\u05DC\u05D4 \u05E2\u05DC \u05DE\u05D9 \u05DE\u05DB\u05D4\u05DF \u05D4\u05D9\u05D5\u05DD \u05D1\u05EA\u05E4\u05E7\u05D9\u05D3, \u05D7\u05D3\u05E9\u05D5\u05EA, \u05DE\u05D7\u05D9\u05E8\u05D9\u05DD, \u05D0\u05D5 \u05DB\u05DC \u05DE\u05D9\u05D3\u05E2 \u05E2\u05D3\u05DB\u05E0\u05D9 \u05DE\u05D4\u05E2\u05D5\u05DC\u05DD, \u05D0\u05DC \u05EA\u05E2\u05E0\u05D4 \u05DE\u05D4\u05D6\u05D9\u05DB\u05E8\u05D5\u05DF. \u05D4\u05D7\u05D6\u05E8 \u05D1\u05E9\u05D3\u05D4 do \u05D0\u05EA [{"type":"web","query":"\u05D4\u05E9\u05D0\u05DC\u05D4 \u05D4\u05DE\u05DC\u05D0\u05D4"}] \u05D5\u05D1\u05E9\u05D3\u05D4 answer \u05E8\u05E7 "\u05E9\u05E0\u05D9\u05D9\u05D4, \u05D1\u05D5\u05D3\u05E7".`);
   out.push(isAdmin ? "[[H]]" + ACTIONS_ADMIN + "\n" + adm + "[[/H]]" : "- \u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05E0\u05D9\u05D4\u05D5\u05DC \u05DE\u05D5\u05EA\u05E8\u05D5\u05EA \u05E8\u05E7 \u05DC\u05DE\u05E0\u05D4\u05DC\u05D9\u05DD. \u05D0\u05DD \u05D4\u05D5\u05D0 \u05DE\u05D1\u05E7\u05E9 \u05E4\u05E2\u05D5\u05DC\u05EA \u05E0\u05D9\u05D4\u05D5\u05DC, \u05EA\u05D2\u05D9\u05D3 \u05DC\u05D5 \u05D1\u05D7\u05D1\u05D9\u05D1\u05D5\u05EA \u05E9\u05E8\u05E7 \u05DE\u05E0\u05D4\u05DC\u05D9\u05DD \u05D9\u05DB\u05D5\u05DC\u05D9\u05DD.");
@@ -3385,8 +3493,9 @@ async function applyActions(env, acts, { phone, callId, isAdmin }) {
         const to = String(a.to || "").replace(/\D/g, "");
         if (nm[to]) await tellFriend(env, phone, to, String(a.text).slice(0, 600));
         else after.push("\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D7\u05D1\u05E8 \u05D4\u05D6\u05D4 \u05D1\u05E8\u05E9\u05D9\u05DE\u05D4, \u05D0\u05D6 \u05D4\u05D4\u05D5\u05D3\u05E2\u05D4 \u05DC\u05D0 \u05E0\u05E9\u05DC\u05D7\u05D4.");
-      } else if (a.type === "route" && (a.from || a.to)) replace = await routeAnswer(a).catch(() => "") || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D7\u05E9\u05D1 \u05DE\u05E1\u05DC\u05D5\u05DC \u05DB\u05E8\u05D2\u05E2.";
+      } else if (a.type === "route" && (a.from || a.to)) replace = await routeAnswer(a, env).catch(() => "") || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D7\u05E9\u05D1 \u05DE\u05E1\u05DC\u05D5\u05DC \u05DB\u05E8\u05D2\u05E2.";
       else if (a.type === "news") replace = await newsAnswer(env, String(a.topic || "").slice(0, 100), isAdmin) || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05D1\u05D9\u05D0 \u05D7\u05D3\u05E9\u05D5\u05EA \u05DB\u05E8\u05D2\u05E2. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1 \u05E2\u05D5\u05D3 \u05DE\u05E2\u05D8.";
+      else if (a.type === "bus") replace = await busAnswer(env, a).catch(() => "") || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05DE\u05E6\u05D5\u05D0 \u05DE\u05D9\u05D3\u05E2 \u05E2\u05DC \u05D4\u05D0\u05D5\u05D8\u05D5\u05D1\u05D5\u05E1 \u05DB\u05E8\u05D2\u05E2. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05EA\u05E7\u05E9\u05E8 \u05DC\u05DB\u05D5\u05DB\u05D1\u05D9\u05EA 8787.";
       else if (a.type === "web" && a.query) {
         replace = await webAnswer(env, String(a.query).slice(0, 500), "", String(a.query_en || "").slice(0, 300)) || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05DE\u05E6\u05D5\u05D0 \u05D0\u05EA \u05D6\u05D4 \u05D1\u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05DB\u05E8\u05D2\u05E2. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05E0\u05E1\u05D5\u05EA \u05E9\u05D5\u05D1 \u05E2\u05D5\u05D3 \u05DE\u05E2\u05D8.";
       } else if (ADMIN_ACTS.has(a.type) && isAdmin) {
@@ -4691,6 +4800,12 @@ var worker_default = {
       }
       return Response.json({ r, ms: Date.now() - t0, trace: aiTrace });
     }
+    if (parts[0] === "aztest") {
+      aiTrace = [];
+      const t0 = Date.now();
+      const pcm = await azureTTS(env, u.searchParams.get("t") || "\u05D1\u05D3\u05D9\u05E7\u05D4", 8e3);
+      return Response.json({ ok: !!pcm, bytes: pcm ? pcm.length : 0, ms: Date.now() - t0, trace: aiTrace });
+    }
     if (parts[0] === "speak") {
       aiTrace = [];
       const t0 = Date.now();
@@ -4758,7 +4873,7 @@ var worker_default = {
     }
     if (parts[0] === "route") {
       aiTrace = [];
-      return Response.json({ r: await routeAnswer(JSON.parse(u.searchParams.get("a"))), trace: aiTrace });
+      return Response.json({ r: await routeAnswer(JSON.parse(u.searchParams.get("a")), env), trace: aiTrace });
     }
     if (parts[0] === "fetchtest_off") {
       const t0 = Date.now();
@@ -4779,6 +4894,11 @@ var worker_default = {
       aiTrace = [];
       const t0 = Date.now();
       return Response.json({ r: await snippetAnswer(env, u.searchParams.get("q") || "", u.searchParams.get("en") || ""), ms: Date.now() - t0, trace: aiTrace });
+    }
+    if (parts[0] === "bus") {
+      aiTrace = [];
+      const t0 = Date.now();
+      return Response.json({ r: await busAnswer(env, JSON.parse(u.searchParams.get("a") || "{}")), ms: Date.now() - t0, trace: aiTrace });
     }
     if (parts[0] === "web") {
       aiTrace = [];
