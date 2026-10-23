@@ -1,0 +1,20 @@
+# בודק שכל עותקי דף הניהול (שימחס, דעת תורה ו-index.html) נבנו מ-src/dash.html,
+# כדי שכל שינוי יופיע גם ב-GitHub Pages וגם ב-docs/both.
+name: סנכרון דף הניהול
+on:
+  pull_request:
+    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/daattorah/index.html', 'scripts/sync-pages.sh']
+  push:
+    branches: [main]
+    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/daattorah/index.html', 'scripts/sync-pages.sh']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: בנייה מחדש והשוואה
+        run: |
+          sh scripts/sync-pages.sh
+          git diff --exit-code --stat -- index.html docs/index.html docs/daattorah/index.html || { echo "::error::העותקים של דף הניהול לא מעודכנים. הריצו scripts/sync-pages.sh ודחפו."; exit 1; }
