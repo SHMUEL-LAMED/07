@@ -49,12 +49,62 @@ const SMALL_CSS = `:root{color-scheme:light;--bg:#f9f9f7;--card:#fcfcfb;--ink:#0
 .box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 24px;width:min(380px,100%);display:grid;gap:12px}h1{margin:0;font-size:20px}p{margin:0;color:var(--mut);font-size:14px}
 input{font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit;width:100%}button{font:inherit;font-weight:600;padding:12px;border:0;border-radius:10px;background:var(--acc);color:#fff;cursor:pointer}.err{color:var(--bad);font-size:14px}code{font-size:13px;background:var(--bg);padding:2px 6px;border-radius:6px}`;
 const shell = inner => `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>ניהול קו הקבוצה</title><style>${SMALL_CSS}</style></head><body>${inner}</body></html>`;
-const loginPage = (err = "") => shell(`<form class="box" method="post" action="/admin/login"><h1>ניהול קו הקבוצה</h1><p>073-351-2880</p>${err ? `<div class="err">${esc(err)}</div>` : ""}<input type="password" name="p" placeholder="סיסמה" autocomplete="current-password" autofocus required><button>כניסה</button></form>`);
+const loginPage = (err = "", gid = "") => shell(`<form class="box" method="post" action="/admin/login"><h1>ניהול קו הקבוצה</h1><p>073-351-2880</p>${err ? `<div class="err">${esc(err)}</div>` : ""}${gid ? googleBox(gid) : ""}<input type="password" name="p" placeholder="סיסמה" autocomplete="current-password" autofocus required><button>כניסה</button></form>`);
+// כפתור "כניסה עם Google" בדף הכניסה של ה-Worker. אחרי אישור גוגל – /admin/glogin קובע cookie ומרענן
+const googleBox = gid => `<div id="gbtn" style="min-height:44px;display:grid;justify-items:center"></div><div class="err" id="gerr"></div><p style="text-align:center">או בסיסמה:</p>
+<script src="https://accounts.google.com/gsi/client" async onload="google.accounts.id.initialize({client_id:${esc(JSON.stringify(gid))},callback:async r=>{const x=await fetch('/admin/glogin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:r.credential})});const j=await x.json().catch(()=>({}));if(x.ok)location.href='/admin';else document.getElementById('gerr').textContent=j.error||'הכניסה נכשלה'}});google.accounts.id.renderButton(document.getElementById('gbtn'),{theme:'outline',size:'large',text:'signin_with',locale:'he',shape:'pill'})"></script>`;
 const setupPage = shell(`<div class="box"><h1>דף הניהול נעול</h1><p>כדי להפעיל אותו צריך להגדיר סיסמה כסוד בשם <code>ADMIN_PASS</code> ב-Cloudflare: Workers &amp; Pages ← yemot-ai ← Settings ← Variables and Secrets (או <code>npx wrangler secret put ADMIN_PASS</code>). אחרי ההגדרה הדף נפתח מיד, בלי פריסה נוספת.</p></div>`);
 
 // הגבלת ניסיונות כניסה לפי כתובת IP (נשמר ב-KV לרבע שעה)
 const failKey = ip => "dash_fail:" + ip;
 async function fails(env, ip) { try { return (await env.KV.get(failKey(ip), "json")) || { n: 0 }; } catch { return { n: 0 }; } }
+
+// כניסה עם גוגל: הדפדפן מקבל מגוגל אסימון זהות (JWT חתום), והשרת בודק את החתימה מול המפתחות הציבוריים של גוגל,
+// שהאסימון נועד לאפליקציה שלנו (GOOGLE_CLIENT_ID), שהמייל מאומת, ושהוא ברשימת המורשים (OWNER_EMAIL או dash_emails ב-KV)
+const GOOGLE_ISS = ["accounts.google.com", "https://accounts.google.com"];
+let gCerts = { at: 0, keys: [] };
+const b64uBytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const b64uJson = s => JSON.parse(new TextDecoder().decode(b64uBytes(s)));
+async function googleCerts(force) {
+  if (!force && gCerts.keys.length && Date.now() - gCerts.at < 36e5) return gCerts.keys;
+  const r = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  if (!r.ok) throw new Error("לא ניתן לבדוק את החשבון מול גוגל כרגע");
+  gCerts = { at: Date.now(), keys: (await r.json()).keys || [] };
+  return gCerts.keys;
+}
+async function googleEmail(env, tok) {
+  const [h, p, sig] = String(tok || "").split(".");
+  if (!h || !p || !sig) throw new Error("אסימון גוגל לא תקין");
+  const head = b64uJson(h), pay = b64uJson(p);
+  if (head.alg !== "RS256") throw new Error("אסימון גוגל לא תקין");
+  const jwk = (await googleCerts()).find(k => k.kid === head.kid) || (await googleCerts(true)).find(k => k.kid === head.kid);
+  if (!jwk) throw new Error("אסימון גוגל לא תקין");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64uBytes(sig), enc.encode(h + "." + p))) throw new Error("אסימון גוגל לא תקין");
+  if (pay.aud !== env.GOOGLE_CLIENT_ID || !GOOGLE_ISS.includes(pay.iss) || !(pay.exp * 1000 > Date.now())) throw new Error("אסימון גוגל לא תקין או שפג תוקפו");
+  if (!(pay.email_verified === true || pay.email_verified === "true") || !pay.email) throw new Error("כתובת המייל בחשבון לא מאומתת");
+  return String(pay.email).toLowerCase();
+}
+const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
+const allowedEmails = async env => { try { return (await env.KV.get("dash_emails", "json")) || []; } catch { return []; } };
+// בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר את המייל או זורק שגיאה בעברית
+async function googleLogin(env, ip, cred, D) {
+  if (!env.GOOGLE_CLIENT_ID) throw new Error("כניסה עם גוגל עוד לא הוגדרה");
+  const f = await fails(env, ip);
+  if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
+  let email = "";
+  try {
+    email = await googleEmail(env, cred);
+    if (email !== ownerEmail(env) && !(await allowedEmails(env)).includes(email)) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
+  } catch (e) {
+    await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+    await D.log(env, `ניסיון כניסה עם גוגל נדחה${email ? " (" + email + ")" : ""} (${ip})`).catch(() => {});
+    throw e;
+  }
+  if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
+  await D.log(env, `כניסה לדף הניהול עם גוגל: ${email}`).catch(() => {});
+  return email;
+}
 
 export async function adminApp(req, env, ctx, u, parts, D) {
   const sub = parts[0] || "";
@@ -68,6 +118,16 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
     return withCors(new Response(null, { status: 204 }), req);
   }
+  // הגדרות ציבוריות לדף הכניסה (מזהה הלקוח של גוגל אינו סוד)
+  if (sub === "api" && parts[1] === "config") return withCors(json({ google: env.GOOGLE_CLIENT_ID || "" }), req);
+  if (sub === "glogin") {
+    if (req.method !== "POST") return redirect("/admin");
+    if ((req.headers.get("Origin") || "") !== u.origin) return json({ error: "מקור לא מורשה" }, 403);
+    const body = await req.json().catch(() => ({}));
+    try { await googleLogin(env, ip, String(body.credential || ""), D); }
+    catch (e) { return json({ error: String(e.message || e) }, 401); }
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env)) } });
+  }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
     if (origin && origin !== GH_ORIGIN) return json({ error: "מקור לא מורשה" }, 403);
@@ -75,6 +135,11 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     const f = await fails(env, ip);
     if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
     const body = await req.json().catch(() => ({}));
+    if (body.google) {
+      try { await googleLogin(env, ip, String(body.google), D); }
+      catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
+      return withCors(json({ token: await newToken(env) }), req);
+    }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
       await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
@@ -87,13 +152,13 @@ export async function adminApp(req, env, ctx, u, parts, D) {
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
     const f = await fails(env, ip);
-    if (f.n >= MAX_FAILS) return html(loginPage("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה"), 429);
+    if (f.n >= MAX_FAILS) return html(loginPage("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה", env.GOOGLE_CLIENT_ID), 429);
     const form = await req.formData().catch(() => null);
     const pass = String((form && form.get("p")) || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
       await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
       await D.log(env, `ניסיון כניסה שגוי לדף הניהול (${ip})`).catch(() => {});
-      return html(loginPage("סיסמה שגויה"), 401);
+      return html(loginPage("סיסמה שגויה", env.GOOGLE_CLIENT_ID), 401);
     }
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
     return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
@@ -103,7 +168,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
   const queryToken = sub === "api" && parts[1] === "audio" ? String(u.searchParams.get("token") || "") : "";
   const token = cookie(req, COOKIE) || (m && m[1]) || queryToken;
   const authed = await validToken(env, token);
-  if (!authed) return sub === "api" ? withCors(json({ error: "לא מחובר" }, 401), req) : html(loginPage());
+  if (!authed) return sub === "api" ? withCors(json({ error: "לא מחובר" }, 401), req) : html(loginPage("", env.GOOGLE_CLIENT_ID));
   if (sub === "api") {
     // אותו-origin כרגיל, או GitHub Pages המדויק בלבד.
     if (req.method === "POST" && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "בקשה לא תקינה" }, 400), req);
@@ -438,6 +503,19 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const answer = String((r && (r.answer || r.text)) || "").trim().slice(0, 3000) || (actions.length ? "הנה מה שאני מציע לבצע:" : "לא הבנתי, אפשר לנסח אחרת?");
       const hlog = await D.kvGet(env, "dashai", []); hlog.push({ d: D.nowIL(), q: ask.slice(0, 300), a: answer.slice(0, 300), n: actions.length }); await env.KV.put("dashai", JSON.stringify(hlog.slice(-100)));
       return json({ answer, actions, dropped: raw.length - actions.length });
+    }
+    case "emails": {
+      const owner = ownerEmail(env);
+      let list = await allowedEmails(env);
+      if (req.method === "POST") {
+        const email = String(body.email || "").trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "כתובת מייל לא תקינה" }, 400);
+        if (body.op === "add" && !list.includes(email) && email !== owner) list = [...list, email];
+        else if (body.op === "remove") { if (email === owner) return json({ error: "אי אפשר להסיר את בעל הקו" }, 400); list = list.filter(e => e !== email); }
+        await env.KV.put("dash_emails", JSON.stringify(list));
+        await D.log(env, `${body.op === "remove" ? "הוסר" : "נוסף"} חשבון גוגל מורשה לדף הניהול: ${email} (${VIA})`).catch(() => {});
+      }
+      return json({ owner, emails: list, enabled: !!env.GOOGLE_CLIENT_ID });
     }
     case "whoami": return json({ ro: !!auth.ro, exp: auth.exp || 0, owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
     case "share": { // קישור לצפייה בלבד (7 ימים כברירת מחדל): מותר לראות הכול, אסור לבצע שום פעולה

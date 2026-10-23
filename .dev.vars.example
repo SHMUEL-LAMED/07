@@ -2,6 +2,7 @@
 YM_TOKEN=
 RUN_KEY=
 ADMIN_PASS=   # סיסמת דף הניהול (/admin). בלי הסוד הזה הדף נעול
+OWNER_EMAIL=  # חשבון הגוגל של בעל הקו – תמיד מורשה להיכנס עם גוגל
 GEMINI_KEY=
 GEMINI_KEYS=
 GROQ_KEY=
@@ -10,4 +11,5 @@ ELEVEN_KEY=
 PROVIDERS=
 # משתנים רגילים שמוגדרים בלוח הבקרה
 GROQ_MODELS=
+GOOGLE_CLIENT_ID=   # מזהה לקוח OAuth מ-Google Cloud (לא סוד). בלעדיו אין כפתור 'כניסה עם Google'
 NAMES=
