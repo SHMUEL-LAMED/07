@@ -580,6 +580,12 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
 .upd i{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:820px){.aip.wide{width:auto}}
+/* ---- כניסה עם גוגל ---- */
+.gbox{display:grid;gap:14px}.gbox[hidden]{display:none}
+#gbtn{display:grid;justify-items:center;min-height:44px}
+.gor{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px}.gor::before,.gor::after{content:"";flex:1;height:1px;background:var(--line)}
+.glist{display:grid;gap:8px}.glist li{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r3);background:var(--bg)}
+.glist li span{flex:1;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -610,8 +616,9 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
     <div class="login-brand">07 / קו הקבוצה</div>
     <h2>טוב שחזרת.</h2>
     <p>כל מה שקורה בקו, במקום אחד.<br>נכנסים ומתחילים לנהל.</p>
+    <div class="gbox" id="gbox" hidden><div id="gbtn"></div><div class="gor"><span>או בסיסמה</span></div></div>
     <label for="login-pass">סיסמת ניהול</label>
-    <input id="login-pass" type="password" placeholder="סיסמת ניהול" autocomplete="current-password" required>
+    <input id="login-pass" type="password" placeholder="סיסמת ניהול" autocomplete="current-password">
     <div class="login-err" id="login-err" role="alert"></div>
     <button class="btn p" type="submit">כניסה</button>
   </form>
@@ -648,8 +655,8 @@ function showLogin(msg = "") {
   setTimeout(() => $("#login-pass").focus(), 0);
 }
 function hideLogin() { $("#login-layer").hidden = true; $("#login-err").textContent = ""; }
-async function createSession(password) {
-  const r = await fetch(API_BASE + "session", { method: "POST", body: JSON.stringify({ password }) });
+async function createSession(password, google) {
+  const r = await fetch(API_BASE + "session", { method: "POST", body: JSON.stringify(google ? { google } : { password }) });
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
   if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
   adminToken = j.token;
@@ -1923,6 +1930,44 @@ document.addEventListener("click", e => {
   check(); setInterval(() => { if (!document.hidden) check(); }, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
 }
+
+// ---------- כניסה עם גוגל (רק חשבונות מורשים) ----------
+let gisReady = null;
+function googleButton() {
+  if (gisReady) return gisReady;
+  gisReady = fetch(API_BASE + "config").then(r => r.json()).then(cfg => {
+    if (!cfg.google) return;
+    return new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; sc.async = true; sc.onload = res; sc.onerror = rej; document.head.append(sc); }).then(() => {
+      google.accounts.id.initialize({ client_id: cfg.google, callback: async r => {
+        try { $("#login-err").textContent = ""; await createSession("", r.credential); hideLogin(); state.data = {}; await startApp(); }
+        catch (err) { showLogin(err.message); }
+      } });
+      google.accounts.id.renderButton($("#gbtn"), { theme: "outline", size: "large", text: "signin_with", locale: "he", shape: "pill", width: 300 });
+      $("#gbox").hidden = false;
+    });
+  }).catch(() => {}); // בלי גוגל (חסום או לא מוגדר) נשארת כניסה בסיסמה
+  return gisReady;
+}
+{ const baseShowLogin = showLogin; showLogin = msg => { baseShowLogin(msg); googleButton(); }; }
+if (!$("#login-layer").hidden) googleButton();
+$("#login-form").addEventListener("submit", e => { if (!$("#login-pass").value) { e.preventDefault(); e.stopImmediatePropagation(); $("#login-err").textContent = "כתבו סיסמה, או היכנסו עם גוגל"; } }, true);
+
+// כרטיס החשבונות המורשים בלשונית "מערכת"
+{
+  const baseSystem = RENDER.system;
+  RENDER.system = d => { setTimeout(drawEmails); return baseSystem(d) + '<div class="card w-only" id="gauth"><h2>כניסה עם גוגל <small>טוען…</small></h2></div>'; };
+}
+async function drawEmails(op, email) {
+  const el = $("#gauth"); if (!el) return;
+  try {
+    const d = await api("emails", op ? { op, email } : undefined);
+    el.innerHTML = `<h2>כניסה עם גוגל <small>${d.enabled ? "פעיל – רק החשבונות כאן יכולים להיכנס" : "עוד לא הוגדר מזהה גוגל (GOOGLE_CLIENT_ID) ב-Cloudflare"}</small></h2>
+      <ul class="list glist">${d.owner ? `<li><span>${esc(d.owner)}</span><span class="pill acc">בעל הקו</span></li>` : '<li class="mut small">לא הוגדר מייל בעל הקו (OWNER_EMAIL)</li>'}${d.emails.map(m => `<li><span>${esc(m)}</span><button class="btn s d" type="button" data-gdel="${esc(m)}">הסרה</button></li>`).join("")}</ul>
+      <form class="row" id="gadd" style="margin-top:12px"><input type="email" name="email" placeholder="name@gmail.com" required style="flex:1;direction:ltr"><button class="btn p">הוספת חשבון</button></form>`;
+  } catch (e) { el.innerHTML = `<h2>כניסה עם גוגל</h2><div class="err">${esc(e.message)}</div>`; }
+}
+document.addEventListener("click", async e => { const b = e.target.closest("[data-gdel]"); if (b && confirm("להסיר את " + b.dataset.gdel + "?")) drawEmails("remove", b.dataset.gdel); });
+document.addEventListener("submit", e => { if (e.target.id !== "gadd") return; e.preventDefault(); drawEmails("add", e.target.email.value); });
 
 // ---------- הפעלה ----------
 async function startApp() {
