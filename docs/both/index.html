@@ -55,7 +55,7 @@ function show(k) {
   for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", b.dataset.k === k);
   for (const key of Object.keys(SRC)) {
     const f = document.getElementById("f-" + key);
-    if (key === k && !f.src) f.src = SRC[key];
+    if (key === k && !f.src) f.src = SRC[key] + "?v=" + Date.now(); // תמיד גרסה טרייה, בלי עותק ישן מהמטמון
     f.hidden = key !== k;
   }
   placePill();
