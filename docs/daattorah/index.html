@@ -586,6 +586,15 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
 .gor{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px}.gor::before,.gor::after{content:"";flex:1;height:1px;background:var(--line)}
 .glist{display:grid;gap:8px}.glist li{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r3);background:var(--bg)}
 .glist li span{flex:1;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+/* ---- מפתחות API ---- */
+.ktpl{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.ktpl button{display:grid;gap:4px;text-align:start;padding:14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);cursor:pointer;font:inherit;color:inherit;transition:all .15s}
+.ktpl button:hover,.ktpl button.on{border-color:var(--acc);background:var(--accbg)}
+.ktpl b{font-size:14px}.ktpl small{color:var(--mut);font-size:12px;line-height:1.4}
+.knew{display:grid;gap:8px;padding:14px;border-radius:var(--r2);background:var(--goodbg);border:1px solid color-mix(in srgb,var(--good) 35%,transparent);margin-bottom:12px}
+.knew code{direction:ltr;display:block;word-break:break-all;font:13px ui-monospace,monospace;background:var(--card);padding:10px;border-radius:8px;border:1px solid var(--line)}
+.klist li{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.klist .num{direction:ltr}
 </style>
 </head>
 <body>
@@ -1968,6 +1977,47 @@ async function drawEmails(op, email) {
 }
 document.addEventListener("click", async e => { const b = e.target.closest("[data-gdel]"); if (b && confirm("להסיר את " + b.dataset.gdel + "?")) drawEmails("remove", b.dataset.gdel); });
 document.addEventListener("submit", e => { if (e.target.id !== "gadd") return; e.preventDefault(); drawEmails("add", e.target.email.value); });
+
+// ---------- מפתחות API (לשונית מערכת) ----------
+const KEY_TPL = [
+  ["view", "צפייה בלבד", "רואה הכול בדף, לא משנה כלום", ["read"], 30],
+  ["admin", "מנהל", "קריאה וכל פעולות הניהול בדף", ["read", "write"], 90],
+  ["files", "קבצי ימות", "קריאה + קבצים ונתונים בימות המשיח", ["read", "yemot"], 30],
+  ["ai", "AI מלא", "הכול: דף הניהול וקבצי ימות", ["read", "write", "yemot"], 30],
+];
+const SCOPE_HE = { read: "קריאה", write: "פעולות", yemot: "ימות" };
+{
+  const baseSys = RENDER.system;
+  RENDER.system = d => { setTimeout(() => drawKeys()); return baseSys(d) + '<div class="card w-only" id="gkeys"><h2>מפתחות API <small>טוען…</small></h2></div>'; };
+}
+let keyTpl = "ai";
+async function drawKeys(body) {
+  const el = $("#gkeys"); if (!el) return;
+  try {
+    const d = await api("keys", body);
+    const t = KEY_TPL.find(x => x[0] === keyTpl) || KEY_TPL[3];
+    const when = ms => ms ? new Date(ms).toLocaleDateString("he-IL") : "—";
+    el.innerHTML = `<h2>מפתחות API <small>לתת ל-AI או לכלי אחר גישה לדף ולקבצי ימות</small></h2>
+      ${d.key ? `<div class="knew"><b>המפתח החדש – מוצג פעם אחת בלבד. העתיקו ושמרו במקום בטוח:</b><code id="knewv">${esc(d.key)}</code><div class="row"><button class="btn p s" type="button" data-kcopy>העתקה</button><span class="mut small">הוראות ל-AI: ${esc(API_BASE.replace(/\/$/, ""))}/help</span></div></div>` : ""}
+      <div class="ktpl">${KEY_TPL.map(([k, n, sub, sc, days]) => `<button type="button" data-ktpl="${k}" class="${k === keyTpl ? "on" : ""}"><b>${n}</b><small>${sub}</small><small>${sc.map(x => SCOPE_HE[x]).join(" · ")} · ${days} ימים</small></button>`).join("")}</div>
+      <form class="row" id="kadd"><input name="name" placeholder="שם (למשל: Claude)" required style="flex:1" maxlength="40">
+        ${["read", "write", "yemot"].map(x => `<label class="chk"><input type="checkbox" name="sc" value="${x}" ${t[3].includes(x) ? "checked" : ""}>${SCOPE_HE[x]}</label>`).join("")}
+        <select name="days">${[[7, "שבוע"], [30, "חודש"], [90, "3 חודשים"], [365, "שנה"], [0, "בלי תוקף"]].map(([v, l]) => `<option value="${v}" ${v === t[4] ? "selected" : ""}>${l}</option>`).join("")}</select>
+        <button class="btn p">יצירת מפתח</button></form>
+      <ul class="list glist klist" style="margin-top:12px">${d.keys.length ? d.keys.map(k => `<li><span><b>${esc(k.name)}</b> <span class="num mut small">${esc(k.prefix)}…</span> ${k.scopes.map(x => `<span class="pill ${x === "yemot" ? "warn" : x === "write" ? "acc" : ""}">${SCOPE_HE[x] || x}</span>`).join(" ")}<br><span class="mut small">נוצר ${when(k.created)} · שימוש אחרון ${k.used ? when(k.used) : "אף פעם"} · תוקף ${k.exp ? when(k.exp) : "ללא"}</span></span><button class="btn s d" type="button" data-krev="${esc(k.id)}" data-kname="${esc(k.name)}">ביטול</button></li>`).join("") : '<li class="mut small">אין מפתחות</li>'}</ul>`;
+  } catch (e) { el.innerHTML = `<h2>מפתחות API</h2><div class="err">${esc(e.message)}</div>`; }
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-ktpl]"); if (t) { keyTpl = t.dataset.ktpl; drawKeys(); return; }
+  const r = e.target.closest("[data-krev]"); if (r && confirm(`לבטל את המפתח "${r.dataset.kname}"? הוא יפסיק לעבוד מיד.`)) { drawKeys({ op: "revoke", id: r.dataset.krev }); return; }
+  if (e.target.closest("[data-kcopy]")) navigator.clipboard?.writeText($("#knewv").textContent).then(() => toast("המפתח הועתק"), () => {});
+});
+document.addEventListener("submit", e => {
+  if (e.target.id !== "kadd") return; e.preventDefault();
+  const f = e.target, scopes = [...f.querySelectorAll("[name=sc]:checked")].map(i => i.value);
+  if (scopes.includes("yemot") && !confirm("מפתח עם גישה לקבצי ימות יכול לקרוא ולכתוב קבצי הגדרות בקו. ליצור?")) return;
+  drawKeys({ op: "create", name: f.name.value, scopes, days: +f.days.value });
+});
 
 // ---------- הפעלה ----------
 async function startApp() {

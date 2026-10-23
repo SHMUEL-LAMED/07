@@ -85,6 +85,20 @@ async function googleEmail(env, tok) {
   if (!(pay.email_verified === true || pay.email_verified === "true") || !pay.email) throw new Error("כתובת המייל בחשבון לא מאומתת");
   return String(pay.email).toLowerCase();
 }
+// מפתחות API (כמו בקלאודפלר ובימות): נוצרים בלשונית "מערכת", מוצגים פעם אחת, ונשמרת רק טביעת SHA-256 שלהם.
+// הרשאות: read – קריאה בכל דף הניהול; write – פעולות ניהול; yemot – גישה ישירה ל-API של ימות (כולל קבצים).
+// מפתח לא יכול ליצור מפתחות, לשנות חשבונות מורשים או לייצר קישורי צפייה.
+const KEY_PREFIX = "ym07_", KEY_SCOPES = ["read", "write", "yemot"];
+const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup"];
+// פעולות ימות שמותרות דרך הנתיב yemot: עיון בקבצים, הורדה, קריאה וכתיבה של קובצי טקסט (הגדרות שלוחה), שיחות ורשימות
+const YM_ALLOWED = ["GetIVR2Dir", "DownloadFile", "GetTextFile", "UploadTextFile", "GetIncomingCalls", "TzintukimListManagement"];
+const loadKeys = async env => { try { return (await env.KV.get("dash_keys", "json")) || []; } catch { return []; } };
+async function keyAuth(env, ctx, tok) {
+  const h = await sha(tok), keys = await loadKeys(env), k = keys.find(x => same(x.hash, h));
+  if (!k || (k.exp && k.exp < Date.now())) return null;
+  if (!k.used || Date.now() - k.used > 5 * 60e3) { k.used = Date.now(); ctx.waitUntil(env.KV.put("dash_keys", JSON.stringify(keys)).catch(() => {})); }
+  return { key: true, id: k.id, name: k.name, scopes: k.scopes, ro: !k.scopes.includes("write"), exp: k.exp || 0 };
+}
 const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
 const allowedEmails = async env => { try { return (await env.KV.get("dash_emails", "json")) || []; } catch { return []; } };
 // בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר את המייל או זורק שגיאה בעברית
@@ -167,15 +181,21 @@ export async function adminApp(req, env, ctx, u, parts, D) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
   const queryToken = sub === "api" && parts[1] === "audio" ? String(u.searchParams.get("token") || "") : "";
   const token = cookie(req, COOKIE) || (m && m[1]) || queryToken;
-  const authed = await validToken(env, token);
+  const authed = token.startsWith(KEY_PREFIX) ? await keyAuth(env, ctx, token) : await validToken(env, token);
   if (!authed) return sub === "api" ? withCors(json({ error: "לא מחובר" }, 401), req) : html(loginPage("", env.GOOGLE_CLIENT_ID));
   if (sub === "api") {
     // אותו-origin כרגיל, או GitHub Pages המדויק בלבד.
-    if (req.method === "POST" && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "בקשה לא תקינה" }, 400), req);
+    if (req.method === "POST" && !authed.key && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "בקשה לא תקינה" }, 400), req);
+    if (authed.key) { // הרשאות מפתח לפי נתיב וסוג בקשה
+      const route = parts[1] || "", sc = authed.scopes;
+      const ok = !KEY_ONLY_SESSION.includes(route) && (route === "help" || (route === "yemot" ? sc.includes("yemot") : req.method === "POST" ? sc.includes("write") : sc.includes("read") || sc.includes("write")));
+      if (!ok) return withCors(json({ error: `למפתח "${authed.name}" אין הרשאה לנתיב ${route} (${req.method})` }, 403), req);
+      if (req.method === "POST") ctx.waitUntil(D.log(env, `מפתח API "${authed.name}": ${route}`).catch(() => {}));
+    }
     const origin = req.headers.get("Origin") || "", gh = origin === GH_ORIGIN;
     const site = req.headers.get("Sec-Fetch-Site");
     if (site && site !== "same-origin" && site !== "none" && !gh) return withCors(json({ error: "בקשה לא תקינה" }, 403), req);
-    if (authed.ro && req.method === "POST") return withCors(json({ error: "קישור לצפייה בלבד – אי אפשר לבצע פעולות" }, 403), req);
+    if (authed.ro && !authed.key && req.method === "POST") return withCors(json({ error: "קישור לצפייה בלבד – אי אפשר לבצע פעולות" }, 403), req);
     try { return withCors(await api(req, env, ctx, u, parts[1] || "", D, authed), req); }
     catch (e) { return withCors(json({ error: String(e.message || e) }, 500), req); }
   }
@@ -504,6 +524,49 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const hlog = await D.kvGet(env, "dashai", []); hlog.push({ d: D.nowIL(), q: ask.slice(0, 300), a: answer.slice(0, 300), n: actions.length }); await env.KV.put("dashai", JSON.stringify(hlog.slice(-100)));
       return json({ answer, actions, dropped: raw.length - actions.length });
     }
+    case "keys": { // ניהול מפתחות – רק מכניסה רגילה (סיסמה/גוגל), לא ממפתח
+      let keys = await loadKeys(env);
+      const view = k => ({ id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes, created: k.created, used: k.used || 0, exp: k.exp || 0 });
+      if (req.method === "POST" && body.op === "create") {
+        const scopes = [...new Set((body.scopes || []).filter(x => KEY_SCOPES.includes(x)))];
+        const name = String(body.name || "").trim().slice(0, 40);
+        if (!name || !scopes.length) return json({ error: "צריך שם ולפחות הרשאה אחת" }, 400);
+        if (keys.length >= 25) return json({ error: "אפשר עד 25 מפתחות. בטלו מפתח ישן" }, 400);
+        const raw = KEY_PREFIX + b64u(crypto.getRandomValues(new Uint8Array(32))), days = Math.max(0, Math.min(3650, +body.days || 0));
+        const k = { id: b64u(crypto.getRandomValues(new Uint8Array(6))), name, scopes, hash: await sha(raw), prefix: raw.slice(0, 11), created: now, exp: days ? now + days * 864e5 : 0 };
+        keys = [...keys, k]; await env.KV.put("dash_keys", JSON.stringify(keys));
+        await D.log(env, `נוצר מפתח API "${name}" (${scopes.join(", ")})`).catch(() => {});
+        return json({ key: raw, keys: keys.map(view) });
+      }
+      if (req.method === "POST" && body.op === "revoke") {
+        const k = keys.find(x => x.id === body.id); keys = keys.filter(x => x.id !== body.id);
+        await env.KV.put("dash_keys", JSON.stringify(keys));
+        if (k) await D.log(env, `בוטל מפתח API "${k.name}"`).catch(() => {});
+      }
+      return json({ keys: keys.map(view) });
+    }
+    case "yemot": { // קבצים ונתונים בימות המשיח – רק רשימה סגורה של פעולות (YM_ALLOWED)
+      if (auth.ro && !auth.key) return json({ error: "אין הרשאה" }, 403);
+      const method = String(body.method || "");
+      if (!YM_ALLOWED.includes(method)) return json({ error: "פעולה לא ברשימה המותרת", allowed: YM_ALLOWED }, 403);
+      const params = {};
+      for (const k of ["path", "what", "contents", "filesFrom", "filesLimit", "action", "TzintukimList", "date"]) if (body.params && body.params[k] != null) params[k] = String(body.params[k]);
+      if ((params.path || params.what) && !/^ivr2:[\w\/.\-א-ת ]*$/.test(params.path || params.what)) return json({ error: "נתיב לא תקין (חייב להתחיל ב-ivr2:)" }, 400);
+      if (method === "TzintukimListManagement" && params.action !== "getlistEnteres") return json({ error: "רק קריאת רשימות" }, 403);
+      const r = await D.ym(env, method, params);
+      if (r instanceof Uint8Array) { let bin = ""; for (let i = 0; i < r.length; i += 0x8000) bin += String.fromCharCode.apply(null, r.subarray(i, i + 0x8000)); return json({ size: r.length, base64: btoa(bin) }); }
+      return json(r);
+    }
+    case "help": return json({
+      about: "API של דף הניהול של קו 073-351-2880. אימות: Authorization: Bearer <מפתח>, או ?token=<מפתח> דרך הגשר של נטפרי.",
+      you: auth.key ? { key: auth.name, scopes: auth.scopes, expires: auth.exp ? new Date(auth.exp).toISOString() : "never" } : { session: true },
+      bases: { worker: "https://yemot-ai.smwlyqswkwt232.workers.dev/admin/api/", netfree_bridge: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" },
+      scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
+      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "audio?p=<נתיב>", "download?p=<נתיב>"],
+      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "ads"],
+      yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
+      safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
+    });
     case "emails": {
       const owner = ownerEmail(env);
       let list = await allowedEmails(env);
