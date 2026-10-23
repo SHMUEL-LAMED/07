@@ -1,0 +1,81 @@
+# פריסה ידנית של השרת של קו דעת תורה (Worker בשם yemot-ai-daat) מתוך live/daat.
+# הפעלה: Actions ← "פריסה לדעת תורה" ← Run workflow ← לכתוב deploy באישור.
+# מעלה רק את הקוד (worker.js + דף הניהול) – בלי לגעת במשתנים, בסודות, ב-KV או ב-cron של ה-Worker.
+# לפני ההעלאה משווה לגרסה החיה: אם החיה שונה גם מהגרסה הקודמת בריפו – עוצר, כדי לא לדרוס שינויים.
+name: פריסה לדעת תורה
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'לכתוב deploy כדי לאשר פריסה לקו דעת תורה'
+        required: true
+        default: ''
+permissions:
+  contents: read
+concurrency: deploy-yemot-ai-daat
+jobs:
+  deploy:
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SCRIPT: yemot-ai-daat
+      HTML: 6afe19a4abb4a11d64497ab9fafcf1234aea92f1-dash.html
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: בדיקת תחביר
+        run: |
+          cp live/daat/worker.js /tmp/check.mjs && node --check /tmp/check.mjs
+          grep -q "import PAGE from \"./$HTML\"" live/daat/worker.js
+      - name: הורדת הגרסה החיה והשוואה
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::error::חסרים הסודות CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          A="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$SCRIPT"
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$A/content/v2" -D /tmp/h.txt -o /tmp/live.bin
+          python3 - <<'PY'
+          import email, re
+          h = open('/tmp/h.txt', encoding='latin-1').read(); raw = open('/tmp/live.bin', 'rb').read()
+          ct = re.search(r'(?im)^content-type:\s*(.+)$', h); ct = ct.group(1).strip() if ct else ''
+          out = raw
+          if 'multipart' in ct:
+              msg = email.message_from_bytes(b'Content-Type: ' + ct.encode() + b'\r\n\r\n' + raw)
+              for part in msg.walk():
+                  name = part.get_param('name', header='content-disposition') or part.get_filename() or ''
+                  if name.endswith('.js'): out = part.get_payload(decode=True); break
+          open('/tmp/live.js', 'wb').write(out)
+          print('content-type:', ct, '| live worker.js bytes:', len(out))
+          PY
+          C=$(git log -n1 --format=%H -- live/daat/worker.js)
+          git show "$C~1:live/daat/worker.js" > /tmp/prev.js 2>/dev/null || : > /tmp/prev.js
+          if cmp -s /tmp/live.js live/daat/worker.js; then echo "החיה כבר זהה לריפו"
+          elif cmp -s /tmp/live.js /tmp/prev.js; then echo "החיה זהה לגרסה הקודמת בריפו – בטוח לפרוס"
+          else echo "::error::הגרסה החיה של דעת תורה שונה מהריפו. קודם לעדכן את live/daat/worker.js מהחיה."; diff <(head -c 4000 /tmp/live.js) <(head -c 4000 /tmp/prev.js) | head -20; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-daat-before-deploy
+          path: /tmp/live.bin
+          if-no-files-found: ignore
+      - name: פריסה (קוד בלבד)
+        run: |
+          A="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$SCRIPT"
+          cp "live/daat/$HTML" "/tmp/$HTML"; cp live/daat/worker.js /tmp/worker.js
+          curl -sS -X PUT "$A/content" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "CF-WORKER-MAIN-MODULE-PART: worker.js" \
+            -F 'metadata={"main_module":"worker.js"};type=application/json' \
+            -F "worker.js=@/tmp/worker.js;type=application/javascript+module" \
+            -F "$HTML=@/tmp/$HTML;type=text/plain" | tee /tmp/out.json
+          grep -q '"success": *true' /tmp/out.json
+      - name: בדיקה שהשרת עונה
+        run: |
+          SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | python3 -c 'import sys,json;print(json.load(sys.stdin)["result"]["subdomain"])')
+          URL="https://$SCRIPT.$SUB.workers.dev"; sleep 5
+          echo "/ → $(curl -s -w ' %{http_code}' "$URL/")"
+          echo "/admin → $(curl -s -o /dev/null -w '%{http_code}' "$URL/admin")   (200 = דף כניסה)"
+          echo "/admin/api/config → $(curl -s "$URL/admin/api/config")"
+          echo "/admin/api/help בלי מפתח → $(curl -s -o /dev/null -w '%{http_code}' "$URL/admin/api/help")   (צפוי 401)"

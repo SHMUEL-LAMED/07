@@ -12,5 +12,6 @@ sed -e 's#functions/v1/admin-netfree/#functions/v1/admin-netfree-daat/#' \
     -e 's#07 / קו הקבוצה#קו דעת תורה#g' \
     -e 's#קו הקבוצה#קו דעת תורה#g' \
     src/dash.html > docs/daattorah/index.html
+cp docs/daattorah/index.html live/daat/6afe19a4abb4a11d64497ab9fafcf1234aea92f1-dash.html # הדף שה-Worker של דעת תורה מגיש ב-/admin
 grep -q 'admin-netfree-daat/' docs/daattorah/index.html || { echo "שגיאה: הגשר של דעת תורה לא הוחלף"; exit 1; }
-echo "index.html, docs/index.html ו-docs/daattorah/index.html עודכנו מ-src/dash.html"
+echo "index.html, docs/index.html, docs/daattorah/index.html ו-live/daat עודכנו מ-src/dash.html"

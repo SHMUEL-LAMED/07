@@ -75,68 +75,145 @@ async function fails(env, ip) {
   }
 }
 __name(fails, "fails");
+// כניסה עם גוגל: הדפדפן מקבל מגוגל אסימון זהות (JWT חתום), והשרת בודק את החתימה מול המפתחות הציבוריים של גוגל,
+// שהאסימון נועד לאפליקציה שלנו (GOOGLE_CLIENT_ID), שהמייל מאומת, ושהוא ברשימת המורשים (OWNER_EMAIL או dash_emails ב-KV)
+const GOOGLE_ISS = ["accounts.google.com", "https://accounts.google.com"];
+let gCerts = { at: 0, keys: [] };
+const b64uBytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const b64uJson = s => JSON.parse(new TextDecoder().decode(b64uBytes(s)));
+async function googleCerts(force) {
+  if (!force && gCerts.keys.length && Date.now() - gCerts.at < 36e5) return gCerts.keys;
+  const r = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  if (!r.ok) throw new Error("לא ניתן לבדוק את החשבון מול גוגל כרגע");
+  gCerts = { at: Date.now(), keys: (await r.json()).keys || [] };
+  return gCerts.keys;
+}
+async function googleEmail(env, tok) {
+  const [h, p, sig] = String(tok || "").split(".");
+  if (!h || !p || !sig) throw new Error("אסימון גוגל לא תקין");
+  const head = b64uJson(h), pay = b64uJson(p);
+  if (head.alg !== "RS256") throw new Error("אסימון גוגל לא תקין");
+  const jwk = (await googleCerts()).find(k => k.kid === head.kid) || (await googleCerts(true)).find(k => k.kid === head.kid);
+  if (!jwk) throw new Error("אסימון גוגל לא תקין");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64uBytes(sig), enc.encode(h + "." + p))) throw new Error("אסימון גוגל לא תקין");
+  if (pay.aud !== env.GOOGLE_CLIENT_ID || !GOOGLE_ISS.includes(pay.iss) || !(pay.exp * 1000 > Date.now())) throw new Error("אסימון גוגל לא תקין או שפג תוקפו");
+  if (!(pay.email_verified === true || pay.email_verified === "true") || !pay.email) throw new Error("כתובת המייל בחשבון לא מאומתת");
+  return String(pay.email).toLowerCase();
+}
+// מפתחות API (כמו בקלאודפלר ובימות): נוצרים בלשונית "מערכת", מוצגים פעם אחת, ונשמרת רק טביעת SHA-256 שלהם.
+// הרשאות: read – קריאה בכל דף הניהול; write – פעולות ניהול; yemot – גישה ישירה ל-API של ימות (כולל קבצים).
+// מפתח לא יכול ליצור מפתחות, לשנות חשבונות מורשים או לייצר קישורי צפייה.
+const KEY_PREFIX = "ym07_", KEY_SCOPES = ["read", "write", "yemot"];
+const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup"];
+// פעולות ימות שמותרות דרך הנתיב yemot: עיון בקבצים, הורדה, קריאה וכתיבה של קובצי טקסט (הגדרות שלוחה), שיחות ורשימות
+const YM_ALLOWED = ["GetIVR2Dir", "DownloadFile", "GetTextFile", "UploadTextFile", "GetIncomingCalls", "TzintukimListManagement"];
+const loadKeys = async env => { try { return (await env.KV.get("dash_keys", "json")) || []; } catch { return []; } };
+async function keyAuth(env, ctx, tok) {
+  const h = await sha(tok), keys = await loadKeys(env), k = keys.find(x => same(x.hash, h));
+  if (!k || (k.exp && k.exp < Date.now())) return null;
+  if (!k.used || Date.now() - k.used > 5 * 60e3) { k.used = Date.now(); ctx.waitUntil(env.KV.put("dash_keys", JSON.stringify(keys)).catch(() => {})); }
+  return { key: true, id: k.id, name: k.name, scopes: k.scopes, ro: !k.scopes.includes("write"), exp: k.exp || 0 };
+}
+const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
+const allowedEmails = async env => { try { return (await env.KV.get("dash_emails", "json")) || []; } catch { return []; } };
+// בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר את המייל או זורק שגיאה בעברית
+async function googleLogin(env, ip, cred, D) {
+  if (!env.GOOGLE_CLIENT_ID) throw new Error("כניסה עם גוגל עוד לא הוגדרה");
+  const f = await fails(env, ip);
+  if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
+  let email = "";
+  try {
+    email = await googleEmail(env, cred);
+    if (email !== ownerEmail(env) && !(await allowedEmails(env)).includes(email)) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
+  } catch (e) {
+    await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+    await D.log(env, `ניסיון כניסה עם גוגל נדחה${email ? " (" + email + ")" : ""} (${ip})`).catch(() => {});
+    throw e;
+  }
+  if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
+  await D.log(env, `כניסה לדף הניהול עם גוגל: ${email}`).catch(() => {});
+  return email;
+}
+
 async function adminApp(req, env, ctx, u, parts, D) {
   const sub = parts[0] || "";
   if (!env.ADMIN_PASS) return html(setupPage, 503);
+  // דרך הגשר ב-Supabase כל הבקשות מגיעות מאותה כתובת. אם הוגדר הסוד BRIDGE_KEY (גם כאן וגם בגשר),
+  // מגבלת ניסיונות הכניסה נספרת לפי הכתובת האמיתית של הדפדפן שהגשר מעביר
   const viaBridge = !!env.BRIDGE_KEY && same(req.headers.get("x-bridge-key") || "", env.BRIDGE_KEY);
   const ip = viaBridge ? "b:" + String(req.headers.get("x-client-ip") || "?").slice(0, 64) : req.headers.get("CF-Connecting-IP") || "?";
+  // GitHub Pages frontend: exact-origin CORS + short-lived signed session token.
   if (sub === "api" && req.method === "OPTIONS") {
-    if (!corsOrigin(req)) return json({ error: "\u05DE\u05E7\u05D5\u05E8 \u05DC\u05D0 \u05DE\u05D5\u05E8\u05E9\u05D4" }, 403);
+    if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
     return withCors(new Response(null, { status: 204 }), req);
+  }
+  // הגדרות ציבוריות לדף הכניסה (מזהה הלקוח של גוגל אינו סוד)
+  if (sub === "api" && parts[1] === "config") return withCors(json({ google: env.GOOGLE_CLIENT_ID || "" }), req);
+  if (sub === "glogin") {
+    if (req.method !== "POST") return redirect("/admin");
+    if ((req.headers.get("Origin") || "") !== u.origin) return json({ error: "מקור לא מורשה" }, 403);
+    const body = await req.json().catch(() => ({}));
+    try { await googleLogin(env, ip, String(body.credential || ""), D); }
+    catch (e) { return json({ error: String(e.message || e) }, 401); }
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env)) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
-    if (origin && origin !== GH_ORIGIN) return json({ error: "\u05DE\u05E7\u05D5\u05E8 \u05DC\u05D0 \u05DE\u05D5\u05E8\u05E9\u05D4" }, 403);
-    if (req.method !== "POST") return withCors(json({ error: "\u05E9\u05D9\u05D8\u05D4 \u05DC\u05D0 \u05DE\u05D5\u05E8\u05E9\u05D9\u05EA" }, 405), req);
+    if (origin && origin !== GH_ORIGIN) return json({ error: "מקור לא מורשה" }, 403);
+    if (req.method !== "POST") return withCors(json({ error: "שיטה לא מורשית" }, 405), req);
     const f = await fails(env, ip);
-    if (f.n >= MAX_FAILS) return withCors(json({ error: "\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D1\u05E2 \u05E9\u05E2\u05D4" }, 429), req);
+    if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
     const body = await req.json().catch(() => ({}));
+    if (body.google) {
+      try { await googleLogin(env, ip, String(body.google), D); }
+      catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
+      return withCors(json({ token: await newToken(env) }), req);
+    }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
-      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {
-      });
-      await D.log(env, `\u05E0\u05D9\u05E1\u05D9\u05D5\u05DF \u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9 \u05DC\u05D3\u05E3 \u05D4\u05E0\u05D9\u05D4\u05D5\u05DC \u05DE-GitHub Pages (${ip})`).catch(() => {
-      });
-      return withCors(json({ error: "\u05E1\u05D9\u05E1\u05DE\u05D4 \u05E9\u05D2\u05D5\u05D9\u05D4" }, 401), req);
+      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      await D.log(env, `ניסיון כניסה שגוי לדף הניהול מ-GitHub Pages (${ip})`).catch(() => {});
+      return withCors(json({ error: "סיסמה שגויה" }, 401), req);
     }
-    if (f.n) await env.KV.delete(failKey(ip)).catch(() => {
-    });
+    if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
     return withCors(json({ token: await newToken(env) }), req);
   }
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
     const f = await fails(env, ip);
-    if (f.n >= MAX_FAILS) return html(loginPage("\u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05E0\u05D9\u05E1\u05D9\u05D5\u05E0\u05D5\u05EA. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D1\u05E2 \u05E9\u05E2\u05D4"), 429);
+    if (f.n >= MAX_FAILS) return html(loginPage("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה", env.GOOGLE_CLIENT_ID), 429);
     const form = await req.formData().catch(() => null);
-    const pass = String(form && form.get("p") || "");
+    const pass = String((form && form.get("p")) || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
-      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {
-      });
-      await D.log(env, `\u05E0\u05D9\u05E1\u05D9\u05D5\u05DF \u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9 \u05DC\u05D3\u05E3 \u05D4\u05E0\u05D9\u05D4\u05D5\u05DC (${ip})`).catch(() => {
-      });
-      return html(loginPage("\u05E1\u05D9\u05E1\u05DE\u05D4 \u05E9\u05D2\u05D5\u05D9\u05D4"), 401);
+      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      await D.log(env, `ניסיון כניסה שגוי לדף הניהול (${ip})`).catch(() => {});
+      return html(loginPage("סיסמה שגויה", env.GOOGLE_CLIENT_ID), 401);
     }
-    if (f.n) await env.KV.delete(failKey(ip)).catch(() => {
-    });
+    if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
     return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
   }
   if (sub === "logout") return redirect("/admin", { "Set-Cookie": setCookie("") });
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
   const queryToken = sub === "api" && parts[1] === "audio" ? String(u.searchParams.get("token") || "") : "";
-  const token = cookie(req, COOKIE) || m && m[1] || queryToken;
-  const authed = await validToken(env, token);
-  if (!authed) return sub === "api" ? withCors(json({ error: "\u05DC\u05D0 \u05DE\u05D7\u05D5\u05D1\u05E8" }, 401), req) : html(loginPage());
+  const token = cookie(req, COOKIE) || (m && m[1]) || queryToken;
+  const authed = token.startsWith(KEY_PREFIX) ? await keyAuth(env, ctx, token) : await validToken(env, token);
+  if (!authed) return sub === "api" ? withCors(json({ error: "לא מחובר" }, 401), req) : html(loginPage("", env.GOOGLE_CLIENT_ID));
   if (sub === "api") {
-    if (req.method === "POST" && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "\u05D1\u05E7\u05E9\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4" }, 400), req);
+    // אותו-origin כרגיל, או GitHub Pages המדויק בלבד.
+    if (req.method === "POST" && !authed.key && req.headers.get("X-Requested-With") !== "dash") return withCors(json({ error: "בקשה לא תקינה" }, 400), req);
+    if (authed.key) { // הרשאות מפתח לפי נתיב וסוג בקשה
+      const route = parts[1] || "", sc = authed.scopes;
+      const ok = !KEY_ONLY_SESSION.includes(route) && (route === "help" || (route === "yemot" ? sc.includes("yemot") : req.method === "POST" ? sc.includes("write") : sc.includes("read") || sc.includes("write")));
+      if (!ok) return withCors(json({ error: `למפתח "${authed.name}" אין הרשאה לנתיב ${route} (${req.method})` }, 403), req);
+      if (req.method === "POST") ctx.waitUntil(D.log(env, `מפתח API "${authed.name}": ${route}`).catch(() => {}));
+    }
     const origin = req.headers.get("Origin") || "", gh = origin === GH_ORIGIN;
     const site = req.headers.get("Sec-Fetch-Site");
-    if (site && site !== "same-origin" && site !== "none" && !gh) return withCors(json({ error: "\u05D1\u05E7\u05E9\u05D4 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4" }, 403), req);
-    if (authed.ro && req.method === "POST") return withCors(json({ error: "\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05DC\u05D1\u05D3 \u2013 \u05D0\u05D9 \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D1\u05E6\u05E2 \u05E4\u05E2\u05D5\u05DC\u05D5\u05EA" }, 403), req);
-    try {
-      return withCors(await api(req, env, ctx, u, parts[1] || "", D, authed), req);
-    } catch (e) {
-      return withCors(json({ error: String(e.message || e) }, 500), req);
-    }
+    if (site && site !== "same-origin" && site !== "none" && !gh) return withCors(json({ error: "בקשה לא תקינה" }, 403), req);
+    if (authed.ro && !authed.key && req.method === "POST") return withCors(json({ error: "קישור לצפייה בלבד – אי אפשר לבצע פעולות" }, 403), req);
+    try { return withCors(await api(req, env, ctx, u, parts[1] || "", D, authed), req); }
+    catch (e) { return withCors(json({ error: String(e.message || e) }, 500), req); }
   }
   if (sub) return redirect("/admin");
   return html(PAGE);
@@ -636,6 +713,62 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       hlog.push({ d: D.nowIL(), q: ask.slice(0, 300), a: answer.slice(0, 300), n: actions.length });
       await env.KV.put("dashai", JSON.stringify(hlog.slice(-100)));
       return json({ answer, actions, dropped: raw.length - actions.length });
+    }
+    case "keys": { // ניהול מפתחות – רק מכניסה רגילה (סיסמה/גוגל), לא ממפתח
+      let keys = await loadKeys(env);
+      const view = k => ({ id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes, created: k.created, used: k.used || 0, exp: k.exp || 0 });
+      if (req.method === "POST" && body.op === "create") {
+        const scopes = [...new Set((body.scopes || []).filter(x => KEY_SCOPES.includes(x)))];
+        const name = String(body.name || "").trim().slice(0, 40);
+        if (!name || !scopes.length) return json({ error: "צריך שם ולפחות הרשאה אחת" }, 400);
+        if (keys.length >= 25) return json({ error: "אפשר עד 25 מפתחות. בטלו מפתח ישן" }, 400);
+        const raw = KEY_PREFIX + b64u(crypto.getRandomValues(new Uint8Array(32))), days = Math.max(0, Math.min(3650, +body.days || 0));
+        const k = { id: b64u(crypto.getRandomValues(new Uint8Array(6))), name, scopes, hash: await sha(raw), prefix: raw.slice(0, 11), created: now, exp: days ? now + days * 864e5 : 0 };
+        keys = [...keys, k]; await env.KV.put("dash_keys", JSON.stringify(keys));
+        await D.log(env, `נוצר מפתח API "${name}" (${scopes.join(", ")})`).catch(() => {});
+        return json({ key: raw, keys: keys.map(view) });
+      }
+      if (req.method === "POST" && body.op === "revoke") {
+        const k = keys.find(x => x.id === body.id); keys = keys.filter(x => x.id !== body.id);
+        await env.KV.put("dash_keys", JSON.stringify(keys));
+        if (k) await D.log(env, `בוטל מפתח API "${k.name}"`).catch(() => {});
+      }
+      return json({ keys: keys.map(view) });
+    }
+    case "yemot": { // קבצים ונתונים בימות המשיח – רק רשימה סגורה של פעולות (YM_ALLOWED)
+      if (auth.ro && !auth.key) return json({ error: "אין הרשאה" }, 403);
+      const method = String(body.method || "");
+      if (!YM_ALLOWED.includes(method)) return json({ error: "פעולה לא ברשימה המותרת", allowed: YM_ALLOWED }, 403);
+      const params = {};
+      for (const k of ["path", "what", "contents", "filesFrom", "filesLimit", "action", "TzintukimList", "date"]) if (body.params && body.params[k] != null) params[k] = String(body.params[k]);
+      if ((params.path || params.what) && !/^ivr2:[\w\/.\-א-ת ]*$/.test(params.path || params.what)) return json({ error: "נתיב לא תקין (חייב להתחיל ב-ivr2:)" }, 400);
+      if (method === "TzintukimListManagement" && params.action !== "getlistEnteres") return json({ error: "רק קריאת רשימות" }, 403);
+      const r = await D.ym(env, method, params);
+      if (r instanceof Uint8Array) { let bin = ""; for (let i = 0; i < r.length; i += 0x8000) bin += String.fromCharCode.apply(null, r.subarray(i, i + 0x8000)); return json({ size: r.length, base64: btoa(bin) }); }
+      return json(r);
+    }
+    case "help": return json({
+      about: "API של דף הניהול של קו דעת תורה 079-494-7582. אימות: Authorization: Bearer <מפתח>, או ?token=<מפתח> דרך הגשר של נטפרי.",
+      you: auth.key ? { key: auth.name, scopes: auth.scopes, expires: auth.exp ? new Date(auth.exp).toISOString() : "never" } : { session: true },
+      bases: { worker: u.origin + "/admin/api/", netfree_bridge: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" },
+      scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
+      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "audio?p=<נתיב>", "download?p=<נתיב>"],
+      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "ads"],
+      yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
+      safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
+    });
+    case "emails": {
+      const owner = ownerEmail(env);
+      let list = await allowedEmails(env);
+      if (req.method === "POST") {
+        const email = String(body.email || "").trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "כתובת מייל לא תקינה" }, 400);
+        if (body.op === "add" && !list.includes(email) && email !== owner) list = [...list, email];
+        else if (body.op === "remove") { if (email === owner) return json({ error: "אי אפשר להסיר את בעל הקו" }, 400); list = list.filter(e => e !== email); }
+        await env.KV.put("dash_emails", JSON.stringify(list));
+        await D.log(env, `${body.op === "remove" ? "הוסר" : "נוסף"} חשבון גוגל מורשה לדף הניהול: ${email} (${VIA})`).catch(() => {});
+      }
+      return json({ owner, emails: list, enabled: !!env.GOOGLE_CLIENT_ID });
     }
     case "whoami":
       return json({ ro: !!auth.ro, exp: auth.exp || 0, owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
