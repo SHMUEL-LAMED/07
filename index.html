@@ -517,6 +517,29 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
   .login-box{padding:32px 24px}
 }
 @media print{.side,.bnav,.totop,.cmdk,.prefs,.scrim{display:none!important}body{padding:0!important}main{zoom:1}}
+/* ---- שער לכל לשונית ---- */
+.page-head{position:relative;overflow:hidden;isolation:isolate;display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;padding:26px 30px;border-radius:calc(24px*var(--rad));background:var(--card);border:1px solid var(--line);box-shadow:var(--sh)}
+.page-head::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(55% 120% at 100% 0%,color-mix(in srgb,var(--acc) 11%,transparent),transparent 65%),radial-gradient(40% 90% at 0% 100%,color-mix(in srgb,var(--gold) 13%,transparent),transparent 70%)}
+.page-head .ph-mark{position:absolute;z-index:-1;inset-inline-end:150px;top:50%;transform:translateY(-50%) rotate(-8deg);width:150px;height:150px;color:var(--acc);opacity:.06}
+.page-head .ph-mark .ico{width:100%;height:100%;stroke-width:1.2}
+.ph-ico{display:grid;place-items:center;width:58px;height:58px;border-radius:calc(17px*var(--rad));color:#fff;background:linear-gradient(140deg,color-mix(in srgb,var(--acc) 70%,#fff),var(--acc) 55%,var(--acc2));box-shadow:0 12px 26px -12px var(--acc),inset 0 1px 0 rgba(255,255,255,.35)}
+.ph-ico .ico{width:26px;height:26px;stroke-width:1.8}
+.ph-txt{min-width:0}
+.ph-eye{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.5px;display:flex;gap:8px;align-items:center}
+.ph-eye span{color:var(--mut);font-weight:500;letter-spacing:0}
+.ph-txt h2{margin:4px 0 4px;font:900 clamp(24px,2.6vw,32px)/1.15 var(--serif);letter-spacing:-.6px}
+.ph-txt p{margin:0;color:var(--ink2);font-size:14.5px;max-width:620px}
+.ph-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ph-chips span{display:inline-flex;align-items:baseline;gap:6px;padding:5px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
+.ph-chips b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+.ph-chips span.hot{background:var(--badbg);border-color:transparent;color:var(--bad)}.ph-chips span.hot b{color:var(--bad)}
+.ph-chips span.ok{background:var(--goodbg);border-color:transparent;color:var(--goodt)}.ph-chips span.ok b{color:var(--goodt)}
+.ph-act{display:flex;gap:8px;align-self:start}
+.ph-act .btn{display:inline-flex;align-items:center;gap:7px}
+.ph-act .ico{width:16px;height:16px}
+@media(max-width:820px){.page-head{grid-template-columns:auto 1fr;padding:20px}.ph-act{grid-column:1/-1;justify-self:stretch}.ph-act .btn{flex:1;justify-content:center}.page-head .ph-mark{inset-inline-end:-20px}}
+@media(max-width:600px){.ph-ico{width:46px;height:46px}.ph-ico .ico{width:22px;height:22px}.ph-txt p{font-size:13.5px}.page-head{gap:14px}}
+@media print{.ph-act{display:none}}
 </style>
 </head>
 <body>
@@ -1749,6 +1772,33 @@ addEventListener("keydown", e => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
   if (!typing && e.key === "?" && $("#login-layer").hidden) { e.preventDefault(); openKeys(); }
 }, true);
+
+// ---------- שער לכל לשונית ----------
+const PH = {
+  pending: ["הודעות ובקשות שמחכות להחלטה שלך. מקשיבים, מחליטים וממשיכים.", d => { const n = d.lists.reduce((a, l) => a + l.files.length, 0); return [[n, n === 1 ? "ממתינה" : "ממתינות", n ? "hot" : "ok"]]; }],
+  msgs: ["כל ההודעות בקו, עם תמלול, נגן וחיפוש.", d => [[d.list.length, "הודעות נטענו"]]],
+  trash: ["הקלטות שנמחקו מהקו או הוצאו מהחשובות. אפשר להחזיר אותן.", d => [[d.files.length, "בסל"]]],
+  members: ["כרטיס לכל חבר: פעילות, רשימות והודעות אישיות.", () => [[Object.keys(state.names).length, "חברים"]]],
+  studio: ["מקליטים, מעלים או מקריאים בקול העוזר, ומשדרים לקו.", null],
+  sched: ["ההודעה הנכונה בזמן הנכון: צינתוקים, הודעות וחזרות קבועות.", d => [[(d.jobs || []).length, "בתור"]]],
+  event: ["ההרשמה לאירוע בשלוחה 9: מי נרשם ומי עוד לא.", null],
+  bot: ["הכללים והרשימות של העוזר הקולי בקו.", null],
+  reports: ["תמונה חודשית של הקו: מי שמע, מי התקשר ועל מה שאלו.", null],
+  stats: ["מספרים ומגמות מתוך היומנים של ימות המשיח.", null],
+  live: ["מי בקו עכשיו, איפה הוא נמצא וכמה זמן הוא שם.", d => [[d.online.length, "בקו עכשיו", d.online.length ? "ok" : ""]]],
+  system: ["בריאות השרת, הגדרות, גיבוי ושחזור.", null],
+  log: ["כל מה שקרה בקו ובדף, לפי הסדר.", d => [[(d.lines || []).length, "רשומות"]]],
+};
+const groupOf = k => { let g = ""; for (const [t] of TABS) { if (NAV_GROUPS[t]) g = NAV_GROUPS[t]; if (t === k) return g; } return ""; };
+const pageHead = (k, d) => {
+  const [sub, chipsFn] = PH[k] || ["", null];
+  let chips = []; try { chips = chipsFn ? chipsFn(d) : []; } catch {}
+  return `<section class="page-head" aria-label="${esc(TAB_NAME[k] || "")}"><span class="ph-mark" aria-hidden="true">${ico(k)}</span><span class="ph-ico" aria-hidden="true">${ico(k)}</span>
+    <div class="ph-txt"><div class="ph-eye">${esc(groupOf(k))}<span>· קו הקבוצה</span></div><h2>${esc(TAB_NAME[k] || "")}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}${chips.length ? `<div class="ph-chips">${chips.map(([n, l, c]) => `<span class="${c || ""}"><b data-count="${esc(n)}">${esc(n)}</b>${esc(l)}</span>`).join("")}</div>` : ""}</div>
+    <div class="ph-act"><button class="btn" type="button" data-ui="cmdk">${ico("search")} חיפוש</button><button class="btn" type="button" data-ui="reload">${ico("refresh")} רענון</button></div></section>`;
+};
+for (const k of Object.keys(RENDER)) if (k !== "home") { const base = RENDER[k]; RENDER[k] = d => pageHead(k, d) + base(d); }
+document.addEventListener("click", e => { if (e.target.closest("[data-ui=reload]")) show(state.tab, true); });
 
 // ---------- הפעלה ----------
 async function startApp() {
