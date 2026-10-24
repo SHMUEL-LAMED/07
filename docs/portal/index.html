@@ -56,9 +56,7 @@ async function lineStats(lines){const area=document.querySelector("#aggregate");
 async function load(){try{
   identity=await call();user.textContent=identity.email;logout.classList.remove("hidden");
   const lines=identity.lines||[];
-  // חשבון לקוח עם קו יחיד נכנס ישירות לקו. בעלי השירות נשארים במרכז.
-  if(!identity.isOwner&&lines.length===1){enterLine(lines[0]);return}
-  app.innerHTML=`<h2>${identity.isOwner?'מרכז הבעלים — כל הקווים':'הקווים שלי'}</h2><p class="muted">${identity.isOwner?'ניהול השירות, גישה ללקוחות ונתונים מכל הקווים.':'בחר את הקו שאליו תרצה להיכנס.'}</p><div class="grid">${lines.map(renderLine).join("")||'<p>לא הוקצו לחשבון קווים.</p>'}</div>${identity.isOwner?ownerPanel(identity):''}`;
+  app.innerHTML=`<h2>${identity.isOwner?'מרכז הבעלים — כל הקווים':'האזור האישי שלי'}</h2><p class="muted">${identity.isOwner?'ניהול השירות, גישה ללקוחות, הוספת קווים ונתונים מכל הקווים.':'הקווים שהוקצו לחשבון שלך.'}</p><div class="grid">${lines.map(renderLine).join("")||'<p>לא הוקצו לחשבון קווים.</p>'}</div>${identity.isOwner?ownerPanel(identity):''}`;
   document.querySelectorAll("[data-enter]").forEach(b=>b.onclick=()=>{const l=lines.find(x=>x.slug===b.dataset.enter);if(l)enterLine(l)});
   document.querySelector("#approve")?.addEventListener("click",async()=>{const email=document.querySelector("#email").value.trim().toLowerCase(),selected=[...document.querySelector("#lines").selectedOptions].map(o=>o.value);try{await call("access",{email,approved:true});await call("assign",{email,lines:selected});await load()}catch(e){alert(e.message)}});
   document.querySelectorAll("[data-block]").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await call("access",{email:b.dataset.block,blocked:b.dataset.state==="on"});await load()}catch(e){alert(e.message);b.disabled=false}});
