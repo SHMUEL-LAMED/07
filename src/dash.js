@@ -594,7 +594,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       }
       return json({ owner, managers: list, emails: list.map(m => m.e), enabled: !!env.GOOGLE_CLIENT_ID });
     }
-    case "whoami": return json({ ro: !!auth.ro, owner: !!auth.owner, key: !!auth.key, exp: auth.exp || 0, line: D.LINE_PHONE || "", lineName: env.LINE_NAME || "", owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
+    case "whoami": return json({ ro: !!auth.ro, isOwner: !!auth.owner && !auth.key && !auth.ro, key: !!auth.key, exp: auth.exp || 0, line: D.LINE_PHONE || "", lineName: env.LINE_NAME || "", owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
     case "share": { // קישור לצפייה בלבד (7 ימים כברירת מחדל): מותר לראות הכול, אסור לבצע שום פעולה
       if (auth.ro || req.method !== "POST") return json({ error: "רק מנהל מחובר יכול ליצור קישור" }, 403);
       const days = Math.max(1, Math.min(90, +body.days || 7)), token = await newToken(env, true, days);

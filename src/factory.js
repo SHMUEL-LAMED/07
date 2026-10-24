@@ -18,9 +18,18 @@ const YM_API = "https://www.call2all.co.il/ym/api/";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const REG = "factory_lines";
 // סודות ומשתנים של קו המקור שמועתקים לקו החדש (מפתחות ה-AI והקול). רק אם קיימים
-const COPY_SECRETS = ["GEMINI_KEY", "GEMINI_KEYS", "GROQ_KEY", "AAI_KEY", "ELEVEN_KEY", "ELEVEN_KEYS", "AZURE_TTS_KEY", "AZURE_TTS_REGION", "PROVIDERS", "SERPER_KEY", "TAVILY_KEY"];
+const COPY_SECRETS = ["GEMINI_KEY", "GEMINI_KEYS", "GROQ_KEY", "AAI_KEY", "ELEVEN_KEY", "ELEVEN_KEYS", "AZURE_TTS_KEY", "AZURE_TTS_REGION", "PROVIDERS", "SERPER_KEY", "TAVILY_KEY", "BRIDGE_KEY"];
 const COPY_VARS = ["GROQ_MODELS", "GOOGLE_CLIENT_ID"];
 const MAX_DIRS = 200, MAX_DEPTH = 5;
+// בשרת החינמי יש מגבלה של 50 פניות החוצה לכל הרצה. משאירים מרווח לבדיקת הטוקן, ל-KV וליומן
+const BUDGET = 40;
+const budget = () => ({ left: BUDGET, take(n = 1) { if (this.left < n) return false; this.left -= n; return true; } });
+const sha = async t => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, "0")).join("");
+// הטוקן של קו המקור עצמו אסור במפעל (כדי לא לבנות קו נוסף על אותה מערכת ולא לכתוב לשלוחות של המקור)
+function notSource(env, token, D, phone) {
+  if (env.YM_TOKEN && token === String(env.YM_TOKEN).trim()) throw new Error("זה הטוקן של הקו הזה עצמו – צריך טוקן של המערכת החדשה");
+  if (phone && D && phone === D.LINE_PHONE) throw new Error("זה המספר של הקו הזה עצמו – צריך מערכת אחרת");
+}
 
 const rnd = n => { const b = crypto.getRandomValues(new Uint8Array(n)); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const digits = v => String(v || "").replace(/\D/g, "");
@@ -104,12 +113,15 @@ async function createLine(env, body, origin, D) {
   const info = await checkToken(token);
   const linePhone = digits(body.linePhone) || info.linePhone;
   if (!okPhone(linePhone)) throw new Error("מספר הקו לא תקין");
+  notSource(env, token, D, linePhone);
   const ownerPhone = digits(body.ownerPhone);
   if (ownerPhone && !okPhone(ownerPhone)) throw new Error("מספר הטלפון של בעל הקו לא תקין");
   const ownerEmail = String(body.ownerEmail || env.OWNER_EMAIL || "").trim().toLowerCase();
   const name = String(body.name || "").trim().slice(0, 40) || "קו " + linePhone;
   const script = scriptName(slug), reg = await loadReg(env);
   if (reg.some(l => l.slug === slug)) throw new Error("כבר קיים קו בשם הזה");
+  const tokHash = await sha(token), twin = reg.find(l => l.tokHash === tokHash || l.line === linePhone);
+  if (twin) throw new Error(`על המערכת הזו כבר נבנה הקו "${twin.name}" (${twin.slug})`);
   const exists = await cf(env, "GET", `/{acc}/workers/scripts/${script}/settings`, undefined, true);
   if (exists.status !== 404) throw new Error(`כבר קיים Worker בשם ${script} ב-Cloudflare`);
 
@@ -141,7 +153,7 @@ async function createLine(env, body, origin, D) {
     await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה כתובת workers.dev");
     const sub = (await cf(env, "GET", "/{acc}/workers/subdomain")).subdomain;
     const url = `https://${script}.${sub}.workers.dev`;
-    const line = { slug, script, url, name, line: linePhone, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, kv: kv.id, template: origin, test: true };
+    const line = { slug, script, url, name, line: linePhone, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, kv: kv.id, template: origin, test: true };
     await saveReg(env, [...reg, line]);
     await D.log(env, `מפעל הקווים: נבנה קו חדש "${name}" (${linePhone}) – ${script}`).catch(() => {});
     return { ok: true, steps, line: view(line), adminPass, adminUrl: url + "/admin", note: "הסיסמה מוצגת פעם אחת. הקו נוצר במצב בדיקה (TEST_MODE=1): צינתוקים יוצאים רק למנהלים עד שתשנו ל-0." };
@@ -154,14 +166,35 @@ async function createLine(env, body, origin, D) {
 }
 
 // ---------- העתקת מבנה השלוחות (ext.ini) ----------
-async function templateTree(env, D) {
+const iniPath = path => "ivr2:" + (path === "/" ? "" : path) + "/ext.ini";
+// קריאת ext.ini: { ok, text } כשנקרא (ריק = אין קובץ), או { ok:false } כשלא ידוע מה יש שם
+const NOT_FOUND = /not.?found|לא נמצא|לא קיים|אינו קיים|does not exist|no such/i;
+// כשהקריאה נכשלת: בודקים ברשימת התיקייה (dirCall, אם יש תקציב) אם יש בה ext.ini. אין קובץ או אין תיקייה = ריק
+async function readIni(call, dirCall) {
+  const r = await call().catch(() => null);
+  if (ymOk(r) || r && typeof r.contents === "string") return { ok: true, text: typeof r.contents === "string" ? r.contents : "" };
+  if (r && NOT_FOUND.test(String(r.message || ""))) return { ok: true, text: "" };
+  const d = dirCall ? await dirCall().catch(() => null) : null;
+  if (d && (ymOk(d) || Array.isArray(d.files))) {
+    const has = (d.files || []).some(f => /(^|\/)ext\.ini$/i.test(String(f.name || f.what || "")));
+    return has ? { ok: false, text: "" } : { ok: true, text: "" };
+  }
+  if (d && NOT_FOUND.test(String(d.message || ""))) return { ok: true, text: "" };
+  return { ok: false, text: "" };
+}
+const dirOf = path => "ivr2:" + path;
+async function templateTree(env, D, bud) {
   const out = [], queue = [["/", 0]], seen = new Set();
+  let cut = false;
   while (queue.length && out.length < MAX_DIRS) {
+    if (!bud.take(2)) { cut = true; break; }
     const [path, depth] = queue.shift();
     if (seen.has(path)) continue; seen.add(path);
-    const d = await D.ym(env, "GetIVR2Dir", { path: "ivr2:" + path }).catch(() => ({}));
-    const ini = await D.ym(env, "GetTextFile", { what: "ivr2:" + (path === "/" ? "" : path) + "/ext.ini" }).catch(() => ({}));
-    if (ini && typeof ini.contents === "string" && ini.contents.trim()) out.push({ path, contents: ini.contents });
+    const d = await D.ym(env, "GetIVR2Dir", { path: "ivr2:" + path }).catch(() => null);
+    if (!d || !Array.isArray(d.dirs) && !ymOk(d)) { cut = true; continue; } // לא ידוע מה יש מתחת – לא להעמיד פנים שהעץ שלם
+    const ini = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
+    if (!ini.ok) cut = true;
+    else if (ini.text.trim()) out.push({ path, contents: ini.text });
     if (depth >= MAX_DEPTH) continue;
     for (const s of d.dirs || []) {
       const n = String(s.name || s.what || "").replace(/^ivr2:/, "").split("/").filter(Boolean).pop();
@@ -169,7 +202,7 @@ async function templateTree(env, D) {
       queue.push([(path === "/" ? "" : path) + "/" + n, depth + 1]);
     }
   }
-  return { files: out, truncated: queue.length > 0 };
+  return { files: out, truncated: cut || queue.length > 0 };
 }
 function rewriteIni(text, from, to) {
   let t = text;
@@ -177,44 +210,63 @@ function rewriteIni(text, from, to) {
   if (from.runKey && to.runKey) t = t.split(from.runKey).join(to.runKey);
   return t;
 }
-async function ivrPlan(env, body, origin, D) {
+// הטוקן חייב להיות של המערכת שהקו נבנה עליה (נשמרה טביעת SHA-256 שלו ביצירה), ולא של קו המקור
+async function lineToken(env, body, D) {
   const reg = await loadReg(env), line = reg.find(l => l.slug === body.slug);
   if (!line) throw new Error("הקו לא נמצא ברשימה");
   const token = String(body.ymToken || "").trim();
-  await checkToken(token);
-  const { files, truncated } = await templateTree(env, D);
+  notSource(env, token, D);
+  const info = await checkToken(token);
+  if (line.tokHash ? (await sha(token)) !== line.tokHash : info.linePhone !== line.line)
+    throw new Error(`הטוקן הזה לא שייך לקו "${line.name}" (${line.line}). צריך את הטוקן של המערכת שהקו נבנה עליה`);
+  return { reg, line, token };
+}
+async function ivrPlan(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const bud = budget();
+  const { files, truncated: treeCut } = await templateTree(env, D, bud);
   const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
   const flagPhones = [D.LINE_PHONE, D.OWNER].filter(Boolean);
   const plan = [];
+  let truncated = treeCut;
   for (const f of files) {
     const after = rewriteIni(f.contents, from, to);
-    const cur = await ymT(token, "GetTextFile", { what: "ivr2:" + (f.path === "/" ? "" : f.path) + "/ext.ini" }).catch(() => ({}));
-    const before = cur && typeof cur.contents === "string" ? cur.contents : "";
-    plan.push({ path: f.path, after, before, same: before.trim() === after.trim(), api: /api_link|type\s*=\s*api/i.test(after), warn: flagPhones.filter(p => after.includes(p)).map(p => `מכיל את המספר ${p} של קו המקור`) });
+    const base = { path: f.path, after, api: /api_link|type\s*=\s*api/i.test(after), warn: flagPhones.filter(p => after.includes(p)).map(p => `מכיל את המספר ${p} של קו המקור`) };
+    if (!bud.take()) { truncated = true; plan.push({ ...base, before: "", unknown: true, same: false }); continue; }
+    const cur = await readIni(() => ymT(token, "GetTextFile", { what: iniPath(f.path) }), () => bud.take() ? ymT(token, "GetIVR2Dir", { path: dirOf(f.path) }) : null);
+    plan.push({ ...base, before: cur.text, unknown: !cur.ok, same: cur.ok && cur.text.trim() === after.trim() });
   }
   return { slug: line.slug, url: line.url, count: plan.length, truncated, plan };
 }
+// כתיבה: רק לשלוחות שנבחרו. קוראים מחדש את המקור ואת היעד של כל אחת (בלי לסרוק את כל העץ),
+// לא כותבים על קובץ שלא הצלחנו לקרוא, ושומרים גיבוי של מה שהיה לפני כל כתיבה
 async function ivrApply(env, body, origin, D) {
-  const reg = await loadReg(env), line = reg.find(l => l.slug === body.slug);
-  if (!line) throw new Error("הקו לא נמצא ברשימה");
+  const { reg, line, token } = await lineToken(env, body, D);
   if (String(body.confirm || "") !== line.slug) throw new Error("לאישור הכתיבה יש להקליד את השם הקצר של הקו");
-  const token = String(body.ymToken || "").trim();
-  await checkToken(token);
-  const want = new Set((body.paths || []).map(String));
-  if (!want.size) throw new Error("לא נבחרו שלוחות");
-  const { plan } = await ivrPlan(env, body, origin, D);
-  const chosen = plan.filter(p => want.has(p.path) && !p.same);
-  const backup = { at: Date.now(), files: chosen.map(p => ({ path: p.path, before: p.before })) };
-  await env.KV.put(`factory_backup:${line.slug}:${backup.at}`, JSON.stringify(backup), { expirationTtl: 90 * 86400 });
-  const done = [], failed = [];
-  for (const p of chosen) {
-    const r = await ymT(token, "UploadTextFile", { what: "ivr2:" + (p.path === "/" ? "" : p.path) + "/ext.ini", contents: p.after }).catch(e => ({ message: e.message }));
-    (ymOk(r) ? done : failed).push(ymOk(r) ? p.path : `${p.path}: ${r && r.message || "שגיאה"}`);
+  const want = [...new Set((body.paths || []).map(String))].filter(p => /^\/[\w\/.-]*$/.test(p) && !p.includes(".."));
+  if (!want.length) throw new Error("לא נבחרו שלוחות");
+  const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
+  const bud = budget(), ready = [], failed = [], skipped = [];
+  for (const path of want) {
+    if (!bud.take(3)) { skipped.push(path); continue; }
+    const src = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
+    if (!src.ok || !src.text.trim()) { failed.push(`${path}: לא נקרא מקו המקור`); continue; }
+    const after = rewriteIni(src.text, from, to);
+    const cur = await readIni(() => ymT(token, "GetTextFile", { what: iniPath(path) }), () => bud.take() ? ymT(token, "GetIVR2Dir", { path: dirOf(path) }) : null);
+    if (!cur.ok) { failed.push(`${path}: לא ניתן לקרוא את הקיים – לא נכתב`); continue; }
+    if (cur.text.trim() !== after.trim()) ready.push({ path, after, before: cur.text });
   }
-  line.ivr = { at: Date.now(), written: done.length, backup: backup.at };
+  const backup = { at: Date.now(), files: ready.map(p => ({ path: p.path, before: p.before })) };
+  if (ready.length) await env.KV.put(`factory_backup:${line.slug}:${backup.at}`, JSON.stringify(backup), { expirationTtl: 90 * 86400 });
+  const done = [];
+  for (const p of ready) {
+    const r = await ymT(token, "UploadTextFile", { what: iniPath(p.path), contents: p.after }).catch(e => ({ message: e.message }));
+    if (ymOk(r)) done.push(p.path); else failed.push(`${p.path}: ${r && r.message || "שגיאה"}`);
+  }
+  line.ivr = { at: Date.now(), written: (line.ivr && line.ivr.written || 0) + done.length, backup: ready.length ? backup.at : (line.ivr && line.ivr.backup) || null };
   await saveReg(env, reg);
-  await D.log(env, `מפעל הקווים: נכתבו ${done.length} קובצי שלוחות לקו "${line.name}"${failed.length ? ` (${failed.length} נכשלו)` : ""}`).catch(() => {});
-  return { ok: !failed.length, done, failed, backup: backup.at };
+  await D.log(env, `מפעל הקווים: נכתבו ${done.length} קובצי שלוחות לקו "${line.name}"${failed.length ? ` (${failed.length} נכשלו)` : ""}${skipped.length ? ` (${skipped.length} ממתינים לסבב נוסף)` : ""}`).catch(() => {});
+  return { ok: !failed.length && !skipped.length, done, failed, skipped, backup: ready.length ? backup.at : null };
 }
 
 // ---------- נקודת הכניסה מ-dash.js ----------

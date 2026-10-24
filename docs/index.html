@@ -1635,6 +1635,8 @@ function applyPrefs() {
 }
 applyPrefs();
 if (!location.hash && prefs.start !== "home" && TAB_NAME[prefs.start]) state.tab = prefs.start;
+// הלשונית שביקשו בכתובת (למשל #lines), לפני ש-show() מחליף לשונית שעוד לא נטענה בבית
+const START_TAB = state.tab;
 const themeNow = () => document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 function setTheme(t) {
   if (t === "auto") { delete document.documentElement.dataset.theme; try { localStorage.removeItem("theme"); } catch {} }
@@ -1936,7 +1938,7 @@ document.addEventListener("click", e => {
   const pageUrl = () => location.pathname + "?v=" + Date.now();
   const sig = t => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return t.length + ":" + h; };
   let base = null;
-  const busy = () => document.querySelector(".rec .dot:not([hidden])") || !$("#mm").hidden || !$("#login-layer").hidden ||
+  const busy = () => (typeof fx !== "undefined" && (fx.created || fx.plan || fx.check)) || document.querySelector(".rec .dot:not([hidden])") || !$("#mm").hidden || !$("#login-layer").hidden ||
     [...document.querySelectorAll("textarea,input[type=text],input:not([type])")].some(i => i === document.activeElement && i.value.trim());
   const check = async () => {
     try {
@@ -2040,9 +2042,11 @@ document.addEventListener("submit", e => {
 });
 
 // ---------- מפעל הקווים (לשונית "קווים" – רק לבעל הקו, ורק בקו המקור) ----------
-const fx = { token: "", check: null, created: null, plan: null };
+// הטוקן נשמר רק בזיכרון, ושייך לקו אחד (tokenSlug). לקו אחר תמיד מבקשים את הטוקן שלו
+const fx = { token: "", tokenSlug: "", check: null, created: null, plan: null };
 function linesTab(me) {
-  if (!me || !me.owner || me.lineName || TABS.some(t => t[0] === "lines")) return;
+  // רק isOwner===true (שרת חדש). שרת ישן מחזיר ב-owner את מספר הטלפון – לא להציג אצלו
+  if (!me || me.isOwner !== true || me.ro || me.key || me.lineName || TABS.some(t => t[0] === "lines")) return;
   TABS.push(["lines", "קווים"]); TAB_NAME.lines = "קווים";
   ICO.lines = '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/>';
   PH.lines = ["מפעל הקווים: מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם חדש עם כל ה-AI ודף ניהול משלו.", d => [[(d.lines || []).length, "קווים שנבנו"]]];
@@ -2052,7 +2056,7 @@ function linesTab(me) {
   b.dataset.go = "lines"; b.title = "קווים";
   b.innerHTML = `<span class="nav-icon">${ico("lines")}</span><span class="nav-label">קווים</span>`;
   const log = $("#tabs").querySelector('[data-go="log"]'); (log ? log.after(b) : $("#tabs").append(b));
-  if (state.tab === "lines") show("lines", true);
+  if (state.tab === "lines" || START_TAB === "lines") show("lines", true);
 }
 const fxStep = () => fx.created ? 3 : fx.check ? 2 : 1;
 function fxRender(d) {
@@ -2095,10 +2099,10 @@ function fxRender(d) {
 const fxPagesUrl = slug => "https://shmuel-lamed.github.io/07/line/?l=" + encodeURIComponent(slug);
 function fxPlanHtml() {
   const p = fx.plan;
-  return `<h2>חיבור השלוחות של "${esc(p.slug)}" <small>${p.count} קובצי ext.ini מקו המקור${p.truncated ? " (רק חלק – העץ גדול)" : ""}</small></h2>
+  return `<h2>חיבור השלוחות של "${esc(p.slug)}" <small>${p.count} קובצי ext.ini מקו המקור</small></h2>${p.truncated ? `<div class="banner warn"><div><b>זו רק חלק מהשלוחות.</b> בשרת החינמי יש מגבלת פניות לכל בקשה, ולא כל העץ נקרא. אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>` : ""}
     <div class="mut small" style="margin-bottom:10px">כל קובץ מועתק מהקו הזה, אחרי החלפת כתובת השרת ומפתח ההרצה בכתובת של הקו החדש. מה שכבר קיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות <b>לא</b> מועתקים.</div>
     <form data-fx="apply"><div class="wrap"><table class="fx-ivr"><thead><tr><th></th><th>שלוחה</th><th>מצב</th><th>אחרי ההעתקה</th><th>קיים היום</th></tr></thead><tbody>
-    ${p.plan.map(x => `<tr><td><input type="checkbox" name="p" value="${esc(x.path)}" ${x.same ? "disabled" : "checked"}></td><td class="num">${esc(x.path)}</td><td>${x.same ? '<span class="pill ok">זהה</span>' : x.before ? '<span class="pill warn">יוחלף</span>' : '<span class="pill acc">חדש</span>'}${x.api ? ' <span class="pill">API</span>' : ""}${(x.warn || []).map(w => `<div class="note">${esc(w)}</div>`).join("")}</td><td><pre>${esc(x.after)}</pre></td><td>${x.before ? `<pre>${esc(x.before)}</pre>` : '<span class="mut">—</span>'}</td></tr>`).join("")}
+    ${p.plan.map(x => `<tr><td><input type="checkbox" name="p" value="${esc(x.path)}" ${x.same ? "disabled" : x.unknown ? "" : "checked"}></td><td class="num">${esc(x.path)}</td><td>${x.same ? '<span class="pill ok">זהה</span>' : x.unknown ? '<span class="pill warn">לא נקרא – לבדוק</span>' : x.before ? '<span class="pill warn">יוחלף</span>' : '<span class="pill acc">חדש</span>'}${x.api ? ' <span class="pill">API</span>' : ""}${(x.warn || []).map(w => `<div class="note">${esc(w)}</div>`).join("")}</td><td><pre>${esc(x.after)}</pre></td><td>${x.before ? `<pre>${esc(x.before)}</pre>` : '<span class="mut">—</span>'}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="row" style="margin-top:12px"><input name="confirm" placeholder="להקליד את השם הקצר לאישור" required style="direction:ltr"><button class="btn p">כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-fx="planx">סגירה</button></div></form>`;
 }
@@ -2112,33 +2116,40 @@ document.addEventListener("submit", async e => {
   const f = e.target.closest("[data-fx]"); if (!f) return; e.preventDefault();
   const k = f.dataset.fx, btn = f.querySelector("button.p");
   if (k === "check") {
-    fx.token = f.t.value.trim(); const r = await fxCall({ op: "check", ymToken: fx.token }, btn);
+    fx.token = f.t.value.trim(); fx.tokenSlug = ""; const r = await fxCall({ op: "check", ymToken: fx.token }, btn);
     if (r) { fx.check = r; toast("הטוקן תקין"); show("lines", true); }
   } else if (k === "create") {
     const v = Object.fromEntries(new FormData(f));
     if (!confirm(`לבנות קו חדש "${v.name}" (${v.linePhone}) בשם yemot-line-${v.slug}?\nייווצר Worker חדש ב-Cloudflare עם מפתחות ה-AI של הקו הזה.`)) return;
     toast("בונה את הקו… זה יכול לקחת חצי דקה");
     const r = await fxCall({ op: "create", ymToken: fx.token, ...v }, btn);
-    if (r) { fx.created = r; show("lines", true); }
+    if (r) { fx.created = r; fx.tokenSlug = r.line.slug; show("lines", true); }
   } else if (k === "apply") {
     const paths = [...f.querySelectorAll("[name=p]:checked")].map(i => i.value);
     if (!paths.length) return toast("לא נבחרו שלוחות", true);
     if (!confirm(`לכתוב ${paths.length} קובצי שלוחות למערכת של "${fx.plan.slug}"? מה שקיים שם יישמר בגיבוי.`)) return;
-    const r = await fxCall({ op: "ivr_apply", slug: fx.plan.slug, ymToken: fx.token, paths, confirm: f.confirm.value.trim() }, btn);
-    if (r) { toast(r.ok ? `נכתבו ${r.done.length} שלוחות` : `נכתבו ${r.done.length}, נכשלו ${r.failed.length}`, !r.ok); fx.plan = null; show("lines", true); }
+    const r = await fxCall({ op: "ivr_apply", slug: fx.plan.slug, ymToken: fx.plan.token, paths, confirm: f.confirm.value.trim() }, btn);
+    if (r) {
+      const more = (r.skipped || []).length ? `, ${r.skipped.length} ממתינות – ללחוץ שוב על "חיבור שלוחות"` : "";
+      toast(r.ok ? `נכתבו ${r.done.length} שלוחות` : `נכתבו ${r.done.length}, נכשלו ${r.failed.length}${more}`, !r.ok);
+      if ((r.failed || []).length) alert("לא נכתבו:\n" + r.failed.join("\n"));
+      fx.plan = null; show("lines", true);
+    }
   }
 });
 document.addEventListener("click", async e => {
   const b = e.target.closest("button[data-fx]"); if (!b) return;
   const k = b.dataset.fx;
-  if (k === "back") { fx.check = null; show("lines", true); }
-  else if (k === "reset") { fx.check = null; fx.created = null; fx.token = ""; show("lines", true); }
+  if (k === "back") { fx.check = null; fx.plan = null; show("lines", true); }
+  else if (k === "reset") { fx.check = null; fx.created = null; fx.plan = null; fx.token = ""; fx.tokenSlug = ""; show("lines", true); }
   else if (k === "planx") { fx.plan = null; show("lines", true); }
   else if (k === "ivr") {
-    if (!fx.token) { const t = prompt("הטוקן של המערכת בימות של הקו הזה (לא נשמר):"); if (!t) return; fx.token = t.trim(); }
+    const slug = b.dataset.slug;
+    let token = fx.tokenSlug === slug ? fx.token : "";
+    if (!token) { const t = prompt(`הטוקן של המערכת בימות של הקו "${slug}" (לא נשמר):`); if (!t) return; token = t.trim(); }
     toast("קורא את מבנה השלוחות…");
-    const r = await fxCall({ op: "ivr_plan", slug: b.dataset.slug, ymToken: fx.token }, b);
-    if (r) { fx.plan = r; show("lines", true); setTimeout(() => $("#fx-ivr")?.scrollIntoView({ behavior: "smooth" }), 100); }
+    const r = await fxCall({ op: "ivr_plan", slug, ymToken: token }, b);
+    if (r) { fx.plan = { ...r, token }; show("lines", true); setTimeout(() => $("#fx-ivr")?.scrollIntoView({ behavior: "smooth" }), 100); }
   } else if (k === "forget") {
     const c = prompt(`להסיר את "${b.dataset.slug}" מהרשימה? (ה-Worker עצמו לא יימחק)\nלאישור הקלידו את השם הקצר:`); if (!c) return;
     const r = await fxCall({ op: "forget", slug: b.dataset.slug, confirm: c.trim() }, b); if (r) show("lines", true);
