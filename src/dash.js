@@ -4,6 +4,7 @@
 // כך שההתנהגות זהה לפקודות הקוליות דרך העוזר ובשלוחה 7.
 import PAGE from "./dash.html";
 import { factory } from "./factory.js";
+import { portal } from "./portal.js";
 
 const COOKIE = "adm", TTL_DAYS = 30, MAX_FAILS = 6, FAIL_WINDOW = 15 * 60;
 const enc = new TextEncoder();
@@ -137,6 +138,11 @@ export async function adminApp(req, env, ctx, u, parts, D) {
   if (sub === "api" && req.method === "OPTIONS") {
     if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
     return withCors(new Response(null, { status: 204 }), req);
+  }
+  if (sub === "api" && parts[1] === "portal") {
+    const origin = req.headers.get("Origin") || "";
+    if (origin && origin !== GH_ORIGIN && origin !== u.origin) return json({ error: "מקור לא מורשה" }, 403);
+    return withCors(await portal(req, env, googleEmail), req);
   }
   // הגדרות ציבוריות לדף הכניסה (מזהה הלקוח של גוגל אינו סוד)
   if (sub === "api" && parts[1] === "config") return withCors(json({ google: env.GOOGLE_CLIENT_ID || "" }), req);
