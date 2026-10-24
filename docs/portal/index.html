@@ -1,13 +1,72 @@
-<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>מרכז הקווים</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet"><style>
-:root{font-family:Heebo,Arial,sans-serif;color:#151923;background:#f6f4ef}*{box-sizing:border-box}body{margin:0}header{height:68px;background:#fffefa;border-bottom:1px solid #e8e4da;display:flex;align-items:center;padding:0 max(20px,calc((100% - 1100px)/2));justify-content:space-between}h1{font-size:20px;margin:0}main{max-width:1000px;margin:38px auto;padding:0 18px}.card{background:#fffefa;border:1px solid #e8e4da;border-radius:18px;padding:24px;margin:16px 0;box-shadow:0 8px 24px #00000008}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.line{padding:18px;border:1px solid #e8e4da;border-radius:14px;background:white}button,a.btn{border:0;border-radius:10px;background:#3646c9;color:white;padding:10px 16px;font:600 14px Heebo;text-decoration:none;cursor:pointer;display:inline-block}input{font:inherit;padding:10px;border:1px solid #ddd;border-radius:9px}small,.muted{color:#747987}.error{color:#b42318}
-</style><header><h1>מרכז הקווים</h1><span id="user"></span></header><main><div id="app" class="card">מתחבר…</div></main><script src="https://accounts.google.com/gsi/client" async defer></script><script>
+<!doctype html>
+<html lang="he" dir="rtl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>מרכז הקווים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{font-family:Heebo,Arial,sans-serif;color:#151923;background:#f5f6fa}*{box-sizing:border-box}body{margin:0}header{min-height:68px;background:#fff;border-bottom:1px solid #e4e7ee;display:flex;align-items:center;justify-content:space-between;padding:12px max(20px,calc((100% - 1100px)/2));gap:14px}h1{font-size:20px;margin:0}main{max-width:1050px;margin:32px auto;padding:0 18px}.card{background:#fff;border:1px solid #e4e7ee;border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 8px 24px #00000008}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.line{padding:18px;border:1px solid #e4e7ee;border-radius:14px;background:white}.line h3{margin:0 0 8px}.line p{margin:5px 0 14px}.toolbar,.actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}button,.btn{border:0;border-radius:10px;background:#3646c9;color:white;padding:10px 16px;font:600 14px Heebo;text-decoration:none;cursor:pointer;display:inline-block}button.secondary,.btn.secondary{background:#edf0ff;color:#2738ad}button.danger{background:#fff0ef;color:#a3261f}button:disabled{opacity:.6;cursor:wait}input,select{font:inherit;padding:10px;border:1px solid #ccd1dc;border-radius:9px;min-width:0}select[multiple]{min-height:130px}.muted{color:#747987}.error{color:#b42318}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.stat{padding:13px;border-radius:12px;background:#f5f6fa}.stat b{display:block;font-size:22px}.client{padding:12px 0;border-bottom:1px solid #eceef3}.client:last-child{border:0}.line-status{font-size:12px;color:#7a3e08;background:#fff4de;padding:3px 8px;border-radius:999px}.hidden{display:none!important}
+</style>
+<header><h1>מרכז הקווים</h1><div class="toolbar"><span id="user" class="muted"></span><button id="logout" class="secondary hidden">יציאה</button></div></header>
+<main><div id="app" class="card">טוען…</div></main>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+"use strict";
 const API="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/portal";
-let tok=sessionStorage.getItem("portalToken")||"", identity;
-const app=document.querySelector("#app");
-function showLogin(msg="כניסה למערכת ניהול הקווים"){app.innerHTML='<h2>'+msg+'</h2><p>התחברו עם חשבון Google שאושר לשירות.</p><div id="gbtn"></div>';const c=document.createElement("script");c.src=API+"?action=config";/* configured client ID is supplied by the server */fetch("https://yemot-ai.smwlyqswkwt232.workers.dev/admin/api/config").then(r=>r.json()).then(x=>{if(!x.google){app.insertAdjacentHTML("beforeend",'<p class="error">כניסה בגוגל עדיין לא הוגדרה בשרת.</p>');return}const wait=setInterval(()=>{if(window.google?.accounts?.id){clearInterval(wait);google.accounts.id.initialize({client_id:x.google,callback:async r=>{try{const q=await fetch(API+"?action=login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({google:r.credential})});const d=await q.json();if(!q.ok)throw Error(d.error);tok=d.token;sessionStorage.setItem("portalToken",tok);sessionStorage.setItem("portalGoogle",r.credential);load()}catch(e){showLogin(e.message)}}});google.accounts.id.renderButton(document.querySelector("#gbtn"),{theme:"outline",size:"large",locale:"he"})}},200)})}
-async function call(action="me",body){const r=await fetch(API+"?action="+action+"&token="+encodeURIComponent(tok),{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.error);return d}
-async function load(){try{identity=await call();document.querySelector("#user").textContent=identity.email;const lines=identity.lines||[];app.innerHTML='<h2>'+(identity.isOwner?'כל הקווים':'הקווים שלי')+'</h2><div class="grid">'+(lines.map(l=>'<div class="line"><b>'+l.name+'</b><p>'+l.line+'</p><a class="btn" href="'+l.url+'#g="+encodeURIComponent(sessionStorage.getItem("portalGoogle")||"")+'">כניסה לניהול הקו</a></div>').join("")||'<p>לא הוקצו לחשבון קווים.</p>')+'</div>'+(identity.isOwner?ownerPanel(identity):'')+'<p><button id="logout">יציאה</button></p>';document.querySelector("#logout").onclick=()=>{sessionStorage.removeItem("portalToken");location.reload()};if(identity.isOwner)bindOwner()}catch(e){sessionStorage.removeItem("portalToken");showLogin(e.message)}}
-function ownerPanel(data){return '<section class="card"><h2>ניהול שירות</h2><p>להוספת קו חדש פתחו את מפעל הקווים.</p><a class="btn" href="https://shmuel-lamed.github.io/07/#lines" target="_blank">הוספת קו חדש</a></section><section class="card"><h2>אישור לקוחות ושיוך קווים</h2><div class="grid"><input id="email" placeholder="כתובת Google של הלקוח"><select id="lines" multiple>'+data.lines.map(l=>'<option value="'+l.slug+'">'+l.name+' · '+l.line+'</option>').join("")+'</select></div><p><button id="approve">אישור ושיוך</button></p><h3>חשבונות שאושרו</h3><ul>'+((data.clients||[]).map(c=>'<li>'+c.email+' — '+c.lines.length+' קווים '+(c.blocked?'(מושהה)':'')+' <button type="button" data-block="'+c.email+'" data-state="'+(c.blocked?'off':'on')+'">'+(c.blocked?'החזר גישה':'השהה')+'</button> <button type="button" data-revoke="'+c.email+'">הסר מהשירות</button></li>').join("")||'<li>אין עדיין חשבונות</li>')+'</ul></section>'}
-function bindOwner(){document.querySelectorAll("[data-block]").forEach(b=>b.onclick=async()=>{try{await call("access",{email:b.dataset.block,blocked:b.dataset.state==="on"});load()}catch(e){alert(e.message)}});document.querySelectorAll("[data-revoke]").forEach(b=>b.onclick=async()=>{try{await call("access",{email:b.dataset.revoke,approved:false});load()}catch(e){alert(e.message)}});document.querySelector("#approve").onclick=async()=>{const email=document.querySelector("#email").value,lines=[...document.querySelector("#lines").selectedOptions].map(o=>o.value);try{await call("access",{email,approved:true});await call("assign",{email,lines});load()}catch(e){alert(e.message)}}}
-if(tok)load();else showLogin();
-</script></html>
+const CONFIG="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/config";
+const LINES_API="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/";
+const app=document.querySelector("#app"),user=document.querySelector("#user"),logout=document.querySelector("#logout");
+let token=sessionStorage.getItem("portalToken")||"",identity=null,googleCredential=sessionStorage.getItem("portalGoogle")||"";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+async function request(url,body){const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});const d=await r.json().catch(()=>({error:"תשובה לא תקינה מהשרת"}));if(!r.ok)throw Error(d.error||"שגיאה "+r.status);return d}
+async function call(action="me",body){return request(API+"?action="+encodeURIComponent(action)+"&token="+encodeURIComponent(token),body)}
+function login(message="כניסה למערכת ניהול הקווים"){
+  app.innerHTML="<h2>"+esc(message)+"</h2><p>התחבר עם חשבון Google שאושר לשירות.</p><div id=\"gbtn\"></div><p id=\"loginError\" class=\"error\"></p>";
+  request(CONFIG).then(config=>{
+    if(!config.google)throw Error("כניסה בגוגל עדיין לא הוגדרה בשרת.");
+    const timer=setInterval(()=>{if(!window.google?.accounts?.id)return;clearInterval(timer);
+      google.accounts.id.initialize({client_id:config.google,callback:async credential=>{
+        try{const result=await request(API+"?action=login",{google:credential.credential});token=result.token;googleCredential=credential.credential;sessionStorage.setItem("portalToken",token);sessionStorage.setItem("portalGoogle",googleCredential);await load()}
+        catch(e){document.querySelector("#loginError").textContent=e.message}
+      }});
+      google.accounts.id.renderButton(document.querySelector("#gbtn"),{theme:"outline",size:"large",locale:"he",text:"signin_with"});
+    },100);
+    setTimeout(()=>clearInterval(timer),15000);
+  }).catch(e=>{const p=document.querySelector("#loginError");if(p)p.textContent=e.message});
+}
+function handoffUrl(line){const u=new URL(line.url,location.href);u.hash="g="+encodeURIComponent(googleCredential);return u.href}
+function enterLine(line){location.href=handoffUrl(line)}
+function renderLine(line){return `<article class="line"><h3>${esc(line.name)}</h3><p class="muted">קו ${esc(line.line||"")}</p><div class="actions"><button data-enter="${esc(line.slug)}">כניסה לניהול הקו</button></div></article>`}
+function renderClients(clients,lines){return `<section class="card"><h2>אישור לקוחות וניהול גישה</h2><div class="grid"><label>חשבון Google של הלקוח<input id="email" type="email" autocomplete="email" placeholder="name@gmail.com"></label><label>הקווים שיוקצו לו<select id="lines" multiple>${lines.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)} · ${esc(l.line)}</option>`).join("")}</select></label></div><p class="muted">אפשר לבחור כמה קווים. המנהל יוכל להוסיף מנהלים מתוך דף הניהול של הקו.</p><button id="approve">אישור ושיוך</button><h3>חשבונות שאושרו</h3>${clients.length?clients.map(c=>`<div class="client"><b>${esc(c.email)}</b> · ${(c.lines||[]).length} קווים ${c.blocked?'<span class="line-status">גישה מושהית</span>':''}<div class="actions"><button class="secondary" data-block="${esc(c.email)}" data-state="${c.blocked?'off':'on'}">${c.blocked?'החזר גישה':'השהה גישה'}</button><button class="danger" data-revoke="${esc(c.email)}">הסר מהשירות</button></div></div>`).join(""):'<p class="muted">אין עדיין חשבונות שאושרו.</p>'}</section>`}
+function ownerPanel(data){return `<section class="card"><h2>ניהול השירות</h2><p>הקווים החדשים שתיצור יופיעו כאן אוטומטית. לכל קו יש דף ניהול משלו.</p><div class="actions"><a class="btn" href="/07/source/#lines">הוספת קו חדש</a><button class="secondary" id="refreshStats">רענן נתונים</button></div><h3>נתונים מכל הקווים</h3><div id="aggregate" class="stats"><div class="stat">טוען נתונים…</div></div></section>${renderClients(data.clients||[],data.lines||[])}`}
+async function lineStats(lines){const area=document.querySelector("#aggregate");if(!area)return;try{
+  if(!googleCredential)throw Error("יש להתחבר מחדש ל-Google כדי לרענן נתוני קווים.");
+  const settled=await Promise.allSettled(lines.filter(l=>l.enabled!==false).map(async line=>{
+    const base=LINES_API+encodeURIComponent(line.slug)+"/";
+    const session=await request(base+"session",{google:googleCredential});
+    const summary=await request(base+"overview?token="+encodeURIComponent(session.token));
+    return {line,summary};
+  }));
+  const results=settled.filter(x=>x.status==="fulfilled").map(x=>x.value),failed=settled.length-results.length;
+  const online=results.reduce((n,x)=>n+(x.summary.online||[]).length,0),pending=results.reduce((n,x)=>n+(x.summary.pending||[]).reduce((a,p)=>a+(+p.n||0),0)+(+x.summary.joins||0),0),members=results.reduce((n,x)=>n+(+x.summary.members?.active||0),0);
+  area.innerHTML=`<div class="stat"><b>${online}</b>מתקשרים כעת</div><div class="stat"><b>${pending}</b>הודעות ובקשות ממתינות</div><div class="stat"><b>${members}</b>חברים פעילים</div><div class="stat"><b>${results.length}/${settled.length}</b>קווים שנענו</div>`+(results.map(x=>`<div class="stat"><b>${(x.summary.online||[]).length}</b>${esc(x.line.name)} · מתקשרים כעת</div>`).join(""))+(failed?`<p class="error">${failed} קווים לא החזירו נתונים. בדוק שהקו פעיל ושהחשבון מורשה בו.</p>`:'');
+ }catch(e){area.innerHTML=`<p class="error">לא ניתן לטעון נתונים מכל הקווים: ${esc(e.message)}</p><p class="muted">התחבר מחדש ל-Google ונסה שוב.</p>`}}
+async function load(){try{
+  identity=await call();user.textContent=identity.email;logout.classList.remove("hidden");
+  const lines=identity.lines||[];
+  // חשבון לקוח עם קו יחיד נכנס ישירות לקו. בעלי השירות נשארים במרכז.
+  if(!identity.isOwner&&lines.length===1){enterLine(lines[0]);return}
+  app.innerHTML=`<h2>${identity.isOwner?'מרכז הבעלים — כל הקווים':'הקווים שלי'}</h2><p class="muted">${identity.isOwner?'ניהול השירות, גישה ללקוחות ונתונים מכל הקווים.':'בחר את הקו שאליו תרצה להיכנס.'}</p><div class="grid">${lines.map(renderLine).join("")||'<p>לא הוקצו לחשבון קווים.</p>'}</div>${identity.isOwner?ownerPanel(identity):''}`;
+  document.querySelectorAll("[data-enter]").forEach(b=>b.onclick=()=>{const l=lines.find(x=>x.slug===b.dataset.enter);if(l)enterLine(l)});
+  document.querySelector("#approve")?.addEventListener("click",async()=>{const email=document.querySelector("#email").value.trim().toLowerCase(),selected=[...document.querySelector("#lines").selectedOptions].map(o=>o.value);try{await call("access",{email,approved:true});await call("assign",{email,lines:selected});await load()}catch(e){alert(e.message)}});
+  document.querySelectorAll("[data-block]").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await call("access",{email:b.dataset.block,blocked:b.dataset.state==="on"});await load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll("[data-revoke]").forEach(b=>b.onclick=async()=>{if(!confirm("להסיר את החשבון ואת שיוכי הקווים שלו?"))return;b.disabled=true;try{await call("access",{email:b.dataset.revoke,approved:false});await load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelector("#refreshStats")?.addEventListener("click",()=>lineStats(lines));
+  if(identity.isOwner)await lineStats(lines);
+ }catch(e){token="";sessionStorage.removeItem("portalToken");if(e.message.includes("הגישה לשירות הושעתה")){user.textContent="";app.innerHTML=`<h2>הגישה לשירות הושעתה</h2><p class="error">פנה לבעל השירות.</p>`}else login(e.message)}}
+logout.onclick=async()=>{try{await call("logout",{})}catch{}sessionStorage.removeItem("portalToken");sessionStorage.removeItem("portalGoogle");location.reload()};
+if(token)load();else login();
+</script>
+</html>

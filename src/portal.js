@@ -27,6 +27,26 @@ async function syncClientLines(env, lines, email, slugs) {
     else if (old) await env.KV.delete("portal_synced:" + email + ":" + line.slug);
   }
 }
+async function syncClientBlock(env, lines, email, blocked) {
+  const headers = { Authorization: "Bearer " + env.CF_FACTORY_TOKEN };
+  for (const line of lines) {
+    if (!line.kv) continue;
+    const url = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/storage/kv/namespaces/" + line.kv + "/values/" + encodeURIComponent("portal_blocked:" + email);
+    const r = await fetch(url, blocked ? { method: "PUT", headers: { ...headers, "Content-Type": "text/plain" }, body: "1" } : { method: "DELETE", headers });
+    if (!r.ok) throw new Error("לא ניתן לעדכן חסימת גישה בקו " + line.name);
+  }
+}
+async function revokeClientSessions(env, email) {
+  let cursor;
+  do {
+    const page = await env.KV.list({ prefix: "portal_session:", cursor });
+    for (const item of page.keys) {
+      const session = await env.KV.get(item.name, "json");
+      if (normalize(session?.email) === email) await env.KV.delete(item.name);
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+}
 const randomToken = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes, n => n.toString(16).padStart(2, "0")).join("");
@@ -66,6 +86,12 @@ export async function portal(req, env, verifyGoogle) {
   const allowed = isOwner ? lines : lines.filter(l => l.enabled !== false &&
     (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug)));
   if (action === "me") {
+    // The service owner must be recognized by every independent line Worker too,
+    // so the same Google credential can open each line dashboard.
+    if (isOwner) {
+      try { await syncClientLines(env, lines, owner, lines.map(l => l.slug)); }
+      catch (e) { return reply({ error: String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים") }, 502); }
+    }
     if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine) });
     const accounts = await env.KV.list({ prefix: "portal_approved:" });
     const clients = [];
@@ -82,13 +108,33 @@ export async function portal(req, env, verifyGoogle) {
     const email = normalize(body.email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email === owner)
       return reply({ error: "חשבון לא תקין" }, 400);
-    if (body.approved === true) await env.KV.put("portal_approved:" + email, "1");
-    else if (body.approved === false) {
-      await env.KV.delete("portal_approved:" + email);
-      await env.KV.delete("portal_memberships:" + email);
+    const assigned = await env.KV.get("portal_memberships:" + email, "json") || [];
+    if (body.blocked === true || body.approved === false) {
+      // Block centrally first, then remove only memberships created by this portal.
+      await env.KV.put("portal_blocked:" + email, "1");
+      if (body.approved === false) await env.KV.delete("portal_approved:" + email);
+      await revokeClientSessions(env, email);
+      try { await syncClientBlock(env, lines, email, true); }
+      catch (e) { return reply({ error: String(e.message || "הגישה נחסמה במרכז, אך לא בכל הקווים") }, 502); }
+      try { await syncClientLines(env, lines, email, []); }
+      catch (e) { return reply({ error: String(e.message || "הגישה נחסמה במרכז, אך סנכרון קו נכשל") }, 502); }
+      if (body.approved === false) await env.KV.delete("portal_memberships:" + email);
     }
-    if (body.blocked === true) await env.KV.put("portal_blocked:" + email, "1");
-    else if (body.blocked === false) await env.KV.delete("portal_blocked:" + email);
+    if (body.approved === true) {
+      await env.KV.put("portal_approved:" + email, "1");
+      await env.KV.delete("portal_blocked:" + email);
+      try { await syncClientBlock(env, lines, email, false); }
+      catch (e) { return reply({ error: String(e.message || "החשבון אושר, אך לא ניתן לעדכן את הגישה בקווים") }, 502); }
+    }
+    if (body.blocked === false) {
+      if (await env.KV.get("portal_approved:" + email)) {
+        try { await syncClientLines(env, lines, email, assigned); }
+        catch (e) { return reply({ error: String(e.message || "לא ניתן לשחזר את הרשאות הקווים") }, 502); }
+        try { await syncClientBlock(env, lines, email, false); }
+        catch (e) { return reply({ error: String(e.message || "לא ניתן לשחזר את הגישה בכל הקווים") }, 502); }
+      }
+      await env.KV.delete("portal_blocked:" + email);
+    }
     return reply({ ok: true });
   }
   if (action === "assign" && req.method === "POST") {

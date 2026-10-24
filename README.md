@@ -4,6 +4,8 @@
 רץ כ-Cloudflare Worker (עם KV, Workers AI ו-cron של כל דקה).
 
 ## מבנה
+- `docs/portal/` – כניסה אחידה עם Google, מרכז הבעלים, שיוך לקוחות, מעבר לקווים ונתונים מצטברים.
+- `docs/source/` – דף הניהול של קו המקור ומפעל הקווים.
 - `src/worker.js` – קוד השרת (שלוחות ימות, העוזר, בדיקת הודעות, צינתוקים, cron).
 - `src/dash.js` + `src/dash.html` – דף הניהול בכתובת `/admin` (כניסה בסיסמה `ADMIN_PASS`, פעולות מהדפדפן, זמן אמת, ארכיון, סטטיסטיקה).
 - `wrangler.toml` – הגדרות ה-Worker (KV, AI, cron, טעינת ה-html כטקסט).
