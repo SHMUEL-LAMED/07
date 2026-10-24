@@ -4,6 +4,7 @@
 // כך שההתנהגות זהה לפקודות הקוליות דרך העוזר ובשלוחה 7.
 import PAGE from "./dash.html";
 import { factory } from "./factory.js";
+import { portal } from "./portal.js";
 
 const COOKIE = "adm", TTL_DAYS = 30, MAX_FAILS = 6, FAIL_WINDOW = 15 * 60;
 const enc = new TextEncoder();
@@ -21,9 +22,26 @@ async function sign(env, msg) {
 // אסימון בעלים: exp.ow.sig – כניסה בסיסמה או בחשבון הגוגל של בעל הקו. רק הוא פותח את מפעל הקווים
 async function newToken(env, ro = false, days = TTL_DAYS, owner = false) { const exp = String(Date.now() + days * 864e5); return ro ? exp + ".ro." + await sign(env, "ro|" + exp) : owner ? exp + ".ow." + await sign(env, "ow|" + exp) : exp + "." + await sign(env, exp); }
 async function validToken(env, tok) {
-  const parts = String(tok || "").split("."), exp = parts[0], kind = parts.length === 3 ? parts[1] : "", sig = parts[parts.length - 1];
+  const parts = String(tok || "").split("."), exp = parts[0], sig = parts[parts.length - 1];
+  if (parts.length === 4 && parts[1] === "g" && +exp > Date.now()) {
+    const encoded = parts[2];
+    if (!same(sig, await sign(env, "g|" + exp + "|" + encoded))) return null;
+    let email;
+    try { email = new TextDecoder().decode(Uint8Array.from(atob(encoded.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((encoded.length + 3) % 4)), c => c.charCodeAt(0))).toLowerCase(); }
+    catch { return null; }
+    if (await env.KV.get("portal_blocked:" + email)) return null;
+    const role = await roleOf(env, email);
+    if (!role) return null;
+    return { ro: role === "viewer", owner: role === "owner", email, exp: +exp };
+  }
+  const kind = parts.length === 3 ? parts[1] : "";
   if (!exp || !sig || parts.length > 3 || (parts.length === 3 && kind !== "ro" && kind !== "ow") || !(+exp > Date.now())) return null;
   return same(sig, await sign(env, kind ? kind + "|" + exp : exp)) ? { ro: kind === "ro", owner: kind === "ow", exp: +exp } : null;
+}
+async function googleToken(env, email) {
+  const exp = String(Date.now() + TTL_DAYS * 864e5);
+  const encoded = b64u(new TextEncoder().encode(String(email).trim().toLowerCase()));
+  return exp + ".g." + encoded + "." + await sign(env, "g|" + exp + "|" + encoded);
 }
 const cookie = (req, name) => { const m = new RegExp("(?:^|;\\s*)" + name + "=([^;]*)").exec(req.headers.get("Cookie") || ""); return m ? m[1] : ""; };
 const setCookie = tok => `${COOKIE}=${tok}; Path=/admin; Max-Age=${tok ? TTL_DAYS * 86400 : 0}; HttpOnly; Secure; SameSite=Lax`;
@@ -113,7 +131,8 @@ async function googleLogin(env, ip, cred, D) {
   if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
   let email = "", role = "";
   try {
-    email = await googleEmail(env, cred);
+    email = String(await googleEmail(env, cred)).trim().toLowerCase();
+    if (await env.KV.get("portal_blocked:" + email)) throw new Error("הגישה לשירות הושעתה");
     role = await roleOf(env, email);
     if (!role) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
   } catch (e) {
@@ -138,6 +157,11 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
     return withCors(new Response(null, { status: 204 }), req);
   }
+  if (sub === "api" && parts[1] === "portal") {
+    const origin = req.headers.get("Origin") || "";
+    if (origin && origin !== GH_ORIGIN && origin !== u.origin) return json({ error: "מקור לא מורשה" }, 403);
+    return withCors(await portal(req, env, googleEmail), req);
+  }
   // הגדרות ציבוריות לדף הכניסה (מזהה הלקוח של גוגל אינו סוד)
   if (sub === "api" && parts[1] === "config") return withCors(json({ google: env.GOOGLE_CLIENT_ID || "" }), req);
   if (sub === "glogin") {
@@ -147,7 +171,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     let g;
     try { g = await googleLogin(env, ip, String(body.credential || ""), D); }
     catch (e) { return json({ error: String(e.message || e) }, 401); }
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner")) } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await googleToken(env, g.email)) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
@@ -160,7 +184,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
       let g;
       try { g = await googleLogin(env, ip, String(body.google), D); }
       catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
-      return withCors(json({ token: await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner") }), req);
+      return withCors(json({ token: await googleToken(env, g.email) }), req);
     }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {

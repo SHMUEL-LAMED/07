@@ -1,12 +1,11 @@
-# בודק שכל עותקי דף הניהול (שימחס, דעת תורה ו-index.html) נבנו מ-src/dash.html,
-# כדי שכל שינוי יופיע גם ב-GitHub Pages וגם ב-docs/both.
+# בודק שדף הקו המקורי, קווי המפעל ודעת תורה נבנו מ-src/dash.html.
 name: סנכרון דף הניהול
 on:
   pull_request:
-    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/daattorah/index.html', 'docs/line/**', 'live/daat/**', 'scripts/sync-pages.sh']
+    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/source/**', 'docs/daattorah/index.html', 'docs/line/**', 'live/daat/**', 'scripts/sync-pages.sh']
   push:
     branches: [main]
-    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/daattorah/index.html', 'docs/line/**', 'live/daat/**', 'scripts/sync-pages.sh']
+    paths: ['src/dash.html', 'index.html', 'docs/index.html', 'docs/source/**', 'docs/daattorah/index.html', 'docs/line/**', 'live/daat/**', 'scripts/sync-pages.sh']
 permissions:
   contents: read
 jobs:
@@ -17,4 +16,4 @@ jobs:
       - name: בנייה מחדש והשוואה
         run: |
           sh scripts/sync-pages.sh
-          git diff --exit-code --stat -- index.html docs/index.html docs/line/index.html docs/daattorah/index.html live/daat/ || { echo "::error::העותקים של דף הניהול לא מעודכנים. הריצו scripts/sync-pages.sh ודחפו."; exit 1; }
+          git diff --exit-code --stat -- index.html docs/index.html docs/source/index.html docs/line/index.html docs/daattorah/index.html live/daat/ || { echo "::error::העותקים של דף הניהול לא מעודכנים. הריצו scripts/sync-pages.sh ודחפו."; exit 1; }
