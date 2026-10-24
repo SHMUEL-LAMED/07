@@ -20,7 +20,7 @@ header::after{content:"";position:absolute;inset-inline:0;bottom:-1px;height:1px
 .brand small{display:block;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.5px;margin-top:2px}
 .tabs{position:relative;display:flex;gap:4px;margin-inline-start:auto;padding:4px;background:var(--bg);border:1px solid var(--line);border-radius:14px}
 .tabs .pill{position:absolute;top:4px;bottom:4px;border-radius:10px;background:var(--card);box-shadow:var(--sh),0 0 0 1px var(--line);transition:inset-inline-start .35s cubic-bezier(.2,.8,.2,1),width .35s cubic-bezier(.2,.8,.2,1)}
-.tabs button{position:relative;z-index:1;display:flex;align-items:center;gap:9px;border:0;background:none;color:var(--muted);padding:7px 16px;border-radius:10px;font:600 14px Heebo,system-ui,sans-serif;cursor:pointer;white-space:nowrap;transition:color .2s}
+.tabs button{position:relative;z-index:1;display:flex;align-items:center;gap:9px;border:0;background:none;color:var(--muted);padding:7px 16px;border-radius:10px;font:600 14px Heebo,system-ui,sans-serif;cursor:pointer;white-space:nowrap;transition:color .2s}.tabs button.refresh{padding-inline:10px;font-size:17px}.status{position:absolute;inset-inline:20px;bottom:10px;z-index:3;max-width:min(560px,calc(100% - 40px));padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--glass);color:var(--muted);font-size:12px;box-shadow:var(--sh)}.status[hidden]{display:none}
 .tabs button:hover{color:var(--fg)}
 .tabs button[aria-selected="true"]{color:var(--fg)}
 .tabs button i{width:8px;height:8px;border-radius:50%;background:var(--line);transition:background .2s,box-shadow .2s}
@@ -41,38 +41,96 @@ iframe[hidden]{display:none}
   <div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="7" y="2" width="18" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="10" y="5" width="12" height="7" rx="1" fill="currentColor"/><g fill="currentColor"><circle cx="11" cy="16" r="1.25"/><circle cx="16" cy="16" r="1.25"/><circle cx="21" cy="16" r="1.25"/><circle cx="11" cy="20" r="1.25"/><circle cx="16" cy="20" r="1.25"/><circle cx="21" cy="20" r="1.25"/><circle cx="11" cy="24" r="1.25"/><circle cx="16" cy="24" r="1.25"/><circle cx="21" cy="24" r="1.25"/></g></svg></span><div><h1>ניהול הקווים</h1><small>מרחב ניהול משותף</small></div></div>
   <nav class="tabs" role="tablist" aria-label="בחירת קו">
     <span class="pill" aria-hidden="true"></span>
+    <button role="tab" data-k="factory" aria-selected="false"><i></i>מרכז הקווים</button>
     <button role="tab" data-k="shim" aria-selected="false"><i></i>שימחס<small>073-351-2880</small></button>
     <button role="tab" data-k="daat" aria-selected="false"><i></i>דעת תורה<small>079-494-7582</small></button>
+    <button class="refresh" type="button" id="refresh-lines" title="רענון רשימת הקווים" aria-label="רענון רשימת הקווים">↻</button>
   </nav>
 </header>
 <main>
+  <div id="status" class="status" hidden></div>
+  <iframe id="f-factory" title="מרכז הקווים" hidden></iframe>
   <iframe id="f-shim" title="ניהול שימחס" hidden></iframe>
   <iframe id="f-daat" title="ניהול דעת תורה" hidden></iframe>
 </main>
 <script>
-const SRC = { shim: "../", daat: "../daattorah/" };
+const SRC = {
+  factory: "../#lines",
+  shim: "../",
+  daat: "../daattorah/"
+};
+const FACTORY_API = "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/factory";
+const statusBox = document.getElementById("status");
+
+function note(message, bad = false) {
+  statusBox.textContent = message;
+  statusBox.hidden = !message;
+  statusBox.style.color = bad ? "#b42318" : "";
+}
+function cleanKey(slug) { return "line-" + String(slug || "").replace(/[^a-z0-9-]/gi, ""); }
+function fmtLine(number) {
+  const d = String(number || "").replace(/\D/g, "");
+  return d.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3").replace(/^(\d{2})(\d{3})(\d{4})$/, "$1-$2-$3");
+}
+function addLine(line) {
+  if (!line || !line.slug || !line.url) return;
+  const key = cleanKey(line.slug);
+  if (SRC[key]) return;
+  SRC[key] = "../line/?l=" + encodeURIComponent(line.slug);
+  const b = document.createElement("button");
+  b.type = "button";
+  b.setAttribute("role", "tab");
+  b.dataset.k = key;
+  b.setAttribute("aria-selected", "false");
+  b.innerHTML = "<i></i>" + String(line.name || "קו חדש").replace(/[&<>]/g, "") + "<small>" + fmtLine(line.line) + "</small>";
+  document.getElementById("refresh-lines").before(b);
+  b.addEventListener("click", () => show(key));
+}
+async function refreshLines() {
+  let token = "";
+  try { token = sessionStorage.getItem("adminToken") || ""; } catch (e) {}
+  if (!token) {
+    note("כדי לראות קווים שנבנו ולהוסיף קו חדש, יש להיכנס ב„מרכז הקווים” עם סיסמת הניהול או חשבון הבעלים.");
+    return;
+  }
+  note("טוען את רשימת הקווים…");
+  try {
+    const r = await fetch(FACTORY_API + "?token=" + encodeURIComponent(token));
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || data.error) throw new Error(data.error || "לא ניתן לטעון את הקווים");
+    (data.lines || []).forEach(addLine);
+    note(data.lines && data.lines.length ? "נטענו " + data.lines.length + " קווים שנבנו. כל אחד נפתח בלשונית משלו." : "עדיין לא נבנו קווים. ב„מרכז הקווים” אפשר להוסיף את הראשון.");
+  } catch (e) {
+    note("רשימת הקווים זמינה רק לחשבון הבעלים. היכנסו ב„מרכז הקווים” עם סיסמת הניהול או חשבון הבעלים, ואז לחצו רענון.", true);
+  }
+}
 function show(k) {
-  for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", b.dataset.k === k);
+  if (!SRC[k]) return;
+  for (const b of document.querySelectorAll(".tabs button[data-k]")) b.setAttribute("aria-selected", b.dataset.k === k);
   for (const key of Object.keys(SRC)) {
     const f = document.getElementById("f-" + key);
-    if (key === k && !f.src) f.src = SRC[key] + "?v=" + Date.now(); // תמיד גרסה טרייה, בלי עותק ישן מהמטמון
+    if (!f) continue;
+    if (key === k && !f.src) f.src = SRC[key] + (SRC[key].includes("?") ? "&" : "?") + "v=" + Date.now();
     f.hidden = key !== k;
   }
   placePill();
   try { localStorage.setItem("bothTab", k); } catch (e) {}
   if (location.hash !== "#" + k) history.replaceState(null, "", "#" + k);
+  if (k === "factory") refreshLines();
 }
 function placePill() {
   const b = document.querySelector('.tabs button[aria-selected="true"]'), p = document.querySelector(".tabs .pill"), nav = b && b.parentElement.getBoundingClientRect(), r = b && b.getBoundingClientRect();
   if (!b) return;
-  p.style.width = r.width + "px"; p.style.insetInlineStart = (getComputedStyle(b.parentElement).direction === "rtl" ? nav.right - r.right : r.left - nav.left) + "px";
+  p.style.width = r.width + "px";
+  p.style.insetInlineStart = (getComputedStyle(b.parentElement).direction === "rtl" ? nav.right - r.right : r.left - nav.left) + "px";
 }
 addEventListener("resize", placePill);
 if (document.fonts) document.fonts.ready.then(placePill);
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.k)));
+document.querySelectorAll(".tabs button[data-k]").forEach((b) => b.addEventListener("click", () => show(b.dataset.k)));
+document.getElementById("refresh-lines").addEventListener("click", refreshLines);
 let first = location.hash.slice(1);
 if (!SRC[first]) { try { first = localStorage.getItem("bothTab"); } catch (e) {} }
-show(SRC[first] ? first : "shim");
+show(SRC[first] ? first : "factory");
 </script>
 </body>
 </html>
