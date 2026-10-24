@@ -1,115 +1,445 @@
 <!doctype html>
 <html lang="he" dir="rtl">
+<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <title>מרכז הקווים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{font-family:Heebo,Arial,sans-serif;color:#151923;background:#f5f6fa}*{box-sizing:border-box}body{margin:0}header{min-height:68px;background:#fff;border-bottom:1px solid #e4e7ee;display:flex;align-items:center;justify-content:space-between;padding:12px max(20px,calc((100% - 1100px)/2));gap:14px}h1{font-size:20px;margin:0}main{max-width:1050px;margin:32px auto;padding:0 18px}.card{background:#fff;border:1px solid #e4e7ee;border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 8px 24px #00000008}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.line{padding:18px;border:1px solid #e4e7ee;border-radius:14px;background:white}.line h3{margin:0 0 8px}.line p{margin:5px 0 14px}.toolbar,.actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}button,.btn{border:0;border-radius:10px;background:#3646c9;color:white;padding:10px 16px;font:600 14px Heebo;text-decoration:none;cursor:pointer;display:inline-block}button.secondary,.btn.secondary{background:#edf0ff;color:#2738ad}button.danger{background:#fff0ef;color:#a3261f}button:disabled{opacity:.6;cursor:wait}input,select{font:inherit;padding:10px;border:1px solid #ccd1dc;border-radius:9px;min-width:0}select[multiple]{min-height:130px}.muted{color:#747987}.error{color:#b42318}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.stat{padding:13px;border-radius:12px;background:#f5f6fa}.stat b{display:block;font-size:22px}.client{padding:12px 0;border-bottom:1px solid #eceef3}.client:last-child{border:0}.line-status{font-size:12px;color:#7a3e08;background:#fff4de;padding:3px 8px;border-radius:999px}.hidden{display:none!important}body.logged-out{background:#fff}body.logged-out header{display:none}body.logged-out main{max-width:none;min-height:100vh;margin:0;padding:24px;display:grid;place-items:center}body.logged-out #app{width:min(340px,100%);margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}body.logged-out #gbtn{display:flex;justify-content:center}body.logged-out #loginError{text-align:center;margin:12px 0 0}
-body:not(.logged-out){min-height:100vh;background:#f3f5fb;color:#18223a}body:not(.logged-out) header{position:sticky;top:0;z-index:5;min-height:70px;padding:12px max(20px,calc((100% - 1180px)/2));background:#ffffffed;backdrop-filter:blur(14px);box-shadow:0 2px 14px #15213a0a}body:not(.logged-out) h1{font-size:18px;letter-spacing:-.3px}body:not(.logged-out) main{max-width:1180px;margin:30px auto;padding:0 22px 48px}body:not(.logged-out) #app{display:grid;gap:22px;background:transparent;border:0;border-radius:0;padding:0;margin:0;box-shadow:none}.hero{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:30px 34px;border-radius:24px;background:linear-gradient(120deg,#17244b,#3549b5 68%,#586be0);color:#fff;box-shadow:0 18px 44px #273f9d24}.hero-copy{min-width:0}.eyebrow{font-size:12px;font-weight:700;letter-spacing:.7px;color:#cbd3ff}.hero h2{font-size:30px;line-height:1.2;margin:6px 0 8px;letter-spacing:-.7px}.hero p{margin:0;color:#e0e5ff}.hero .btn{background:#fff;color:#293b98;padding:12px 18px;white-space:nowrap}.section{display:grid;gap:14px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.section-head h2{margin:0;font-size:22px;letter-spacing:-.4px}.count{display:inline-grid;place-items:center;min-width:32px;height:32px;padding:0 9px;border-radius:999px;background:#e8ecff;color:#3446bd;font-weight:800}.grid{grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}.line{position:relative;display:flex;flex-direction:column;min-height:190px;padding:21px;border-color:#e5e9f2;border-radius:18px;box-shadow:0 7px 20px #18284d0a;transition:transform .15s,box-shadow .15s}.line:hover{transform:translateY(-2px);box-shadow:0 14px 28px #18284d15}.line h3{font-size:19px;letter-spacing:-.3px;margin:5px 0}.line-kicker{font-size:12px;font-weight:700;color:#747d94}.line p{margin:0 0 18px}.line .actions{margin-top:auto}.line button{width:100%;padding:11px 14px}.line-status{align-self:flex-start;margin-top:7px}.card{padding:22px 24px;margin:0;border-color:#e5e9f2;border-radius:18px;box-shadow:0 7px 20px #18284d0a}.card h2{margin:0 0 8px;font-size:21px}.card p{line-height:1.65}.account-panel{display:flex;align-items:center;justify-content:space-between;gap:20px}.account-panel p{margin:4px 0}.owner-panel{display:grid;gap:16px}.owner-tools{display:flex;align-items:center;justify-content:space-between;gap:20px}.owner-tools p{margin:3px 0;color:#69738a}.client-form{display:grid;grid-template-columns:minmax(220px,1fr) minmax(260px,1.5fr);gap:14px;align-items:end}.client-form label{display:grid;gap:7px;font-weight:600}.client-form input{width:100%}.stat{border:1px solid #e8ebf2;background:#f8f9fc}.stats{margin-top:12px}.client{padding:16px 0}.client .actions{margin-top:10px}@media(max-width:680px){body:not(.logged-out) main{margin:18px auto;padding:0 14px 32px}body:not(.logged-out) header{padding:10px 14px}.hero{align-items:flex-start;flex-direction:column;padding:24px;border-radius:20px}.hero h2{font-size:25px}.hero .btn{width:100%;text-align:center}.section-head h2{font-size:19px}.grid{grid-template-columns:1fr}.account-panel,.owner-tools{align-items:stretch;flex-direction:column}.client-form{grid-template-columns:1fr}.account-panel button{width:100%}}
-.brand{min-width:145px}.brand h1{font-size:17px}.brand small{display:block;color:#8a91a3;font-size:11px;margin-top:2px}.profile-area{position:relative;flex:none}.profile-button{display:inline-flex;align-items:center;gap:9px;background:#fff;color:#25304a;border:1px solid #e2e6ef;padding:9px 13px;border-radius:13px;box-shadow:0 4px 12px #18284d08}.profile-button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.profile-menu{position:absolute;top:calc(100% + 10px);inset-inline-start:0;z-index:20;width:min(310px,calc(100vw - 28px));padding:20px;background:#fff;border:1px solid #e4e7ee;border-radius:17px;box-shadow:0 18px 44px #18284d20}.profile-menu h2{font-size:18px;margin:0 0 6px}.profile-menu p{margin:8px 0}.profile-email{display:block;direction:ltr;text-align:right;overflow-wrap:anywhere}.line-tabs{display:flex;align-items:center;gap:7px;min-width:0;flex:1;overflow-x:auto;padding:3px;scrollbar-width:thin}.line-tab{display:inline-flex;align-items:center;gap:9px;flex:none;border:1px solid transparent;border-radius:12px;background:transparent;color:#6d7588;padding:9px 13px;white-space:nowrap}.line-tab:hover{background:#f6f7fb;color:#202a42}.line-tab[aria-selected=true]{background:#fff;border-color:#e5e8ef;color:#19233b;box-shadow:0 3px 12px #18284d0a}.line-tab small{direction:ltr;color:#9399a8;font-size:11px;font-weight:500}.service-tab{color:#3143b7;background:#eff1ff}.service-tab[aria-selected=true]{background:#3646c9;color:white}.service-tab[aria-selected=true] small{color:#e3e7ff}body:not(.logged-out) main{max-width:none;margin:0;padding:0}.line-workspace{width:100%;min-height:calc(100vh - 74px);background:#f4f6fb}.line-workspace iframe{display:block;width:100%;height:calc(100vh - 74px);border:0;background:#f4f6fb}.owner-area{max-width:1180px;margin:30px auto;padding:0 22px 45px}.owner-panel{display:grid;gap:18px}.empty-state{max-width:680px;margin:14vh auto;text-align:center;padding:42px 26px;background:#fff;border:1px solid #e5e9f2;border-radius:22px;box-shadow:0 12px 30px #18284d0a}.empty-state h2{margin:0 0 8px;font-size:25px}.empty-state p{color:#737d92}.client-form select{width:100%}.client-form select[multiple]{min-height:155px}.client button{font-size:13px}.owner-tools .btn{white-space:nowrap}@media(max-width:760px){body:not(.logged-out) header{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;padding:10px 12px}.profile-area{grid-column:1;grid-row:1}.brand{grid-column:2;grid-row:1;min-width:0;text-align:left}.brand small{display:none}.line-tabs{grid-column:1/-1;grid-row:2;max-width:100%;padding:4px 0}.line-tab{padding:8px 10px;font-size:13px}.line-tab small{font-size:10px}.profile-button{padding:8px 10px}.line-workspace,.line-workspace iframe{min-height:calc(100vh - 115px);height:calc(100vh - 115px)}.owner-area{margin:18px auto;padding:0 14px 30px}.owner-tools{align-items:flex-start;flex-direction:column}.owner-tools .actions{width:100%}.owner-tools .actions>*{flex:1;text-align:center}}
-body.logged-out{background:radial-gradient(ellipse at 50% 43%,#fff 0%,#f8f9fd 45%,#eef1f8 100%)}body.logged-out main{position:relative;isolation:isolate}body.logged-out main::before,body.logged-out main::after{content:"";position:fixed;z-index:-1;border-radius:50%;pointer-events:none;filter:blur(2px)}body.logged-out main::before{width:min(54vw,560px);height:min(54vw,560px);top:-24vh;inset-inline-start:-12vw;background:radial-gradient(circle,#dfe7ffb0 0%,#edf1ff65 48%,transparent 72%)}body.logged-out main::after{width:min(48vw,500px);height:min(48vw,500px);bottom:-25vh;inset-inline-end:-9vw;background:radial-gradient(circle,#e5eafd9c 0%,#f0f3ff60 50%,transparent 73%)}body.logged-out #app{width:min(390px,calc(100vw - 32px));min-height:116px;display:grid;place-items:center;margin:0;padding:28px 26px;border:1px solid transparent;border-radius:24px;background:linear-gradient(#ffffffed,#ffffffed) padding-box,linear-gradient(135deg,#fff,#dce3f6) border-box;box-shadow:0 24px 70px #253b7714,0 4px 14px #253b7708;backdrop-filter:blur(18px)}body.logged-out #gbtn{width:100%;display:flex;justify-content:center}body.logged-out #loginError:empty{display:none}body.logged-out #loginError:not(:empty){margin:13px 0 0;padding:9px 12px;border-radius:10px;background:#fff4f2;text-align:center}body.logged-out #gbtn iframe{max-width:100%}@media(max-width:480px){body.logged-out main{padding:18px}body.logged-out #app{width:min(360px,calc(100vw - 36px));min-height:108px;padding:22px 18px}}
-.lines-table-wrap{grid-column:1/-1;overflow-x:auto;margin-top:6px;border:1px solid #e4e7ee;border-radius:14px;background:#fff}.lines-table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}.lines-table th{font-weight:600;color:#6b7387;text-align:right;padding:10px 12px;border-bottom:1px solid #e4e7ee;background:#f8f9fc;white-space:nowrap}.lines-table td{padding:10px 12px;border-bottom:1px solid #f0f2f6;vertical-align:middle}.lines-table tr:last-child td{border-bottom:0}.lines-table td small{display:block;color:#8a91a3;font-size:12px}.row-actions{white-space:nowrap;text-align:left}.row-actions button{padding:6px 12px;font-size:13px;margin-inline-start:6px}.health{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600}.health.ok{background:#e6f6ec;color:#1d7a43}.health.warn{background:#fff4e0;color:#9a5b00}.health.off{background:#eef0f4;color:#5b6375}
+/* אותם צבעים, גופן ופינות כמו בדף הניהול של כל קו – כדי שהכול ייראה כמערכת אחת */
+:root{color-scheme:light;
+--bg:#f3f5f9;--bg2:#e9edf4;--card:#fff;--ink:#101828;--ink2:#475467;--mut:#7d8598;--line:#e4e7ee;
+--acc:#2f5fd1;--acc2:#1e46a8;--accbg:#e8eefc;--good:#15803d;--goodbg:#e7f7ed;--warn:#92400e;--warnbg:#fff4de;--bad:#dc2626;--badbg:#fdeaea;
+--ring:rgba(47,95,209,.18);--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);--sh2:0 16px 40px rgba(16,24,40,.16);
+--r:16px;--r2:12px;--side:268px}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;
+--acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--good:#4ade80;--goodbg:#132a1c;--warn:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
+--ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 16px 40px rgba(0,0,0,.55)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;
+--acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--good:#4ade80;--goodbg:#132a1c;--warn:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
+--ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 16px 40px rgba(0,0,0,.55)}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Heebo,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+button,input,select{font:inherit;color:inherit}a{color:var(--acc)}
+.hidden{display:none!important}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- כפתורים, שדות, תגיות ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:11px;padding:9px 16px;font-weight:600;cursor:pointer;background:var(--acc);color:#fff;text-decoration:none;white-space:nowrap;transition:background .15s,box-shadow .15s}
+.btn:hover{background:var(--acc2)}.btn:focus-visible,.field:focus-visible,.nav a:focus-visible{outline:none;box-shadow:0 0 0 4px var(--ring)}
+.btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line)}.btn.ghost:hover{background:var(--bg2)}
+.btn.soft{background:var(--accbg);color:var(--acc)}.btn.soft:hover{filter:brightness(.97)}
+.btn.danger{background:var(--badbg);color:var(--bad)}.btn.danger:hover{filter:brightness(.96)}
+.btn.sm{padding:6px 11px;font-size:13px;border-radius:9px}.btn:disabled{opacity:.55;cursor:default}
+.field{width:100%;border:1px solid var(--line);background:var(--card);border-radius:11px;padding:10px 12px;transition:box-shadow .15s,border-color .15s}
+.field:focus{border-color:var(--acc)}label.lbl{display:grid;gap:6px;font-weight:600;font-size:14px}label.lbl small{font-weight:400;color:var(--mut)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--bg2);color:var(--ink2);white-space:nowrap}
+.pill.ok{background:var(--goodbg);color:var(--good)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.acc{background:var(--accbg);color:var(--acc)}
+.mut{color:var(--mut)}.small{font-size:13px}.ltr{direction:ltr;unicode-bidi:isolate}.num{font-variant-numeric:tabular-nums}
+.err{color:var(--bad);font-weight:600}
+
+/* ---- מבנה: סרגל צד + אזור עבודה ---- */
+.shell{display:grid;grid-template-columns:var(--side) 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--card);border-inline-end:1px solid var(--line);z-index:30}
+.brand{display:flex;align-items:center;gap:11px;padding:20px 20px 14px}
+.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(140deg,#5b8def,var(--acc) 55%,#1e3a8a);box-shadow:0 6px 16px rgba(47,95,209,.35)}
+.logo svg{width:21px;height:21px}.brand b{display:block;font-size:17px;font-weight:800;letter-spacing:-.3px}.brand small{display:block;color:var(--mut);font-size:12px}
+.picker{margin:4px 14px 10px;position:relative}
+.picker-btn{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);border-radius:13px;cursor:pointer;text-align:start}
+.picker-btn:hover{border-color:var(--acc)}.picker-btn .dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:none}.picker-btn .dot.off{background:var(--mut)}
+.picker-btn span{flex:1;min-width:0}.picker-btn b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.picker-btn small{display:block;color:var(--mut);font-size:12px}
+.pop{position:absolute;inset-inline:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh2);padding:8px;z-index:40}
+.pop .field{margin-bottom:6px}.pop-list{max-height:320px;overflow:auto;display:grid;gap:2px}
+.pop-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;border:0;background:none;width:100%;text-align:start}
+.pop-item:hover,.pop-item.on{background:var(--accbg)}.pop-item span{flex:1}.pop-item small{color:var(--mut);font-size:12px}
+.pop-sep{height:1px;background:var(--line);margin:6px 4px}
+.nav{padding:4px 12px;display:grid;gap:2px}.nav-h{font-size:11.5px;font-weight:700;color:var(--mut);padding:12px 10px 4px;letter-spacing:.3px}
+.nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:11px;color:var(--ink2);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--bg2);color:var(--ink)}.nav a.on{background:var(--accbg);color:var(--acc);font-weight:700}
+.ndot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;margin-inline:5px}.ndot.off{background:var(--mut)}
+.nav a .cnt{margin-inline-start:auto;font-size:12px;color:var(--mut)}
+.side-scroll{flex:1;overflow-y:auto;padding-bottom:10px}
+.me{border-top:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--accbg);color:var(--acc);font-weight:800;flex:none}
+.me div{flex:1;min-width:0}.me b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.me small{display:block;color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{border:0;background:none;padding:8px;border-radius:10px;cursor:pointer;color:var(--ink2);display:grid;place-items:center}.icon-btn:hover{background:var(--bg2);color:var(--ink)}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:12px 24px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.topbar h1{font-size:18px;margin:0;font-weight:800;white-space:nowrap}
+.quick{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline-start:auto;padding:2px}.quick::-webkit-scrollbar{display:none}
+.qtab{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer;white-space:nowrap;font-size:13.5px;font-weight:600;color:var(--ink2)}
+.qtab:hover{border-color:var(--acc);color:var(--ink)}.qtab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.qtab i{width:7px;height:7px;border-radius:50%;background:var(--good)}.qtab i.off{background:var(--mut)}.qtab.on i{background:#fff}
+.burger{display:none}
+.content{padding:24px;max-width:1240px;width:100%;margin:0 auto;flex:1}
+.content.full{max-width:none;padding:0;display:flex;flex-direction:column}
+
+/* ---- כרטיסים, מדדים, טבלאות ---- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:20px}
+.card+.card,.grid+.card,.card+.grid{margin-top:16px}
+.card h2{margin:0 0 4px;font-size:17px}.card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}.card-head>div{flex:1;min-width:200px}.card-head p{margin:0;color:var(--mut);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.kpi b{display:block;font-size:28px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.kpi span{color:var(--mut);font-size:13px}
+.kpi.skel b{width:50px;height:28px;border-radius:8px;background:var(--bg2);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.5}}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r2)}
+table.t{width:100%;border-collapse:collapse;font-size:14px;min-width:720px}
+.t th{text-align:start;font-weight:600;color:var(--mut);font-size:12.5px;padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}.t tr:last-child td{border-bottom:0}.t tbody tr:hover{background:color-mix(in srgb,var(--bg) 60%,transparent)}
+.t td b{display:block}.t td small{display:block;color:var(--mut);font-size:12px}
+.acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.t .acts{flex-wrap:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 10px;border-radius:99px;background:var(--accbg);color:var(--acc);font-size:12.5px;font-weight:600}
+.chip button{border:0;background:none;color:inherit;cursor:pointer;padding:0 3px;border-radius:50%;line-height:1;font-size:15px}.chip button:hover{background:rgba(0,0,0,.08)}
+.chip-add{border:1px dashed var(--line);background:none;border-radius:99px;padding:3px 10px;font-size:12.5px;color:var(--mut);cursor:pointer}
+.empty{text-align:center;padding:48px 20px;color:var(--mut)}.empty h2{color:var(--ink);margin:0 0 6px;font-size:19px}
+.empty .big{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;margin:0 auto 14px;background:var(--accbg);color:var(--acc)}.empty .big svg{width:26px;height:26px}
+.lines-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,transform .15s}
+.lc:hover{border-color:var(--acc);transform:translateY(-1px)}.lc-h{display:flex;align-items:center;gap:10px}.lc-h b{flex:1;font-size:16px}
+.lc-m{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}.lc-m div{background:var(--bg);border-radius:10px;padding:8px 4px}.lc-m b{display:block;font-size:18px;font-variant-numeric:tabular-nums}.lc-m span{font-size:11.5px;color:var(--mut)}
+
+/* ---- אשף קו חדש ---- */
+.steps{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}.steps span{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;background:var(--bg2);color:var(--mut);font-size:13px;font-weight:600}
+.steps span.on{background:var(--acc);color:#fff}.steps span.ok{background:var(--goodbg);color:var(--good)}
+.form{display:grid;gap:14px;max-width:640px}.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;background:var(--bg);border-radius:12px;padding:12px 14px}.kv b{color:var(--mut);font-weight:600}
+.secret{display:flex;gap:8px;align-items:center;background:var(--warnbg);border-radius:12px;padding:12px 14px}.secret code{flex:1;font-size:16px;font-weight:700;direction:ltr;text-align:start}
+.banner{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--warnbg);color:var(--warn);font-size:14px;margin-bottom:14px}.banner.info{background:var(--accbg);color:var(--acc)}
+pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;font-size:12px;background:var(--bg);border-radius:8px;padding:6px 8px;direction:ltr;text-align:left;white-space:pre-wrap}
+
+/* ---- קו בתוך המרכז ---- */
+.frame-bar{display:flex;align-items:center;gap:10px;padding:10px 24px;border-bottom:1px solid var(--line);background:var(--card)}
+.frame-bar b{font-size:15px}.frame-bar .sp{flex:1}
+.frame{flex:1;width:100%;border:0;min-height:calc(100vh - 120px);background:var(--bg)}
+
+/* ---- חלון קופץ, הודעה קצרה ---- */
+.modal{position:fixed;inset:0;background:rgba(16,24,40,.45);display:grid;place-items:center;z-index:60;padding:16px}
+.modal .card{width:min(520px,100%);max-height:90vh;overflow:auto;box-shadow:var(--sh2)}
+.checks{display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px}
+.checks label{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer}.checks label:hover{background:var(--bg)}
+#toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:12px;font-weight:600;z-index:70;box-shadow:var(--sh2)}
+#toast.bad{background:var(--bad);color:#fff}
+
+/* ---- מסך כניסה ---- */
+.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 30%,var(--card) 0%,var(--bg) 60%)}
+.login-box{width:min(400px,100%);text-align:center;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 28px;box-shadow:var(--sh2)}
+.login-box .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px}.login-box .logo svg{width:28px;height:28px}
+.login-box h1{margin:0 0 6px;font-size:23px}.login-box p{margin:0 0 22px;color:var(--mut)}#gbtn{display:flex;justify-content:center;min-height:44px}
+
+/* ---- נייד ---- */
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{position:fixed;inset-block:0;inset-inline-start:0;width:min(300px,86vw);transform:translateX(100%);transition:transform .22s;box-shadow:var(--sh2)}
+  :root[dir=rtl] .side{transform:translateX(100%)}.shell.open .side{transform:none}
+  .scrim{position:fixed;inset:0;background:rgba(16,24,40,.4);z-index:25}
+  .burger{display:grid}.topbar{padding:10px 14px}.content{padding:16px}.frame-bar{padding:10px 14px}
+  .fgrid{grid-template-columns:1fr}.quick{max-width:60vw}
+}
 </style>
-<body class="logged-out">
-<header id="topbar"><div class="profile-area"><button id="profileButton" class="profile-button" aria-expanded="false" aria-label="גישה לפרופיל"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span>הפרופיל שלי</span></button><section id="profileMenu" class="profile-menu hidden"></section></div><nav id="lineTabs" class="line-tabs" aria-label="בחירת קו"></nav><div class="brand"><h1>מרכז הקווים</h1><small>האזור האישי</small></div></header>
-<main><div id="app" class="card">טוען…</div></main>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" class="hidden"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 "use strict";
-const API="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/portal";
-const CONFIG="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/config";
-const LINES_API="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/";
+// ===== כתובות =====
+const SB="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/";
+const API=SB+"admin-netfree/portal",CONFIG=SB+"admin-netfree/config",LINES_API=SB+"admin-netfree-lines/";
 const LEGACY_LINES=[
-  {slug:"shimchas",name:"שימחס",line:"073-351-2880",url:"/07/source/",api:"https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/",enabled:true,legacy:true},
-  {slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:"https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/",enabled:true,legacy:true}
+  {slug:"shimchas",name:"שימחס",line:"073-351-2880",url:"/07/source/",api:SB+"admin-netfree/",enabled:true,legacy:true},
+  {slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:SB+"admin-netfree-daat/",enabled:true,legacy:true}
 ];
-const app=document.querySelector("#app"),lineTabs=document.querySelector("#lineTabs"),profileButton=document.querySelector("#profileButton"),profileMenu=document.querySelector("#profileMenu");
-let token=sessionStorage.getItem("portalToken")||"",identity=null,googleCredential=sessionStorage.getItem("portalGoogle")||"";
+const SOURCE=LEGACY_LINES[0]; // מפעל הקווים רץ בקו המקור
+
+// ===== מצב =====
+const S={token:"",google:"",me:null,lines:[],view:"",slug:"",data:null,dataAt:0,fx:{token:"",check:null,created:null,plan:null,status:null},pickerOpen:false};
+try{S.token=sessionStorage.getItem("portalToken")||"";S.google=sessionStorage.getItem("portalGoogle")||""}catch{}
+const $=s=>document.querySelector(s),root=$("#root");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const I={
+  logo:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',lines:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 14h3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  chev:'<path d="M7 10l5 5 5-5"/>',out:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'
+};
+const ico=n=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]||""}</svg>`;
+function toast(m,bad){const t=$("#toast");t.textContent=m;t.className=bad?"bad":"";clearTimeout(toast.t);toast.t=setTimeout(()=>t.className="hidden",3600)}
+try{const th=localStorage.getItem("portalTheme");if(th)document.documentElement.dataset.theme=th}catch{}
+
+// ===== תקשורת =====
 async function request(url,body){const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});const d=await r.json().catch(()=>({error:"תשובה לא תקינה מהשרת"}));if(!r.ok)throw Error(d.error||"שגיאה "+r.status);return d}
-async function call(action="me",body){return request(API+"?action="+encodeURIComponent(action)+"&token="+encodeURIComponent(token),body)}
-function login(message="כניסה למערכת ניהול הקווים"){
-  document.body.classList.add("logged-out");
-  app.innerHTML="<div id=\"gbtn\"></div><p id=\"loginError\" class=\"error\">"+(message!=="כניסה למערכת ניהול הקווים"?esc(message):"")+"</p>";
-  request(CONFIG).then(config=>{
-    if(!config.google)throw Error("כניסה בגוגל עדיין לא הוגדרה בשרת.");
-    const timer=setInterval(()=>{if(!window.google?.accounts?.id)return;clearInterval(timer);
-      google.accounts.id.initialize({client_id:config.google,callback:async credential=>{
-        try{const result=await request(API+"?action=login",{google:credential.credential});token=result.token;googleCredential=credential.credential;sessionStorage.setItem("portalToken",token);sessionStorage.setItem("portalGoogle",googleCredential);await load()}
-        catch(e){document.querySelector("#loginError").textContent=e.message}
-      }});
-      google.accounts.id.renderButton(document.querySelector("#gbtn"),{theme:"outline",size:"large",locale:"he",text:"signin_with",shape:"pill",width:Math.min(320,Math.max(220,window.innerWidth-64))});
-    },100);
-    setTimeout(()=>clearInterval(timer),15000);
-  }).catch(e=>{const p=document.querySelector("#loginError");if(p)p.textContent=e.message});
+const call=(action="me",body)=>request(API+"?action="+encodeURIComponent(action)+"&token="+encodeURIComponent(S.token),body);
+const googleExp=()=>{try{return JSON.parse(atob(S.google.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000}catch{return 0}};
+const googleOk=()=>!!S.google&&googleExp()>Date.now()+30000;
+const baseOf=l=>l.api||LINES_API+encodeURIComponent(l.slug)+"/";
+const lineSessions={};
+async function lineToken(l){const b=baseOf(l);if(lineSessions[b])return lineSessions[b];if(!googleOk())throw Error("החיבור לגוגל פג – יש לרענן אותו");return lineSessions[b]=(await request(b+"session",{google:S.google})).token}
+async function lineApi(l,name,body){const t=await lineToken(l);return request(baseOf(l)+name+(name.includes("?")?"&":"?")+"token="+encodeURIComponent(t),body)}
+const handoffUrl=l=>{const u=new URL(l.url||"/07/line/?l="+encodeURIComponent(l.slug),location.href);if(S.google)u.hash="g="+encodeURIComponent(S.google);return u.href};
+const isFactory=l=>!l.legacy&&!LEGACY_LINES.some(x=>x.slug===l.slug);
+
+// ===== כניסה בגוגל =====
+function renderGoogle(el,onCred){request(CONFIG).then(cfg=>{if(!cfg.google)throw Error("כניסה בגוגל עדיין לא הוגדרה בשרת.");
+  const tm=setInterval(()=>{if(!window.google?.accounts?.id)return;clearInterval(tm);
+    google.accounts.id.initialize({client_id:cfg.google,callback:r=>onCred(r.credential)});
+    google.accounts.id.renderButton(el,{theme:"outline",size:"large",locale:"he",text:"signin_with",shape:"pill",width:Math.min(300,Math.max(220,innerWidth-80))})},100);
+  setTimeout(()=>clearInterval(tm),15000)}).catch(e=>toast(e.message,true))}
+function showLogin(msg=""){
+  root.innerHTML=`<div class="login"><div class="login-box"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I.logo}</svg></div>
+  <h1>מרכז הקווים</h1><p>כניסה עם חשבון הגוגל שלך. רואים רק את הקווים שיש לך גישה אליהם.</p><div id="gbtn"></div><p class="err" id="lerr" style="margin:14px 0 0">${esc(msg)}</p></div></div>`;
+  renderGoogle($("#gbtn"),async cred=>{try{const r=await request(API+"?action=login",{google:cred});S.token=r.token;setGoogle(cred);try{sessionStorage.setItem("portalToken",S.token)}catch{}await load()}catch(e){$("#lerr").textContent=e.message}});
 }
-function handoffUrl(line){const u=new URL(line.url,location.href);u.hash="g="+encodeURIComponent(googleCredential);return u.href}
-function enterLine(line){location.href=handoffUrl(line)}
-function renderLine(line){return `<article class="line"><span class="line-kicker">הקו שלי</span><h3>${esc(line.name)}</h3><p class="muted">מספר קו: ${esc(line.line||"לא הוגדר")}</p>${line.enabled===false?'<span class="line-status">הקו מושהה</span>':''}<div class="actions"><button data-enter="${esc(line.slug)}">ניהול הקו והמנהלים</button></div></article>`}
+function setGoogle(c){S.google=c;for(const k in lineSessions)delete lineSessions[k];try{sessionStorage.setItem("portalGoogle",c)}catch{}}
+function refreshGoogle(){modal(`<h2>חידוש החיבור לגוגל</h2><p class="mut">החיבור לגוגל תקף לשעה. כדי להמשיך לעבוד עם הקווים, יש להתחבר שוב.</p><div id="gbtn2" style="display:flex;justify-content:center;margin-top:12px"></div>`);
+  renderGoogle($("#gbtn2"),cred=>{setGoogle(cred);closeModal();toast("החיבור חודש");route()})}
+async function logout(){try{await call("logout",{})}catch{}try{sessionStorage.removeItem("portalToken");sessionStorage.removeItem("portalGoogle")}catch{}location.hash="";location.reload()}
+
+// ===== טעינה =====
+async function load(){
+  try{S.me=await call()}catch(e){S.token="";try{sessionStorage.removeItem("portalToken")}catch{}return showLogin(/נדרשת כניסה|החיבור פג/.test(e.message)?"":e.message)}
+  const dyn=(S.me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);return L?{...L,...l,url:L.url,api:L.api,legacy:true}:l});
+  S.lines=S.me.isOwner?[...LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)),...dyn]:dyn;
+  shell();
+  if(!location.hash){let last="";try{last=sessionStorage.getItem("portalView:"+S.me.email)||""}catch{}
+    location.replace("#"+(last||(S.me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"all")))}
+  route();
+}
+
+// ===== מבנה הדף =====
+function shell(){
+  const me=S.me,own=me.isOwner;
+  root.innerHTML=`<div class="shell" id="shell">
+  <aside class="side"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I.logo}</svg></div><div><b>מרכז הקווים</b><small>${own?"בעל השירות":"האזור האישי"}</small></div></div>
+   <div class="picker"><button class="picker-btn" id="pickBtn" aria-haspopup="listbox"><i class="dot" id="pickDot"></i><span><b id="pickName">בחירת קו</b><small id="pickSub">${S.lines.length} קווים</small></span>${ico("chev")}</button><div class="pop hidden" id="pop"></div></div>
+   <div class="side-scroll">
+    <nav class="nav"><div class="nav-h">ניהול</div>
+     <a href="#overview" data-v="overview">${ico("home")}סקירה</a>
+     <a href="#lines" data-v="lines">${ico("lines")}קווים<span class="cnt">${S.lines.length}</span></a>
+     ${own?`<a href="#new" data-v="new">${ico("plus")}קו חדש</a><a href="#accounts" data-v="accounts">${ico("users")}חשבונות<span class="cnt">${(me.clients||[]).length}</span></a>`:""}
+     <a href="#all" data-v="all">${ico("grid")}כל הקווים</a>
+    </nav>
+    <nav class="nav"><div class="nav-h">הקווים שלי</div>${S.lines.map(l=>`<a href="#line=${encodeURIComponent(l.slug)}" data-v="line" data-slug="${esc(l.slug)}"><i class="ndot${l.enabled===false?" off":""}"></i>${esc(l.name)}<span class="cnt ltr">${esc(l.line||"")}</span></a>`).join("")||'<p class="mut small" style="padding:0 10px">אין עדיין קווים</p>'}</nav>
+   </div>
+   <div class="me"><div class="avatar">${esc((me.email||"?")[0].toUpperCase())}</div><div><b class="ltr">${esc(me.email)}</b><small>${own?"גישה לכל הקווים":S.lines.length+" קווים"}</small></div>
+    <button class="icon-btn" id="themeBtn" title="מצב כהה/בהיר" aria-label="מצב כהה/בהיר">${ico("sun")}</button><button class="icon-btn" id="outBtn" title="יציאה" aria-label="יציאה">${ico("out")}</button></div>
+  </aside>
+  <div class="main"><header class="topbar"><button class="icon-btn burger" id="burger" aria-label="תפריט">${ico("menu")}</button><h1 id="title"></h1>
+   <div class="quick" id="quick">${S.lines.map(l=>`<button class="qtab" data-slug="${esc(l.slug)}"><i class="${l.enabled===false?"off":""}"></i>${esc(l.name)}</button>`).join("")}</div></header>
+   <div class="content" id="view"></div></div></div>`;
+  $("#outBtn").onclick=logout;
+  $("#themeBtn").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),n=cur==="dark"?"light":"dark";document.documentElement.dataset.theme=n;try{localStorage.setItem("portalTheme",n)}catch{}};
+  $("#burger").onclick=()=>toggleSide(true);
+  $("#quick").onclick=e=>{const b=e.target.closest(".qtab");if(b)location.hash="line="+b.dataset.slug};
+  $("#pickBtn").onclick=e=>{e.stopPropagation();togglePicker()};
+  document.addEventListener("click",e=>{if(!e.target.closest(".picker"))togglePicker(false)});
+  document.querySelector(".side").addEventListener("click",e=>{if(e.target.closest(".nav a"))toggleSide(false)});
+}
+function toggleSide(open){const sh=$("#shell");sh.classList.toggle("open",open);let sc=$(".scrim");if(open&&!sc){sc=document.createElement("div");sc.className="scrim";sc.onclick=()=>toggleSide(false);sh.append(sc)}else if(!open&&sc)sc.remove()}
+function togglePicker(open=!S.pickerOpen){S.pickerOpen=open;const p=$("#pop");if(!p)return;p.classList.toggle("hidden",!open);if(!open)return;
+  p.innerHTML=`<input class="field" id="pickQ" placeholder="חיפוש קו…" autocomplete="off"><div class="pop-list" id="pickL"></div>`;
+  const draw=q=>{q=q.trim();const L=S.lines.filter(l=>!q||l.name.includes(q)||String(l.line||"").replace(/\D/g,"").includes(q.replace(/\D/g,"")||"\u0000"));
+    $("#pickL").innerHTML=L.map(l=>`<button class="pop-item${S.slug===l.slug?" on":""}" data-slug="${esc(l.slug)}"><i class="ndot${l.enabled===false?" off":""}"></i><span>${esc(l.name)}</span><small class="ltr">${esc(l.line||"")}</small></button>`).join("")+(L.length?"":'<p class="mut small" style="padding:6px 10px">לא נמצא</p>')+
+    `<div class="pop-sep"></div><button class="pop-item" data-all="1">${ico("grid")}<span>כל הקווים</span></button>`};
+  draw("");$("#pickQ").oninput=e=>draw(e.target.value);$("#pickQ").focus();
+  $("#pickL").onclick=e=>{const b=e.target.closest(".pop-item");if(!b)return;togglePicker(false);toggleSide(false);location.hash=b.dataset.all?"all":"line="+b.dataset.slug};
+}
+
+// ===== ניתוב =====
+addEventListener("hashchange",()=>S.me&&route());
+function route(){
+  const h=decodeURIComponent(location.hash.slice(1)),[v,arg]=h.split("=");
+  S.view=v||"overview";S.slug=v==="line"?arg:"";
+  try{sessionStorage.setItem("portalView:"+S.me.email,h)}catch{}
+  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===S.view&&(S.view!=="line"||a.dataset.slug===S.slug)));
+  document.querySelectorAll(".qtab").forEach(b=>b.classList.toggle("on",b.dataset.slug===S.slug));
+  const cur=S.lines.find(l=>l.slug===S.slug);
+  $("#pickName").textContent=cur?cur.name:S.view==="all"?"כל הקווים":"בחירת קו";$("#pickSub").textContent=cur?cur.line||"":S.lines.length+" קווים";$("#pickDot").className="dot"+(cur&&cur.enabled===false?" off":"");
+  const V=$("#view");V.className="content";
+  const owner=S.me.isOwner,need=["new","accounts"];
+  if(!owner&&(need.includes(S.view)||S.view==="all"))return noAccess(V);
+  const T={overview:"סקירה",lines:"קווים",new:"קו חדש",accounts:"חשבונות",all:"כל הקווים"};
+  $("#title").textContent=cur?cur.name:T[S.view]||"";
+  if(S.view==="line"){if(!cur)return V.innerHTML=empty("lines","הקו לא נמצא","אין לך גישה לקו הזה, או שהוא הוסר.");return lineView(V,cur)}
+  if(S.view==="new")return newLineView(V);
+  if(S.view==="accounts")return accountsView(V);
+  if(S.view==="lines")return linesView(V);
+  if(S.view==="all")return overviewView(V,true);
+  return overviewView(V);
+}
+const empty=(ic,h,p,act="")=>`<div class="card empty"><div class="big">${ico(ic)}</div><h2>${esc(h)}</h2><p>${esc(p)}</p>${act}</div>`;
+function noAccess(V){$("#title").textContent="כל הקווים";V.innerHTML=empty("lock","אין לך גישה למרכז כל הקווים","המרכז פתוח רק לבעל השירות. אפשר לעבור לקווים שלך מהרשימה בצד או מהלשוניות למעלה.",S.lines[0]?`<a class="btn" href="#line=${encodeURIComponent(S.lines[0].slug)}" style="margin-top:14px">מעבר ל${esc(S.lines[0].name)}</a>`:"")}
+
+// ===== קו בתוך המרכז =====
+function lineView(V,l){V.className="content full";
+  V.innerHTML=`<div class="frame-bar"><b>${esc(l.name)}</b><span class="mut ltr small">${esc(l.line||"")}</span>${l.enabled===false?'<span class="pill">מושהה</span>':""}<span class="sp"></span>
+   ${googleOk()?"":`<button class="btn sm soft" id="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn sm ghost" href="${esc(handoffUrl(l))}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
+   <iframe class="frame" title="ניהול ${esc(l.name)}" src="${esc(handoffUrl(l))}" allow="clipboard-read; clipboard-write; microphone"></iframe>`;
+  $("#reG")&&($("#reG").onclick=refreshGoogle);
+}
+
+// ===== נתונים מכל הקווים =====
+const sum7=a=>Array.isArray(a)?a.slice(-7).reduce((n,x)=>n+(+x||0),0):null;
+const pendOf=ov=>(ov.pending||[]).reduce((a,p)=>a+(+p.n||0),0)+(+ov.joins||0);
+function healthOf(h,l){if(l.enabled===false)return["","מושהה"];if(!h)return["warn","לא ידוע"];const p=[];
+  if(h.cronAgo!=null&&h.cronAgo>300)p.push("המשימות לא רצו "+Math.round(h.cronAgo/60)+" דק׳");if((h.errors||[]).length)p.push(h.errors.length+" שגיאות");if((h.bg||[]).length>5)p.push("תור רקע "+h.bg.length);
+  return p.length?["warn",p.join(" · ")]:["ok","תקין"+(h.testMode?" · בדיקה":"")]}
+async function fetchAll(force){
+  if(!force&&S.data&&Date.now()-S.dataAt<60000)return S.data;
+  if(!googleOk())throw Error("google");
+  const rows=await Promise.all(S.lines.map(async l=>{if(l.enabled===false)return{l,off:true};
+    try{const [ov,he,st]=await Promise.allSettled([lineApi(l,"overview"),lineApi(l,"health"),lineApi(l,"stats")]);
+      if(ov.status!=="fulfilled")throw ov.reason;return{l,ov:ov.value,he:he.status==="fulfilled"?he.value:null,st:st.status==="fulfilled"?st.value:null}}
+    catch(e){return{l,err:String(e.message||"לא ענה")}}}));
+  S.data=rows;S.dataAt=Date.now();return rows;
+}
+function kpis(rows){const ok=rows.filter(r=>r.ov),tot=f=>ok.reduce((n,r)=>n+(f(r)||0),0);
+  return `<div class="kpis"><div class="kpi"><b>${tot(r=>(r.ov.online||[]).length)}</b><span>מחוברים עכשיו</span></div><div class="kpi"><b>${tot(r=>pendOf(r.ov))}</b><span>ממתינות לאישור</span></div><div class="kpi"><b>${tot(r=>+r.ov.members?.active)}</b><span>חברים פעילים</span></div><div class="kpi"><b>${tot(r=>sum7(r.st?.calls))}</b><span>שיחות השבוע</span></div><div class="kpi"><b>${tot(r=>sum7(r.st?.msgs))}</b><span>הודעות השבוע</span></div><div class="kpi"><b>${ok.length}/${rows.length}</b><span>קווים שענו</span></div></div>`}
+const skel=()=>`<div class="kpis">${"<div class='kpi skel'><b></b><span>טוען…</span></div>".repeat(6)}</div>`;
+const googleBanner=()=>`<div class="banner info">${ico("refresh")}<div style="flex:1">כדי לראות נתונים מהקווים צריך לחדש את החיבור לגוגל (הוא תקף לשעה).</div><button class="btn sm" id="reG">חידוש</button></div>`;
+async function overviewView(V,allMode){
+  const own=S.me.isOwner;
+  V.innerHTML=`<div class="card-head"><div><h2 style="margin:0;font-size:21px">${own?"שלום, בעל השירות":"שלום"}</h2><p>${own?"תמונת מצב של כל הקווים במערכת.":"הקווים שיש לך גישה אליהם."}</p></div>
+   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="ovBody">${skel()}</div>`;
+  $("#rf").onclick=()=>overviewDraw(true);overviewDraw(false);
+}
+async function overviewDraw(force){const B=$("#ovBody");if(!B)return;
+  if(!S.lines.length){B.innerHTML=empty("lines","אין עדיין קווים",S.me.isOwner?"אפשר לבנות קו ראשון במפעל הקווים.":"פנה לבעל השירות כדי לקבל גישה לקו.",S.me.isOwner?'<a class="btn" href="#new" style="margin-top:14px">בניית קו</a>':"");return}
+  if(force)B.innerHTML=skel();
+  let rows;try{rows=await fetchAll(force)}catch(e){B.innerHTML=googleBanner()+cards(S.lines.map(l=>({l})));$("#reG").onclick=refreshGoogle;return}
+  if(S.view!=="overview"&&S.view!=="all")return;
+  B.innerHTML=kpis(rows)+cards(rows);
+}
+function cards(rows){return `<div class="lines-cards">${rows.map(r=>{const l=r.l,[hc,ht]=r.err?["warn","לא ענה"]:r.ov||r.off?healthOf(r.he,l):["","—"];
+  return `<div class="lc" onclick="location.hash='line=${encodeURIComponent(l.slug)}'"><div class="lc-h"><b>${esc(l.name)}</b><span class="pill ${hc}">${esc(ht)}</span></div><div class="mut small ltr" style="text-align:start">${esc(l.line||"")}</div>
+   <div class="lc-m"><div><b>${r.ov?(r.ov.online||[]).length:"—"}</b><span>מחוברים</span></div><div><b>${r.ov?pendOf(r.ov):"—"}</b><span>ממתינות</span></div><div><b>${r.ov?(+r.ov.members?.active||0):"—"}</b><span>חברים</span></div></div></div>`}).join("")}</div>`}
+
+// ===== קווים (טבלה) =====
+async function linesView(V){
+  const own=S.me.isOwner;
+  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>קווים</h2><p>${own?"כל הקווים במערכת: נתונים, בריאות, כניסה, השהיה והחזרה לפעולה.":"הקווים שיש לך גישה אליהם."}</p></div>
+   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="lt"><p class="mut">טוען…</p></div></div>`;
+  $("#rf").onclick=()=>linesDraw(true);linesDraw(false);
+}
+async function linesDraw(force){const B=$("#lt");if(!B)return;let rows,banner="";
+  try{rows=await fetchAll(force)}catch{rows=S.lines.map(l=>({l}));banner=googleBanner()}
+  if(S.view!=="lines")return;
+  const own=S.me.isOwner;
+  B.innerHTML=banner+`<div class="tw"><table class="t"><thead><tr><th>קו</th><th>מחוברים</th><th>ממתינות</th><th>חברים</th><th>שיחות השבוע</th><th>הודעות השבוע</th><th>מצב</th><th></th></tr></thead><tbody>${rows.map(r=>{const l=r.l,[hc,ht]=r.err?["warn",r.err]:r.ov||r.off?healthOf(r.he,l):["","—"];
+   return `<tr><td><b>${esc(l.name)}</b><small><span class="ltr">${esc(l.line||"")}</span>${l.manager?` · <span class="ltr">${esc(l.manager)}</span>`:""}</small></td><td class="num">${r.ov?(r.ov.online||[]).length:"—"}</td><td class="num">${r.ov?pendOf(r.ov):"—"}</td><td class="num">${r.ov?`${+r.ov.members?.active||0}/${+r.ov.members?.total||0}`:"—"}</td><td class="num">${r.st?sum7(r.st.calls):"—"}</td><td class="num">${r.st?sum7(r.st.msgs):"—"}</td><td><span class="pill ${hc}">${esc(ht)}</span></td>
+   <td><div class="acts"><a class="btn sm soft" href="#line=${encodeURIComponent(l.slug)}">כניסה</a>${own&&isFactory(l)?(l.enabled===false?`<button class="btn sm" data-resume="${esc(l.slug)}">החזרה לפעולה</button>`:`<button class="btn sm danger" data-suspend="${esc(l.slug)}">השהיה</button>`)+`<button class="btn sm ghost" data-ivr="${esc(l.slug)}">חיבור שלוחות</button>`:""}</div></td></tr>`}).join("")}</tbody></table></div>`;
+  $("#reG")&&($("#reG").onclick=refreshGoogle);
+  B.querySelectorAll("[data-suspend]").forEach(b=>b.onclick=async()=>{const slug=b.dataset.suspend,c=prompt(`להשהות את הקו "${slug}"?\nמתקשרים ישמעו "הקו מושהה זמנית", והמשימות לא ירוצו. הנתונים וההגדרות נשמרים ואפשר להחזיר.\nלאישור הקלידו את השם הקצר:`);if(!c)return;b.disabled=true;try{await call("suspend",{slug,confirm:c.trim()});toast("הקו הושהה");S.data=null;await load()}catch(e){toast(e.message,true);b.disabled=false}});
+  B.querySelectorAll("[data-resume]").forEach(b=>b.onclick=async()=>{if(!confirm("להחזיר את הקו לפעולה?"))return;b.disabled=true;try{await call("resume",{slug:b.dataset.resume});toast("הקו חזר לפעולה");S.data=null;await load()}catch(e){toast(e.message,true);b.disabled=false}});
+  B.querySelectorAll("[data-ivr]").forEach(b=>b.onclick=()=>ivrStart(b.dataset.ivr,b));
+}
+
+// ===== חשבונות =====
 async function syncLegacyManagers(email,slugs){
   for(const line of LEGACY_LINES){
-    const session=await request(line.api+"session",{google:googleCredential});
-    const url=line.api+"emails?token="+encodeURIComponent(session.token);
-    const data=await request(url),present=(data.managers||[]).some(m=>(typeof m==="string"?m:m.e)===email);
-    const wanted=slugs.includes(line.slug);
-    if(present!==wanted)await request(url,{email,op:wanted?"add":"remove",role:"admin"});
+    const data=await lineApi(line,"emails"),present=(data.managers||[]).some(m=>(typeof m==="string"?m:m.e)===email),wanted=slugs.includes(line.slug);
+    if(present!==wanted)await lineApi(line,"emails",{email,op:wanted?"add":"remove",role:"admin"});
   }
 }
-function accountPanel(data){return `<h2>הפרופיל והחשבון</h2><p>מחובר באמצעות Google</p><b class="profile-email" dir="ltr">${esc(data.email)}</b><p class="muted">${data.isOwner?'לבעלים יש גישה לכל הקווים במערכת.':`יש לך גישה ל־${(data.lines||[]).length} קווים.`}</p><button class="secondary" id="profileLogout">יציאה מהחשבון</button>`}
-function renderClients(clients,lines){return `<section class="card"><h2>גישה למשתמשים</h2><p class="muted">בחר חשבון Google והקווים שהוא יראה באזור האישי שלו.</p><div class="client-form"><label>חשבון Google<input id="email" type="email" autocomplete="email" placeholder="name@gmail.com"></label><label>קווים לשיוך<select id="lines" multiple>${lines.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)} · ${esc(l.line)}</option>`).join("")}</select></label></div><p class="muted">לניהול מנהלים בכל קו, היכנס לכרטיס הקו המתאים.</p><button id="approve">שמירת גישה לקווים</button><h3>חשבונות עם גישה</h3>${clients.length?clients.map(c=>`<div class="client"><b dir="ltr">${esc(c.email)}</b> · ${(c.lines||[]).length} קווים ${c.blocked?'<span class="line-status">גישה מושהית</span>':''}<div class="actions"><button class="secondary" data-block="${esc(c.email)}" data-state="${c.blocked?'off':'on'}">${c.blocked?'החזר גישה':'השהה גישה'}</button><button class="danger" data-revoke="${esc(c.email)}">הסר גישה</button></div></div>`).join(""):'<p class="muted">אין עדיין חשבונות נוספים.</p>'}</section>`}
-function ownerPanel(data){return `<section class="owner-panel"><section class="card"><div class="owner-tools"><div><h2>ניהול השירות</h2><p>כאן נמצאים כל הקווים במערכת. מתוך ניהול כל קו אפשר להוסיף מנהלים והרשאות.</p></div><div class="actions"><a class="btn" id="addLine" href="/07/source/">הוספת קו</a><button class="secondary" id="refreshStats">רענון נתונים</button></div></div><div id="aggregate" class="stats"><div class="stat">טוען נתונים…</div></div></section>${renderClients(data.clients||[],data.lines||[])}</section>`}
-const LINE_SLUG_OK=s=>/^[a-z0-9-]+$/.test(s);
-async function lineData(line){
-  const base=line.api||LINES_API+encodeURIComponent(line.slug)+"/";
-  const session=await request(base+"session",{google:googleCredential});
-  const q=name=>request(base+name+(name.includes("?")?"&":"?")+"token="+encodeURIComponent(session.token));
-  const [ov,he,st]=await Promise.allSettled([q("overview"),q("health"),q("stats")]);
-  if(ov.status!=="fulfilled")throw ov.reason;
-  return {line,ov:ov.value,he:he.status==="fulfilled"?he.value:null,st:st.status==="fulfilled"?st.value:null};
+const lineName=s=>(S.lines.find(l=>l.slug===s)||{name:s}).name;
+async function saveAccess(email,slugs){if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל ולנסות שוב")}
+  await call("access",{email,approved:true});await syncLegacyManagers(email,slugs);await call("assign",{email,lines:slugs})}
+function accountsView(V){
+  const cl=S.me.clients||[];
+  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>חשבונות</h2><p>חשבונות גוגל שאישרת, והקווים שכל אחד רואה. מנהלים שמנהל קו מוסיף בעצמו נכנסים לבד ולא צריכים להופיע כאן.</p></div><button class="btn" id="newAcc">${ico("plus")}חשבון חדש</button></div>
+   ${cl.length?`<div class="tw"><table class="t"><thead><tr><th>חשבון</th><th>קווים</th><th>מצב</th><th></th></tr></thead><tbody>${cl.map(c=>{const free=S.lines.filter(l=>!(c.lines||[]).includes(l.slug));
+    return `<tr data-email="${esc(c.email)}"><td><b class="ltr">${esc(c.email)}</b></td><td><div class="chips">${(c.lines||[]).map(s=>`<span class="chip">${esc(lineName(s))}<button data-rm="${esc(s)}" title="הסרה מהקו" aria-label="הסרה מהקו">×</button></span>`).join("")||'<span class="mut small">אין קווים</span>'}
+     ${free.length?`<select class="chip-add" data-add aria-label="הוספת קו"><option value="">+ הוספת קו</option>${free.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)}</option>`).join("")}</select>`:""}</div></td>
+     <td>${c.blocked?'<span class="pill bad">מושהה</span>':'<span class="pill ok">פעיל</span>'}</td><td><div class="acts"><button class="btn sm ghost" data-block="${c.blocked?"off":"on"}">${c.blocked?"החזרת גישה":"השהיית גישה"}</button><button class="btn sm danger" data-revoke>הסרה</button></div></td></tr>`}).join("")}</tbody></table></div>`
+    :empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}</div>`;
+  $("#newAcc").onclick=()=>accountModal();
+  const busy=async(el,fn)=>{el.disabled=true;try{await fn();toast("נשמר");await load()}catch(e){toast(e.message,true);el.disabled=false}};
+  V.querySelectorAll("tr[data-email]").forEach(tr=>{const email=tr.dataset.email,c=cl.find(x=>x.email===email),cur=c.lines||[];
+    tr.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{if(confirm(`להסיר את ${email} מהקו "${lineName(b.dataset.rm)}"?`))busy(b,()=>saveAccess(email,cur.filter(s=>s!==b.dataset.rm)))});
+    const add=tr.querySelector("[data-add]");if(add)add.onchange=()=>{if(add.value)busy(add,()=>saveAccess(email,[...cur,add.value]))};
+    tr.querySelector("[data-block]").onclick=e=>{const on=e.currentTarget.dataset.block==="on";busy(e.currentTarget,async()=>{if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל")}await syncLegacyManagers(email,on?[]:cur);await call("access",{email,blocked:on})})};
+    tr.querySelector("[data-revoke]").onclick=e=>{if(confirm(`להסיר את ${email} ואת כל הקווים שלו?`))busy(e.currentTarget,async()=>{if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל")}await syncLegacyManagers(email,[]);await call("access",{email,approved:false})})};
+  });
 }
-const sum7=a=>Array.isArray(a)?a.slice(-7).reduce((n,x)=>n+(+x||0),0):null;
-function healthOf(h,line){
-  if(line.enabled===false)return['off','מושהה'];
-  if(!h)return['warn','לא ידוע'];
-  const p=[];if(h.cronAgo!=null&&h.cronAgo>300)p.push("המשימות לא רצו "+Math.round(h.cronAgo/60)+" דק׳");
-  if((h.errors||[]).length)p.push((h.errors||[]).length+" שגיאות ביומן");
-  if((h.bg||[]).length>5)p.push("תור רקע "+h.bg.length);
-  return p.length?['warn',p.join(" · ")]:['ok','תקין'+(h.testMode?' · מצב בדיקה':'')];
+function accountModal(){
+  modal(`<h2>חשבון חדש</h2><p class="mut small">החשבון יוכל להיכנס עם גוגל ויראה רק את הקווים שתסמן.</p><form class="form" id="accF" style="margin-top:12px">
+   <label class="lbl">מייל גוגל<input class="field ltr" name="email" type="email" required placeholder="name@gmail.com" autocomplete="off"></label>
+   <div class="lbl">קווים<div class="checks">${S.lines.map(l=>`<label><input type="checkbox" name="l" value="${esc(l.slug)}">${esc(l.name)} <span class="mut small ltr">${esc(l.line||"")}</span></label>`).join("")}</div></div>
+   <div class="acts" style="justify-content:flex-start"><button class="btn">שמירה</button><button type="button" class="btn ghost" data-close>ביטול</button></div></form>`);
+  $("#accF").onsubmit=async e=>{e.preventDefault();const f=e.target,email=f.email.value.trim().toLowerCase(),slugs=[...f.querySelectorAll("[name=l]:checked")].map(i=>i.value),b=f.querySelector("button");
+    b.disabled=true;try{await saveAccess(email,slugs);closeModal();toast("החשבון נוסף");await load()}catch(er){toast(er.message,true);b.disabled=false}};
 }
-async function lineStats(lines){const area=document.querySelector("#aggregate");if(!area)return;
- area.innerHTML='<div class="stat">טוען נתונים מכל הקווים…</div>';
- try{
-  if(!googleCredential)throw Error("יש להתחבר מחדש ל-Google כדי לרענן נתוני קווים.");
-  const settled=await Promise.allSettled(lines.map(l=>l.enabled===false?Promise.resolve({line:l,off:true}):lineData(l)));
-  const rows=settled.map((x,i)=>x.status==="fulfilled"?x.value:{line:lines[i],err:String(x.reason&&x.reason.message||"לא ענה")});
-  const ok=rows.filter(r=>r.ov);
-  const tot=f=>ok.reduce((n,r)=>n+(f(r)||0),0);
-  const pend=r=>(r.ov.pending||[]).reduce((a,p)=>a+(+p.n||0),0)+(+r.ov.joins||0);
-  area.innerHTML=`<div class="stat"><b>${tot(r=>(r.ov.online||[]).length)}</b>מחוברים עכשיו</div><div class="stat"><b>${tot(pend)}</b>ממתינות לאישור</div><div class="stat"><b>${tot(r=>+r.ov.members?.active)}</b>חברים פעילים</div><div class="stat"><b>${tot(r=>sum7(r.st?.calls))}</b>שיחות השבוע</div><div class="stat"><b>${tot(r=>sum7(r.st?.msgs))}</b>הודעות השבוע</div><div class="stat"><b>${ok.length}/${rows.length}</b>קווים שענו</div>
-  <div class="lines-table-wrap"><table class="lines-table"><thead><tr><th>קו</th><th>מחוברים</th><th>ממתינות</th><th>חברים</th><th>שיחות השבוע</th><th>הודעות השבוע</th><th>בריאות</th><th></th></tr></thead><tbody>${rows.map(r=>{const l=r.line,[hc,ht]=r.err?['warn',r.err]:healthOf(r.he,l);const factory=!l.legacy&&!LEGACY_LINES.some(x=>x.slug===l.slug)&&LINE_SLUG_OK(l.slug);
-   return `<tr><td><b>${esc(l.name)}</b><small>${esc(l.line||"")}${l.manager?' · <span dir="ltr">'+esc(l.manager)+'</span>':''}</small></td><td>${r.ov?(r.ov.online||[]).length:'—'}</td><td>${r.ov?pend(r):'—'}</td><td>${r.ov?`${+r.ov.members?.active||0}/${+r.ov.members?.total||0}`:'—'}</td><td>${r.st?sum7(r.st.calls):'—'}</td><td>${r.st?sum7(r.st.msgs):'—'}</td><td><span class="health ${hc}">${esc(ht)}</span></td><td class="row-actions"><button class="secondary" data-go="${esc(l.slug)}">כניסה</button>${factory?(l.enabled===false?`<button data-resume="${esc(l.slug)}">החזרה לפעולה</button>`:`<button class="danger" data-suspend="${esc(l.slug)}">השהיה</button>`):''}</td></tr>`}).join("")}</tbody></table></div>`;
-  area.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{const t=lineTabs.querySelector(`[data-slug="${CSS.escape(b.dataset.go)}"]`);const l=lines.find(x=>x.slug===b.dataset.go);if(l&&t)showLine(l,t)});
-  area.querySelectorAll("[data-suspend]").forEach(b=>b.onclick=async()=>{const slug=b.dataset.suspend,c=prompt(`להשהות את הקו "${slug}"?\nמתקשרים ישמעו "הקו מושהה זמנית", והמשימות לא ירוצו. הנתונים וההגדרות נשמרים ואפשר להחזיר.\nלאישור הקלידו את השם הקצר:`);if(!c)return;b.disabled=true;try{await call("suspend",{slug,confirm:c.trim()});await load()}catch(e){alert(e.message);b.disabled=false}});
-  area.querySelectorAll("[data-resume]").forEach(b=>b.onclick=async()=>{if(!confirm("להחזיר את הקו לפעולה?"))return;b.disabled=true;try{await call("resume",{slug:b.dataset.resume});await load()}catch(e){alert(e.message);b.disabled=false}});
- }catch(e){area.innerHTML=`<p class="error">לא ניתן לטעון נתונים מכל הקווים: ${esc(e.message)}</p><p class="muted">התחבר מחדש ל-Google ונסה שוב.</p>`}}
-function activateTab(button){lineTabs.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",String(b===button)))}
-function showLine(line,button){activateTab(button);try{sessionStorage.setItem("portalActiveLine:"+identity.email,line.slug);sessionStorage.setItem("portalActiveView:"+identity.email,"line")}catch{}app.innerHTML=`<div class="line-workspace"><iframe title="ניהול ${esc(line.name)}" src="${esc(handoffUrl(line))}" allow="clipboard-read; clipboard-write"></iframe></div>`}
-function showOwner(button){activateTab(button);if(!identity.isOwner){app.innerHTML=`<section class="empty-state"><h2>אין לך גישה למרכז כל הקווים</h2><p>המרכז פתוח רק לבעל השירות. אפשר לעבור לקווים שלך בלשוניות למעלה.</p></section>`;return}try{sessionStorage.removeItem("portalActiveLine:"+identity.email);sessionStorage.setItem("portalActiveView:"+identity.email,"service")}catch{}app.innerHTML=`<div class="owner-area">${ownerPanel(identity)}</div>`;const add=document.querySelector("#addLine");if(add){add.href=handoffUrl({url:"/07/source/"});add.target="_blank";add.rel="noopener"}document.querySelector("#approve")?.addEventListener("click",async()=>{const email=document.querySelector("#email").value.trim().toLowerCase(),selected=[...document.querySelector("#lines").selectedOptions].map(o=>o.value);try{await call("access",{email,approved:true});await syncLegacyManagers(email,selected);await call("assign",{email,lines:selected});await load()}catch(e){alert(e.message)}});document.querySelectorAll("[data-block]").forEach(b=>b.onclick=async()=>{b.disabled=true;try{if(b.dataset.state==="on")await syncLegacyManagers(b.dataset.block,[]);else{const c=(identity.clients||[]).find(x=>x.email===b.dataset.block);await syncLegacyManagers(b.dataset.block,c?.lines||[])}await call("access",{email:b.dataset.block,blocked:b.dataset.state==="on"});await load()}catch(e){alert(e.message);b.disabled=false}});document.querySelectorAll("[data-revoke]").forEach(b=>b.onclick=async()=>{if(!confirm("להסיר את החשבון ואת שיוכי הקווים שלו?"))return;b.disabled=true;try{await syncLegacyManagers(b.dataset.revoke,[]);await call("access",{email:b.dataset.revoke,approved:false});await load()}catch(e){alert(e.message);b.disabled=false}});document.querySelector("#refreshStats")?.addEventListener("click",()=>lineStats(identity.lines||[]));lineStats(identity.lines||[])}
-async function logout(){try{await call("logout",{})}catch{}sessionStorage.removeItem("portalToken");sessionStorage.removeItem("portalGoogle");location.reload()}
-async function load(){try{
-  identity=await call();document.body.classList.remove("logged-out");app.classList.remove("card");
-  const dynamicLines=(identity.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);return L?{...L,...l,url:L.url,api:L.api}:l}),lines=identity.isOwner?[...LEGACY_LINES.filter(old=>!dynamicLines.some(line=>line.slug===old.slug)),...dynamicLines]:dynamicLines;
-  identity.lines=lines;
-  profileMenu.innerHTML=accountPanel(identity);profileMenu.querySelector("#profileLogout").addEventListener("click",logout);profileButton.onclick=()=>{const open=profileMenu.classList.toggle("hidden");profileButton.setAttribute("aria-expanded",String(!open))};document.addEventListener("click",e=>{if(!e.target.closest(".profile-area")){profileMenu.classList.add("hidden");profileButton.setAttribute("aria-expanded","false")}});
-  lineTabs.innerHTML=lines.map(l=>`<button class="line-tab" type="button" role="tab" aria-selected="false" data-tab="line" data-slug="${esc(l.slug)}"><span>${esc(l.name)}</span><small>${esc(l.line||"")}</small></button>`).join("")+'<button class="line-tab service-tab" type="button" role="tab" aria-selected="false" data-tab="service">כל הקווים</button>';
-  lineTabs.querySelectorAll('[data-tab="line"]').forEach(button=>button.addEventListener("click",()=>{const l=lines.find(x=>x.slug===button.dataset.slug);if(l)showLine(l,button)}));
-  const serviceButton=lineTabs.querySelector('[data-tab="service"]');if(serviceButton)serviceButton.addEventListener("click",()=>showOwner(serviceButton));
-  const saved=sessionStorage.getItem("portalActiveLine:"+identity.email),first=lines.find(l=>l.slug===saved)||lines[0],savedView=sessionStorage.getItem("portalActiveView:"+identity.email);
-  if(identity.isOwner&&serviceButton&&savedView==="service")showOwner(serviceButton);else if(first){const b=lineTabs.querySelector(`[data-slug="${CSS.escape(first.slug)}"]`);showLine(first,b)}else if(serviceButton&&identity.isOwner)showOwner(serviceButton);else app.innerHTML='<section class="empty-state"><h2>אין עדיין קווים משויכים</h2><p>פנה לבעלים כדי לקבל גישה לקו.</p></section>';
- }catch(e){token="";sessionStorage.removeItem("portalToken");if(e.message.includes("הגישה לשירות הושעתה")){document.body.classList.add("logged-out");profileMenu.innerHTML="";app.innerHTML=`<p class="error">הגישה לשירות הושעתה. פנה לבעל השירות.</p>`}else login(e.message)}}
-if(token)load();else login();
+function modal(html){closeModal();const m=document.createElement("div");m.className="modal";m.id="modal";m.innerHTML=`<div class="card">${html}</div>`;m.onclick=e=>{if(e.target===m||e.target.closest("[data-close]"))closeModal()};document.body.append(m);setTimeout(()=>m.querySelector("input")?.focus(),50)}
+function closeModal(){$("#modal")?.remove()}
+addEventListener("keydown",e=>{if(e.key==="Escape"){closeModal();togglePicker(false);toggleSide(false)}});
+
+// ===== קו חדש (מפעל הקווים בקו המקור) =====
+const fxApi=body=>lineApi(SOURCE,"factory",body);
+async function newLineView(V){
+  const fx=S.fx,st=fx.created?3:fx.check?2:1;
+  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>קו חדש</h2><p>מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם עם כל ה-AI ודף ניהול משלו. הקו נבנה במצב בדיקה.</p></div></div>
+   <div class="steps">${["טוקן ימות","פרטי הקו","הקו נבנה"].map((t,i)=>`<span class="${i+1<st?"ok":i+1===st?"on":""}">${i+1}. ${t}</span>`).join("")}</div><div id="fxBody"><p class="mut">טוען…</p></div></div>`;
+  if(!googleOk()){$("#fxBody").innerHTML=googleBanner();$("#reG").onclick=refreshGoogle;return}
+  try{fx.status=fx.status||await fxApi()}catch(e){$("#fxBody").innerHTML=`<p class="err">${esc(e.message)}</p>`;return}
+  const B=$("#fxBody"),ready=fx.status.ready;
+  const setup=ready?"":`<div class="banner"><div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> צריך להגדיר בקו המקור (yemot-ai ← Settings ← Variables and Secrets) את הסוד <code>CF_FACTORY_TOKEN</code> ואת המשתנה <code>CF_ACCOUNT_ID</code>. בינתיים אפשר לבדוק טוקנים.</div></div>`;
+  if(st===1){B.innerHTML=setup+`<form class="form" id="fxCheck"><label class="lbl">טוקן של מערכת בימות המשיח<small>למשל 0791234567:1234 או טוקן API. הבדיקה רק קוראת מימות, והטוקן לא נשמר בדפדפן.</small><input class="field ltr" name="t" type="password" required autocomplete="off" value="${esc(fx.token)}"></label><div><button class="btn">בדיקת הטוקן</button></div></form>`;
+    $("#fxCheck").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector("button");b.disabled=true;fx.token=e.target.t.value.trim();try{fx.check=await fxApi({op:"check",ymToken:fx.token});toast("הטוקן תקין");newLineView(V)}catch(er){toast(er.message,true);b.disabled=false}}}
+  else if(st===2){const c=fx.check;
+    B.innerHTML=setup+`<div class="kv" style="margin-bottom:16px">${Object.entries(c.session||{}).map(([k,v])=>`<b>${esc(k)}</b><span>${esc(v)}</span>`).join("")}<b>תיקיות</b><span>${esc((c.folders||[]).join(", ")||"אין")}</span></div>
+    <form class="form" id="fxCreate"><div class="fgrid"><label class="lbl">שם הקו<input class="field" name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
+     <label class="lbl">שם קצר באנגלית<small>לכתובת: yemot-line-…</small><input class="field ltr" name="slug" required pattern="[a-z0-9][a-z0-9-]{1,18}[a-z0-9]" placeholder="chaverim"></label>
+     <label class="lbl">מספר הקו<input class="field ltr" name="linePhone" value="${esc(c.linePhone||"")}" required pattern="0[0-9]{8,9}"></label>
+     <label class="lbl">טלפון מנהל הקו<small>לא חובה – מנהל בפקודות הקוליות</small><input class="field ltr" name="ownerPhone" pattern="0[0-9]{8,9}"></label></div>
+     <label class="lbl">מייל גוגל של מנהל הקו<small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small><input class="field ltr" name="ownerEmail" type="email" placeholder="name@gmail.com"></label>
+     <div class="acts" style="justify-content:flex-start"><button class="btn" ${ready?"":"disabled"}>בניית הקו</button><button type="button" class="btn ghost" id="fxBack">חזרה</button></div></form>`;
+    $("#fxBack").onclick=()=>{fx.check=null;newLineView(V)};
+    $("#fxCreate").onsubmit=async e=>{e.preventDefault();const v=Object.fromEntries(new FormData(e.target));
+      if(!confirm(`לבנות קו חדש "${v.name}" (${v.linePhone}) בשם yemot-line-${v.slug}?\nייווצר שרת חדש ב-Cloudflare עם מפתחות ה-AI של קו המקור.`))return;
+      const b=e.target.querySelector("button");b.disabled=true;toast("בונה את הקו… זה יכול לקחת חצי דקה");
+      try{fx.created=await fxApi({op:"create",ymToken:fx.token,...v});fx.status=null;S.data=null;await load()}catch(er){toast(er.message,true);b.disabled=false}}}
+  else{const r=fx.created,l=r.line;
+    B.innerHTML=`<div class="banner info"><div><b>הקו "${esc(l.name)}" נבנה.</b> ${esc(r.note||"")}</div></div>
+     <ol class="small" style="margin:0 0 14px;padding-inline-start:20px">${(r.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
+     <p style="margin:0 0 6px;font-weight:600">סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</p><div class="secret"><code id="pw">${esc(r.adminPass)}</code><button class="btn sm ghost" id="cp">העתקה</button></div>
+     <div class="acts" style="justify-content:flex-start;margin-top:16px"><a class="btn soft" href="#line=${encodeURIComponent(l.slug)}">כניסה לקו</a><button class="btn" id="fxIvr">השלב הבא: חיבור השלוחות ←</button><button class="btn ghost" id="fxAgain">קו נוסף</button></div>`;
+    $("#cp").onclick=()=>{navigator.clipboard?.writeText(r.adminPass).then(()=>toast("הועתק"))};
+    $("#fxIvr").onclick=e=>ivrStart(l.slug,e.currentTarget,fx.token);
+    $("#fxAgain").onclick=()=>{if(confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")){S.fx={token:"",check:null,created:null,plan:null,status:null};newLineView(V)}};
+  }
+}
+// חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
+async function ivrStart(slug,btn,known){
+  const token=known||prompt(`הטוקן של המערכת בימות של הקו "${slug}" (לא נשמר):`);if(!token)return;
+  btn.disabled=true;toast("קורא את מבנה השלוחות…");
+  try{const p=await fxApi({op:"ivr_plan",slug,ymToken:token.trim()});ivrModal({...p,token:token.trim()})}catch(e){toast(e.message,true)}finally{btn.disabled=false}
+}
+function ivrModal(p){
+  modal(`<h2>חיבור השלוחות של "${esc(p.slug)}"</h2><p class="mut small">${p.count} קובצי ext.ini מקו המקור, אחרי החלפת הכתובת ומפתח ההרצה. מה שקיים היום נשמר בגיבוי לפני הכתיבה. קבצי שמע לא מועתקים.</p>
+   ${p.truncated?'<div class="banner"><div><b>זו רק חלק מהשלוחות.</b> אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>':""}
+   <form id="ivrF"><div class="tw" style="max-height:46vh;overflow:auto"><table class="t" style="min-width:560px"><thead><tr><th></th><th>שלוחה</th><th>מצב</th><th>אחרי</th></tr></thead><tbody>
+   ${p.plan.map(x=>`<tr><td><input type="checkbox" name="p" value="${esc(x.path)}" ${x.same?"disabled":x.unknown?"":"checked"}></td><td class="ltr">${esc(x.path)}</td><td>${x.same?'<span class="pill ok">זהה</span>':x.unknown?'<span class="pill warn">לא נקרא</span>':x.before?'<span class="pill warn">יוחלף</span>':'<span class="pill acc">חדש</span>'}${(x.warn||[]).map(w=>`<div class="small" style="color:var(--warn)">${esc(w)}</div>`).join("")}</td><td><pre class="ini">${esc(x.after)}</pre></td></tr>`).join("")}</tbody></table></div>
+   <div class="acts" style="justify-content:flex-start;margin-top:14px"><input class="field ltr" name="confirm" required placeholder="להקליד את השם הקצר לאישור" style="max-width:240px"><button class="btn">כתיבת השלוחות שנבחרו</button><button type="button" class="btn ghost" data-close>סגירה</button></div></form>`);
+  $("#modal .card").style.width="min(860px,100%)";
+  $("#ivrF").onsubmit=async e=>{e.preventDefault();const f=e.target,paths=[...f.querySelectorAll("[name=p]:checked")].map(i=>i.value);if(!paths.length)return toast("לא נבחרו שלוחות",true);
+    if(!confirm(`לכתוב ${paths.length} קובצי שלוחות למערכת של "${p.slug}"?`))return;const b=f.querySelector("button");b.disabled=true;
+    try{const r=await fxApi({op:"ivr_apply",slug:p.slug,ymToken:p.token,paths,confirm:f.confirm.value.trim()});closeModal();
+      toast(r.ok?`נכתבו ${r.done.length} שלוחות`:`נכתבו ${r.done.length}, נכשלו ${r.failed.length}${(r.skipped||[]).length?`, ${r.skipped.length} ממתינות לסבב נוסף`:""}`,!r.ok);
+      if((r.failed||[]).length)alert("לא נכתבו:\n"+r.failed.join("\n"))}catch(er){toast(er.message,true);b.disabled=false}};
+}
+
+// ===== הפעלה =====
+if(S.token)load();else showLogin();
 </script>
+</body>
 </html>

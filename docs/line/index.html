@@ -608,6 +608,7 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
 .fx-ivr{width:100%;border-collapse:collapse;font-size:13px}.fx-ivr td,.fx-ivr th{padding:7px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
 .fx-ivr pre{margin:0;max-height:180px;overflow:auto;direction:ltr;text-align:left;font:12px/1.5 ui-monospace,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap}
 .fx-secret{direction:ltr;font:14px ui-monospace,monospace;background:var(--card);border:1px dashed var(--acc);border-radius:8px;padding:10px;word-break:break-all}
+.embedded .side-brand{display:none}.embedded .side-scroll{padding-top:14px}
 </style>
 </head>
 <body>
@@ -647,6 +648,8 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
 </div>
 <script>
 "use strict";
+// בתוך מרכז הקווים (iframe): המרכז כבר מציג את שם הקו, אז מסתירים את הלוגו הכפול
+try { if (window.self !== window.top) document.documentElement.classList.add("embedded"); } catch { document.documentElement.classList.add("embedded"); }
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const state = { tab: (location.hash || "#home").slice(1), data: {}, msgN: 200, filter: {}, names: {} };
