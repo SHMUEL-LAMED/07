@@ -4,10 +4,10 @@
 set -e
 cd "$(dirname "$0")/.."
 cat > index.html <<'EOF'
-<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=./docs/portal/"><title>מרכז הקווים</title><a href="./docs/portal/">מעבר למרכז הקווים</a></html>
+<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>מרכז הקווים</title><script>location.replace("./docs/portal/?v="+Date.now())</script><noscript><a href="./docs/portal/">מעבר למרכז הקווים</a></noscript></html>
 EOF
 cat > docs/index.html <<'EOF'
-<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="0;url=./portal/"><title>מרכז הקווים</title><a href="./portal/">מעבר למרכז הקווים</a></html>
+<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>מרכז הקווים</title><script>location.replace("./portal/?v="+Date.now())</script><noscript><a href="./portal/">מעבר למרכז הקווים</a></noscript></html>
 EOF
 mkdir -p docs/source && cp src/dash.html docs/source/index.html
 mkdir -p docs/line && cp src/dash.html docs/line/index.html   # קווים שנבנו במפעל: /07/line/?l=<שם קצר>
