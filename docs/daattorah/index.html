@@ -595,6 +595,19 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px var(--ring)}
 .knew code{direction:ltr;display:block;word-break:break-all;font:13px ui-monospace,monospace;background:var(--card);padding:10px;border-radius:8px;border:1px solid var(--line)}
 .klist li{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
 .klist .num{direction:ltr}
+/* ---- מפעל הקווים ---- */
+.fx-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.fx-steps span{padding:6px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:12.5px;color:var(--mut)}
+.fx-steps span.on{background:var(--accbg);border-color:var(--acc);color:var(--acc);font-weight:700}
+.fx-steps span.ok{background:var(--goodbg);border-color:transparent;color:var(--goodt)}
+.fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.fx-grid label{display:grid;gap:5px;font-size:13px;font-weight:600;color:var(--ink2)}
+.fx-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px}.fx-kv b{color:var(--mut);font-weight:600}
+.fx-line{display:grid;gap:8px;padding:16px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg)}
+.fx-line h3{margin:0;font:700 17px/1.3 var(--serif)}
+.fx-ivr{width:100%;border-collapse:collapse;font-size:13px}.fx-ivr td,.fx-ivr th{padding:7px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.fx-ivr pre{margin:0;max-height:180px;overflow:auto;direction:ltr;text-align:left;font:12px/1.5 ui-monospace,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap}
+.fx-secret{direction:ltr;font:14px ui-monospace,monospace;background:var(--card);border:1px dashed var(--acc);border-radius:8px;padding:10px;word-break:break-all}
 </style>
 </head>
 <body>
@@ -648,12 +661,15 @@ const KIND_ACTS = { // מקשים כמו בשלוחה 7-4: 1 חשובה, 2 רג�
 // ---------- חיבור לשרת ----------
 // אותו קובץ משמש בשני מקומות: ב-Worker (/admin, עם cookie) וב-GitHub Pages (דרך הגשר ב-Supabase, עם אסימון בפרמטר).
 const REMOTE = !location.pathname.startsWith("/admin");
-const API_BASE = REMOTE ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" : "/admin/api/";
+// קו שנבנה במפעל הקווים: הדף ב-GitHub Pages עם ?l=<שם קצר> עובד מול הגשר הכללי admin-netfree-lines
+const LINE_SLUG = REMOTE ? (new URLSearchParams(location.search).get("l") || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20) : "";
+const API_BASE = REMOTE ? (LINE_SLUG ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/" + LINE_SLUG + "/" : "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/") : "/admin/api/";
+const TOKEN_KEY = "adminToken_daat" + (LINE_SLUG ? "_" + LINE_SLUG : "");
 let adminToken = "";
-try { if (REMOTE) adminToken = sessionStorage.getItem("adminToken_daat") || ""; } catch {}
+try { if (REMOTE) adminToken = sessionStorage.getItem(TOKEN_KEY) || ""; } catch {}
 { // קישור לצפייה בלבד: .../07/#t=<אסימון>
   const m = /^#t=([\w.-]+)$/.exec(location.hash);
-  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem("adminToken_daat", adminToken); } catch {} history.replaceState(null, "", location.pathname); state.tab = "home"; }
+  if (REMOTE && m) { adminToken = m[1]; try { sessionStorage.setItem(TOKEN_KEY, adminToken); } catch {} history.replaceState(null, "", location.pathname + (LINE_SLUG ? "?l=" + LINE_SLUG : "")); state.tab = "home"; }
 }
 const tokq = (sep = "&") => REMOTE && adminToken ? sep + "token=" + encodeURIComponent(adminToken) : "";
 const apiUrl = name => API_BASE + name + tokq(name.includes("?") ? "&" : "?");
@@ -669,9 +685,9 @@ async function createSession(password, google) {
   const j = await r.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" }));
   if (!r.ok || !j.token) throw new Error(j.error || "לא ניתן להתחבר");
   adminToken = j.token;
-  try { sessionStorage.setItem("adminToken_daat", adminToken); } catch {}
+  try { sessionStorage.setItem(TOKEN_KEY, adminToken); } catch {}
 }
-function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem("adminToken_daat"); } catch {} showLogin(msg); }
+function dropSession(msg) { adminToken = ""; try { sessionStorage.removeItem(TOKEN_KEY); } catch {} showLogin(msg); }
 async function apiRaw(name, body) {
   if (REMOTE && !adminToken) { showLogin(); throw new Error("נדרשת כניסה"); }
   const opt = body ? { method: "POST", body: JSON.stringify(body) } : {};
@@ -756,7 +772,7 @@ function badges(d) {
   const pend = (d.pending || []).reduce((a, x) => a + x.n, 0) + (d.joins || 0);
   $("#b-online").textContent = d.online.length ? pl(d.online.length, "אחד בקו", "# בקו") : "אף אחד בקו";
   $("#b-pend").textContent = pend ? pl(pend, "ממתינה אחת", "# ממתינות") : "אין ממתינות"; $("#b-pend").classList.toggle("warn", pend > 0);
-  $("#n-pend").textContent = pend || ""; $("#clock").textContent = "079-494-7582 · עודכן " + fmtD(d.now).slice(6);
+  $("#n-pend").textContent = pend || ""; $("#clock").textContent = LINE_LABEL + " · עודכן " + fmtD(d.now).slice(6);
 }
 
 // ---------- סקירה ----------
@@ -2023,11 +2039,128 @@ document.addEventListener("submit", e => {
   drawKeys({ op: "create", name: f.name.value, scopes, days: +f.days.value });
 });
 
+// ---------- מפעל הקווים (לשונית "קווים" – רק לבעל הקו, ורק בקו המקור) ----------
+const fx = { token: "", check: null, created: null, plan: null };
+function linesTab(me) {
+  if (!me || !me.owner || me.lineName || TABS.some(t => t[0] === "lines")) return;
+  TABS.push(["lines", "קווים"]); TAB_NAME.lines = "קווים";
+  ICO.lines = '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/>';
+  PH.lines = ["מפעל הקווים: מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם חדש עם כל ה-AI ודף ניהול משלו.", d => [[(d.lines || []).length, "קווים שנבנו"]]];
+  LOAD.lines = () => api("factory");
+  RENDER.lines = d => pageHead("lines", d) + fxRender(d);
+  const b = document.createElement("button");
+  b.dataset.go = "lines"; b.title = "קווים";
+  b.innerHTML = `<span class="nav-icon">${ico("lines")}</span><span class="nav-label">קווים</span>`;
+  const log = $("#tabs").querySelector('[data-go="log"]'); (log ? log.after(b) : $("#tabs").append(b));
+  if (state.tab === "lines") show("lines", true);
+}
+const fxStep = () => fx.created ? 3 : fx.check ? 2 : 1;
+function fxRender(d) {
+  const st = fxStep();
+  const steps = ["טוקן", "פרטי הקו", "נבנה"].map((t, i) => `<span class="${i + 1 < st ? "ok" : i + 1 === st ? "on" : ""}">${i + 1}. ${t}</span>`).join("");
+  const setup = d.ready ? "" : `<div class="banner warn"><div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> כדי לבנות קווים צריך להגדיר בקו הזה (Workers ← yemot-ai ← Settings ← Variables and Secrets):<br>
+    • סוד <code>CF_FACTORY_TOKEN</code> – טוקן Cloudflare עם הרשאות Workers Scripts:Edit, Workers KV Storage:Edit, Account Settings:Read<br>
+    • משתנה <code>CF_ACCOUNT_ID</code> – מזהה החשבון. אפשר כבר עכשיו לבדוק טוקנים של ימות.</div></div>`;
+  let body = "";
+  if (st === 1) body = `<form class="form" data-fx="check"><label class="small"><b>טוקן של מערכת בימות המשיח</b> (למשל <span class="num">0791234567:1234</span> או טוקן API)</label>
+      <div class="row"><input type="password" name="t" required autocomplete="off" style="flex:1;direction:ltr" placeholder="טוקן" value="${esc(fx.token)}"><button class="btn p">בדיקת הטוקן</button></div>
+      <div class="mut small">הבדיקה רק קוראת מימות (פרטי מערכת ותיקיות). הטוקן לא נשמר בדפדפן.</div></form>`;
+  else if (st === 2) {
+    const c = fx.check;
+    body = `<div class="fx-kv" style="margin-bottom:12px">${Object.entries(c.session || {}).map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join("")}<b>תיקיות בבסיס</b><span>${esc((c.folders || []).join(", ") || "אין")}</span></div>
+      <form class="form" data-fx="create"><div class="fx-grid">
+        <label>שם הקו<input name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
+        <label>שם קצר באנגלית (לכתובת)<input name="slug" required pattern="[a-z0-9][a-z0-9-]{1,18}[a-z0-9]" placeholder="chaverim" style="direction:ltr"></label>
+        <label>מספר הקו<input name="linePhone" required value="${esc(c.linePhone || "")}" style="direction:ltr"></label>
+        <label>טלפון בעל הקו (מנהל תמיד)<input name="ownerPhone" style="direction:ltr" placeholder="05..."></label>
+        <label>מייל גוגל של בעל הקו<input name="ownerEmail" type="email" style="direction:ltr" placeholder="name@gmail.com"></label>
+      </div>
+      <div class="mut small">ייווצר Worker חדש בשם <span class="num">yemot-line-&lt;שם קצר&gt;</span> עם אחסון משלו, כל ה-AI וכל מפתחות הקול של הקו הזה, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</div>
+      <div class="row"><button type="button" class="btn" data-fx="back">חזרה</button><button class="btn p" ${d.ready ? "" : "disabled"}>בניית הקו</button></div></form>`;
+  } else {
+    const r = fx.created;
+    body = `<div class="knew"><b>הקו "${esc(r.line.name)}" נבנה!</b>
+      <div>${(r.steps || []).map(x => "✓ " + esc(x)).join("<br>")}</div>
+      <div><b>סיסמת דף הניהול של הקו (מוצגת פעם אחת):</b><div class="fx-secret">${esc(r.adminPass)}</div></div>
+      <div class="mut small">${esc(r.note || "")}</div>
+      <div class="row"><a class="btn" href="${esc(r.adminUrl)}" target="_blank" rel="noopener">דף הניהול (workers.dev)</a><a class="btn" href="${esc(fxPagesUrl(r.line.slug))}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a><button type="button" class="btn p" data-fx="ivr" data-slug="${esc(r.line.slug)}">השלב הבא: חיבור השלוחות בימות ←</button><button type="button" class="btn" data-fx="reset">קו נוסף</button></div></div>`;
+  }
+  const lines = (d.lines || []).map(l => `<div class="fx-line"><h3>${esc(l.name)} <span class="pill">${esc(fmtLine(l.line))}</span>${l.test ? ' <span class="pill warn">מצב בדיקה</span>' : ""}</h3>
+      <div class="mut small num">${esc(l.script)} · נבנה ${new Date(l.created).toLocaleDateString("he-IL")}${l.ivr ? ` · שלוחות חוברו ${new Date(l.ivr.at).toLocaleDateString("he-IL")} (${l.ivr.written})` : " · השלוחות עוד לא חוברו"}</div>
+      <div class="row"><a class="btn s" href="${esc(l.url)}/admin" target="_blank" rel="noopener">דף ניהול</a><a class="btn s" href="${esc(fxPagesUrl(l.slug))}" target="_blank" rel="noopener">דרך נטפרי</a><button type="button" class="btn s" data-fx="ivr" data-slug="${esc(l.slug)}">חיבור שלוחות</button><button type="button" class="btn s d" data-fx="forget" data-slug="${esc(l.slug)}">הסרה מהרשימה</button></div></div>`).join("");
+  return `${setup}<div class="card"><h2>קו חדש</h2><div class="fx-steps">${steps}</div>${body}</div>
+    <div class="card" id="fx-ivr"${fx.plan ? "" : " hidden"}>${fx.plan ? fxPlanHtml() : ""}</div>
+    <div class="card"><h2>הקווים שנבנו <small>${(d.lines || []).length}</small></h2><div style="display:grid;gap:10px">${lines || '<div class="empty">עוד לא נבנו קווים</div>'}</div></div>`;
+}
+const fxPagesUrl = slug => "https://shmuel-lamed.github.io/07/line/?l=" + encodeURIComponent(slug);
+function fxPlanHtml() {
+  const p = fx.plan;
+  return `<h2>חיבור השלוחות של "${esc(p.slug)}" <small>${p.count} קובצי ext.ini מקו המקור${p.truncated ? " (רק חלק – העץ גדול)" : ""}</small></h2>
+    <div class="mut small" style="margin-bottom:10px">כל קובץ מועתק מהקו הזה, אחרי החלפת כתובת השרת ומפתח ההרצה בכתובת של הקו החדש. מה שכבר קיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות <b>לא</b> מועתקים.</div>
+    <form data-fx="apply"><div class="wrap"><table class="fx-ivr"><thead><tr><th></th><th>שלוחה</th><th>מצב</th><th>אחרי ההעתקה</th><th>קיים היום</th></tr></thead><tbody>
+    ${p.plan.map(x => `<tr><td><input type="checkbox" name="p" value="${esc(x.path)}" ${x.same ? "disabled" : "checked"}></td><td class="num">${esc(x.path)}</td><td>${x.same ? '<span class="pill ok">זהה</span>' : x.before ? '<span class="pill warn">יוחלף</span>' : '<span class="pill acc">חדש</span>'}${x.api ? ' <span class="pill">API</span>' : ""}${(x.warn || []).map(w => `<div class="note">${esc(w)}</div>`).join("")}</td><td><pre>${esc(x.after)}</pre></td><td>${x.before ? `<pre>${esc(x.before)}</pre>` : '<span class="mut">—</span>'}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="row" style="margin-top:12px"><input name="confirm" placeholder="להקליד את השם הקצר לאישור" required style="direction:ltr"><button class="btn p">כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-fx="planx">סגירה</button></div></form>`;
+}
+async function fxCall(body, btn) {
+  if (btn) btn.disabled = true;
+  try { return await api("factory", body); }
+  catch (e) { toast(e.message, true); return null; }
+  finally { if (btn) btn.disabled = false; }
+}
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("[data-fx]"); if (!f) return; e.preventDefault();
+  const k = f.dataset.fx, btn = f.querySelector("button.p");
+  if (k === "check") {
+    fx.token = f.t.value.trim(); const r = await fxCall({ op: "check", ymToken: fx.token }, btn);
+    if (r) { fx.check = r; toast("הטוקן תקין"); show("lines", true); }
+  } else if (k === "create") {
+    const v = Object.fromEntries(new FormData(f));
+    if (!confirm(`לבנות קו חדש "${v.name}" (${v.linePhone}) בשם yemot-line-${v.slug}?\nייווצר Worker חדש ב-Cloudflare עם מפתחות ה-AI של הקו הזה.`)) return;
+    toast("בונה את הקו… זה יכול לקחת חצי דקה");
+    const r = await fxCall({ op: "create", ymToken: fx.token, ...v }, btn);
+    if (r) { fx.created = r; show("lines", true); }
+  } else if (k === "apply") {
+    const paths = [...f.querySelectorAll("[name=p]:checked")].map(i => i.value);
+    if (!paths.length) return toast("לא נבחרו שלוחות", true);
+    if (!confirm(`לכתוב ${paths.length} קובצי שלוחות למערכת של "${fx.plan.slug}"? מה שקיים שם יישמר בגיבוי.`)) return;
+    const r = await fxCall({ op: "ivr_apply", slug: fx.plan.slug, ymToken: fx.token, paths, confirm: f.confirm.value.trim() }, btn);
+    if (r) { toast(r.ok ? `נכתבו ${r.done.length} שלוחות` : `נכתבו ${r.done.length}, נכשלו ${r.failed.length}`, !r.ok); fx.plan = null; show("lines", true); }
+  }
+});
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-fx]"); if (!b) return;
+  const k = b.dataset.fx;
+  if (k === "back") { fx.check = null; show("lines", true); }
+  else if (k === "reset") { fx.check = null; fx.created = null; fx.token = ""; show("lines", true); }
+  else if (k === "planx") { fx.plan = null; show("lines", true); }
+  else if (k === "ivr") {
+    if (!fx.token) { const t = prompt("הטוקן של המערכת בימות של הקו הזה (לא נשמר):"); if (!t) return; fx.token = t.trim(); }
+    toast("קורא את מבנה השלוחות…");
+    const r = await fxCall({ op: "ivr_plan", slug: b.dataset.slug, ymToken: fx.token }, b);
+    if (r) { fx.plan = r; show("lines", true); setTimeout(() => $("#fx-ivr")?.scrollIntoView({ behavior: "smooth" }), 100); }
+  } else if (k === "forget") {
+    const c = prompt(`להסיר את "${b.dataset.slug}" מהרשימה? (ה-Worker עצמו לא יימחק)\nלאישור הקלידו את השם הקצר:`); if (!c) return;
+    const r = await fxCall({ op: "forget", slug: b.dataset.slug, confirm: c.trim() }, b); if (r) show("lines", true);
+  }
+});
+
 // ---------- הפעלה ----------
+// מספר הקו בכותרת: ברירת מחדל קבועה, ובקו שנבנה במפעל – מהשרת (whoami)
+let LINE_LABEL = "079-494-7582";
+const fmtLine = p => String(p || "").replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3").replace(/^(\d{2})(\d{3})(\d{4})$/, "$1-$2-$3");
 async function startApp() {
   show(state.tab);
   api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
-  try { const me = await api("whoami"); state.ro = me.ro; document.body.classList.toggle("ro", me.ro); $("#rob").hidden = !me.ro; } catch {}
+  try {
+    const me = await api("whoami"); state.ro = me.ro; state.me = me; document.body.classList.toggle("ro", me.ro); $("#rob").hidden = !me.ro;
+    if (me.lineName) { // קו שנבנה במפעל: שם ומספר משלו
+      LINE_LABEL = fmtLine(me.line) || LINE_LABEL;
+      for (const el of document.querySelectorAll(".side-brand b")) el.textContent = me.lineName;
+      for (const el of document.querySelectorAll(".side-brand small")) el.textContent = LINE_LABEL;
+    }
+    if (typeof linesTab === "function") linesTab(me);
+  } catch {}
   pulse();
 }
 

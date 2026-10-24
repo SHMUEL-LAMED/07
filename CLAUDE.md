@@ -35,3 +35,10 @@
 5. **ניהול מתקדם בדף (ספטמבר 2026)** – כרטיס חבר, אצווה, הקלטה/העלאה, סל מחזור, שידור בקול העוזר, תזמון מתקדם (צינתוק/כניסה/הודעה אישית, חוזר יומי/שבועי), שבת וחג, סיכום שבועי, אירוע, דוחות, בקרה חיה, מסך בקרה, גיבוי ושחזור, קישור לצפייה בלבד, ועוזר AI שמציע פעולות לאישור. `src/dash.html` הוא הקובץ היחיד של הדף; אחרי שינוי בו להריץ `scripts/sync-pages.sh` – הוא מעדכן את `index.html`, `docs/index.html` (שימחס, גם בתוך `docs/both/#shim`) ו-`docs/daattorah/index.html` (דעת תורה, `docs/both/#daat`). כל שינוי בדף הניהול חייב להגיע לכל הדפים האלה. הבדיקה `.github/workflows/pages-sync.yml` נכשלת אם שכחו. הגשר ל-GitHub Pages ב-`supabase/functions/admin-netfree`.
 
 לכל משימה: להציג לי את השינוי (diff), לבדוק תחביר (`node --check` לשני הקבצים ו-`npx wrangler deploy --dry-run`), ולפרסם רק אחרי שאני מאשר.
+
+## מפעל הקווים (אוקטובר 2026)
+- `src/factory.js` + לשונית "קווים" בדף הניהול (רק בקו המקור, רק לבעלים – אסימון `exp.ow.sig` מכניסה בסיסמה או בגוגל של `OWNER_EMAIL`).
+- שלבים: בדיקת טוקן ימות (קריאה בלבד) ← בניית Worker חדש `yemot-line-<שם>` (העתקת הקוד של `FACTORY_TEMPLATE`/yemot-ai, KV חדש, משתנים `LINE_PHONE`/`LINE_NAME`/`OWNER_PHONE`/`TEST_MODE=1`, סודות `YM_TOKEN`/`ADMIN_PASS`/`RUN_KEY` חדשים + מפתחות ה-AI של הקו המקור, cron, workers.dev) ← חיבור השלוחות: העתקת ext.ini מהקו המקור עם החלפת כתובת ו-RUN_KEY, תצוגה מקדימה, גיבוי וכתיבה רק אחרי הקלדת השם הקצר.
+- דרוש בקו המקור: הסוד `CF_FACTORY_TOKEN` (Workers Scripts:Edit, Workers KV Storage:Edit, Account Settings:Read) והמשתנה `CF_ACCOUNT_ID`.
+- `worker.js`: `LINE_PHONE` ו-`OWNER` נקראים מהמשתנים `LINE_PHONE`/`OWNER_PHONE` אם קיימים (`applyLineEnv`); בלעדיהם – ערכי שימחס.
+- דף הניהול של קו חדש: `/07/line/?l=<שם>` דרך הגשר `supabase/functions/admin-netfree-lines` (צריך לפרוס אותו פעם אחת).
