@@ -2186,7 +2186,11 @@ $("#logout").addEventListener("click", () => {
   if (!REMOTE) { const f = document.createElement("form"); f.method = "post"; f.action = "/admin/logout"; document.body.append(f); f.submit(); return; }
   state.data = {}; $("#main").innerHTML = ""; dropSession();
 });
-if (!REMOTE || adminToken) { hideLogin(); startApp(); } else showLogin();
+const googleHandoff = /^#g=([A-Za-z0-9._-]+)$/.exec(location.hash);
+if (REMOTE && googleHandoff && !adminToken) {
+  history.replaceState(null, "", location.pathname + location.search);
+  createSession("", googleHandoff[1]).then(() => { hideLogin(); startApp(); }).catch(e => showLogin(e.message));
+} else if (!REMOTE || adminToken) { hideLogin(); startApp(); } else showLogin();
 </script>
 </body>
 </html>
