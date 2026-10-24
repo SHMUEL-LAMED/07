@@ -7,6 +7,24 @@ const publicLine = line => ({ slug: line.slug, name: line.name, line: line.line,
 const reply = (value, status = 200) => new Response(JSON.stringify(value), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
 });
+async function syncClientLines(env, lines, email, slugs) {
+  for (const line of lines) {
+    if (!line.kv) continue;
+    const old = await env.KV.get("portal_synced:" + email + ":" + line.slug);
+    const endpoint = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/storage/kv/namespaces/" + line.kv + "/values/dash_emails";
+    const headers = { Authorization: "Bearer " + env.CF_FACTORY_TOKEN };
+    const current = await fetch(endpoint, { headers });
+    if (!current.ok && current.status !== 404) throw new Error("לא ניתן לקרוא הרשאות קו");
+    let managers = current.status === 404 ? [] : await current.json().catch(() => []);
+    if (!Array.isArray(managers)) managers = [];
+    managers = managers.filter(m => (typeof m === "string" ? m : m.e) !== email);
+    if (slugs.includes(line.slug)) managers.push({ e: email, role: "admin" });
+    const saved = await fetch(endpoint, { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(managers) });
+    if (!saved.ok) throw new Error("לא ניתן לעדכן הרשאות קו");
+    if (slugs.includes(line.slug)) await env.KV.put("portal_synced:" + email + ":" + line.slug, "1");
+    else if (old) await env.KV.delete("portal_synced:" + email + ":" + line.slug);
+  }
+}
 const randomToken = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes, n => n.toString(16).padStart(2, "0")).join("");
@@ -75,6 +93,7 @@ export async function portal(req, env, verifyGoogle) {
     const email = normalize(body.email), slugs = [...new Set(Array.isArray(body.lines) ? body.lines : [])];
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || slugs.some(s => !lines.some(l => l.slug === s)))
       return reply({ error: "חשבון או קו לא תקינים" }, 400);
+    try { await syncClientLines(env, lines, email, slugs); } catch (e) { return reply({ error: String(e.message || "עדכון הרשאות נכשל") }, 502); }
     await env.KV.put("portal_memberships:" + email, JSON.stringify(slugs));
     return reply({ ok: true });
   }
