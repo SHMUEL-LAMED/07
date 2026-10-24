@@ -105,7 +105,7 @@ async function googleEmail(env, tok) {
 // הרשאות: read – קריאה בכל דף הניהול; write – פעולות ניהול; yemot – גישה ישירה ל-API של ימות (כולל קבצים).
 // מפתח לא יכול ליצור מפתחות, לשנות חשבונות מורשים או לייצר קישורי צפייה.
 const KEY_PREFIX = "ym07_", KEY_SCOPES = ["read", "write", "yemot"];
-const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup"];
+const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup", "factory"];
 // פעולות ימות שמותרות דרך הנתיב yemot: עיון בקבצים, הורדה, קריאה וכתיבה של קובצי טקסט (הגדרות שלוחה), שיחות ורשימות
 const YM_ALLOWED = ["GetIVR2Dir", "DownloadFile", "GetTextFile", "UploadTextFile", "GetIncomingCalls", "TzintukimListManagement"];
 const loadKeys = async env => { try { return (await env.KV.get("dash_keys", "json")) || []; } catch { return []; } };
@@ -161,7 +161,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
     let g;
     try { g = await googleLogin(env, ip, String(body.credential || ""), D); }
     catch (e) { return json({ error: String(e.message || e) }, 401); }
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer")) } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner")) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
@@ -174,7 +174,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
       let g;
       try { g = await googleLogin(env, ip, String(body.google), D); }
       catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
-      return withCors(json({ token: await newToken(env, g.role === "viewer") }), req);
+      return withCors(json({ token: await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner") }), req);
     }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
@@ -183,7 +183,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
       return withCors(json({ error: "סיסמה שגויה" }, 401), req);
     }
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
-    return withCors(json({ token: await newToken(env) }), req);
+    return withCors(json({ token: await newToken(env, false, TTL_DAYS, true) }), req);
   }
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
@@ -197,7 +197,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
       return html(loginPage("סיסמה שגויה", env.GOOGLE_CLIENT_ID), 401);
     }
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
-    return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
+    return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env, false, TTL_DAYS, true)) });
   }
   if (sub === "logout") return redirect("/admin", { "Set-Cookie": setCookie("") });
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("Authorization") || "");

@@ -3,6 +3,7 @@
 // הפעולות עצמן (מחיקה, העברה, תזמון, השתקה...) עוברות דרך doAdmin ו-applyReview של worker.js,
 // כך שההתנהגות זהה לפקודות הקוליות דרך העוזר ובשלוחה 7.
 import PAGE from "./dash.html";
+import { factory } from "./factory.js";
 
 const COOKIE = "adm", TTL_DAYS = 30, MAX_FAILS = 6, FAIL_WINDOW = 15 * 60;
 const enc = new TextEncoder();
@@ -17,11 +18,12 @@ async function sign(env, msg) {
   return b64u(await crypto.subtle.sign("HMAC", key, enc.encode(msg)));
 }
 // אסימון רגיל: exp.sig. אסימון צפייה בלבד (קישור לשיתוף): exp.ro.sig – מותר רק GET
-async function newToken(env, ro = false, days = TTL_DAYS) { const exp = String(Date.now() + days * 864e5); return ro ? exp + ".ro." + await sign(env, "ro|" + exp) : exp + "." + await sign(env, exp); }
+// אסימון בעלים: exp.ow.sig – כניסה בסיסמה או בחשבון הגוגל של בעל הקו. רק הוא פותח את מפעל הקווים
+async function newToken(env, ro = false, days = TTL_DAYS, owner = false) { const exp = String(Date.now() + days * 864e5); return ro ? exp + ".ro." + await sign(env, "ro|" + exp) : owner ? exp + ".ow." + await sign(env, "ow|" + exp) : exp + "." + await sign(env, exp); }
 async function validToken(env, tok) {
-  const parts = String(tok || "").split("."), exp = parts[0], ro = parts.length === 3 && parts[1] === "ro", sig = parts[parts.length - 1];
-  if (!exp || !sig || parts.length > 3 || !(+exp > Date.now())) return null;
-  return same(sig, await sign(env, ro ? "ro|" + exp : exp)) ? { ro, exp: +exp } : null;
+  const parts = String(tok || "").split("."), exp = parts[0], kind = parts.length === 3 ? parts[1] : "", sig = parts[parts.length - 1];
+  if (!exp || !sig || parts.length > 3 || (parts.length === 3 && kind !== "ro" && kind !== "ow") || !(+exp > Date.now())) return null;
+  return same(sig, await sign(env, kind ? kind + "|" + exp : exp)) ? { ro: kind === "ro", owner: kind === "ow", exp: +exp } : null;
 }
 const cookie = (req, name) => { const m = new RegExp("(?:^|;\\s*)" + name + "=([^;]*)").exec(req.headers.get("Cookie") || ""); return m ? m[1] : ""; };
 const setCookie = tok => `${COOKIE}=${tok}; Path=/admin; Max-Age=${tok ? TTL_DAYS * 86400 : 0}; HttpOnly; Secure; SameSite=Lax`;
@@ -89,7 +91,7 @@ async function googleEmail(env, tok) {
 // הרשאות: read – קריאה בכל דף הניהול; write – פעולות ניהול; yemot – גישה ישירה ל-API של ימות (כולל קבצים).
 // מפתח לא יכול ליצור מפתחות, לשנות חשבונות מורשים או לייצר קישורי צפייה.
 const KEY_PREFIX = "ym07_", KEY_SCOPES = ["read", "write", "yemot"];
-const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup"];
+const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup", "factory"];
 // פעולות ימות שמותרות דרך הנתיב yemot: עיון בקבצים, הורדה, קריאה וכתיבה של קובצי טקסט (הגדרות שלוחה), שיחות ורשימות
 const YM_ALLOWED = ["GetIVR2Dir", "DownloadFile", "GetTextFile", "UploadTextFile", "GetIncomingCalls", "TzintukimListManagement"];
 const loadKeys = async env => { try { return (await env.KV.get("dash_keys", "json")) || []; } catch { return []; } };
@@ -145,7 +147,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
     let g;
     try { g = await googleLogin(env, ip, String(body.credential || ""), D); }
     catch (e) { return json({ error: String(e.message || e) }, 401); }
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer")) } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner")) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
@@ -158,7 +160,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
       let g;
       try { g = await googleLogin(env, ip, String(body.google), D); }
       catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
-      return withCors(json({ token: await newToken(env, g.role === "viewer") }), req);
+      return withCors(json({ token: await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner") }), req);
     }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
@@ -167,7 +169,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
       return withCors(json({ error: "סיסמה שגויה" }, 401), req);
     }
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
-    return withCors(json({ token: await newToken(env) }), req);
+    return withCors(json({ token: await newToken(env, false, TTL_DAYS, true) }), req);
   }
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
@@ -181,7 +183,7 @@ export async function adminApp(req, env, ctx, u, parts, D) {
       return html(loginPage("סיסמה שגויה", env.GOOGLE_CLIENT_ID), 401);
     }
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
-    return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env)) });
+    return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env, false, TTL_DAYS, true)) });
   }
   if (sub === "logout") return redirect("/admin", { "Set-Cookie": setCookie("") });
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("Authorization") || "");
@@ -573,6 +575,11 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
       safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
     });
+    case "factory": { // מפעל הקווים – רק לבעל הקו (כניסה בסיסמה או בחשבון הגוגל של OWNER_EMAIL)
+      if (!auth.owner || auth.key) return json({ error: "מפעל הקווים פתוח רק לבעל הקו. היכנסו בסיסמה או בחשבון הגוגל של הבעלים" }, 403);
+      try { return json(await factory(req, env, body, D, u.origin)); }
+      catch (e) { return json({ error: String(e.message || e) }, 400); }
+    }
     case "emails": {
       const owner = ownerEmail(env);
       let list = await managers(env);
@@ -587,7 +594,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       }
       return json({ owner, managers: list, emails: list.map(m => m.e), enabled: !!env.GOOGLE_CLIENT_ID });
     }
-    case "whoami": return json({ ro: !!auth.ro, exp: auth.exp || 0, owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
+    case "whoami": return json({ ro: !!auth.ro, owner: !!auth.owner, key: !!auth.key, exp: auth.exp || 0, line: D.LINE_PHONE || "", lineName: env.LINE_NAME || "", owner: D.OWNER, name: who(D.OWNER), now: D.nowIL() });
     case "share": { // קישור לצפייה בלבד (7 ימים כברירת מחדל): מותר לראות הכול, אסור לבצע שום פעולה
       if (auth.ro || req.method !== "POST") return json({ error: "רק מנהל מחובר יכול ליצור קישור" }, 403);
       const days = Math.max(1, Math.min(90, +body.days || 7)), token = await newToken(env, true, days);

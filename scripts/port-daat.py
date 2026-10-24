@@ -24,6 +24,10 @@ cases = (src[ci:ce]
   .replace('API של דף הניהול של קו 073-351-2880', 'API של דף הניהול של קו דעת תורה 079-494-7582')
   .replace('worker: "https://yemot-ai.smwlyqswkwt232.workers.dev/admin/api/"', 'worker: u.origin + "/admin/api/"')
   .replace('functions/v1/admin-netfree/"', 'functions/v1/admin-netfree-daat/"'))
+# מפעל הקווים רץ רק בקו המקור (שימחס) – לא מעבירים אותו לדעת תורה
+if '    case "factory": {' in cases:
+    fi, fj = cut(cases, '    case "factory": {', '    case "emails": {')
+    cases = cases[:fi] + cases[fj:]
 
 if '// כניסה עם גוגל: הדפדפן' in b:  # כבר הועבר בעבר – מחליפים
     hi, hj = cut(b, '// כניסה עם גוגל: הדפדפן', 'async function adminApp(req, env, ctx, u, parts, D) {')

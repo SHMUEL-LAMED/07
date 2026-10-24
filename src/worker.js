@@ -767,7 +767,8 @@ async function cleanVoice(env) {
 
 // ---------- מי בקו עכשיו (שלוחה 5-5) ----------
 const WHERE = [["/8", "מדבר עם העוזר החכם"], ["/3", "בחדר הוועידה"], ["/1", "שומע הודעות"], ["/2", "מקליט הודעה"], ["/9", "בשמחת בית השואבה"], ["/0", "באזור האישי"], ["/7", "בניהול"], ["/5", "במידע על הקבוצה"], ["/4", "בניהול הצינתוקים"]];
-const LINE_PHONE = "0733512880";
+// מספר הקו ומספר בעל הקו: ברירת המחדל היא קו שימחס. קו שנוצר במפעל הקווים מגדיר LINE_PHONE / OWNER_PHONE במשתני ה-Worker
+let LINE_PHONE = "0733512880";
 // כל מספרי הטלפון שבתוך טקסט (ימות מחזירה למשל "0554004249 זיהוי 0554004249 "), בלי המספר של הקו עצמו
 const phonesIn = t => [...String(t ?? "").matchAll(/(?:^|\D)(0\d{8,9})(?!\d)/g)].map(m => m[1]).filter(p => p !== LINE_PHONE);
 function callPhone(c) {
@@ -1373,7 +1374,7 @@ async function tellFriend(env, from, to, text) {
   await log(env, `${sender} השאיר דרך העוזר הודעה אישית ל${nm[to] || to}: ${text}`).catch(() => {});
 }
 // גיבוי: שמואל (מנהל הקו) תמיד מנהל בשרת, גם אם הוסר מרשימת המנהלים בימות
-const OWNER = "0534169095";
+let OWNER = "0534169095";
 async function isAdminPhone(env, phone) {
   if (!phone) return false;
   if (phone === OWNER) return true;
@@ -2362,10 +2363,17 @@ const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; cha
 const DASH = { ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
   // לניהול המתקדם בדף הניהול (ספטמבר 2026): העלאות, קול, תזמונים, גיבוי, אירוע
   ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, event9Menu, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText, loadLine, retrieveContext, adminText };
+// קו שנוצר במפעל הקווים: מספר הקו ובעל הקו מגיעים מהמשתנים. בלי משתנים – ערכי שימחס כמו תמיד
+function applyLineEnv(env) {
+  const d = v => String(v || "").replace(/\D/g, "");
+  if (/^0\d{8,9}$/.test(d(env.LINE_PHONE))) LINE_PHONE = d(env.LINE_PHONE);
+  if (/^0\d{8,9}$/.test(d(env.OWNER_PHONE))) OWNER = d(env.OWNER_PHONE);
+  DASH.LINE_PHONE = LINE_PHONE; DASH.OWNER = OWNER;
+}
 export default {
-  async scheduled(event, env, ctx) { NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
+  async scheduled(event, env, ctx) { applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
   async fetch(req, env, ctx) {
-    NAMES_CACHE = {}; await loadNames(env);
+    applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env);
     const u = new URL(req.url), raw = decodeURIComponent(req.url);
     const param = n => { const m = new RegExp("[?&/]" + n + "=([^&?/]*)").exec(raw); return m ? m[1] : ""; };
     const parts = u.pathname.split("/").filter(Boolean);
