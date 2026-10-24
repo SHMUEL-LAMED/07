@@ -110,7 +110,10 @@ function show(k) {
   for (const key of Object.keys(SRC)) {
     const f = document.getElementById("f-" + key);
     if (!f) continue;
-    if (key === k && !f.src) f.src = SRC[key] + (SRC[key].includes("?") ? "&" : "?") + "v=" + Date.now();
+    if (key === k && !f.src) {
+      const raw = SRC[key], at = raw.indexOf("#"), base = at < 0 ? raw : raw.slice(0, at), hash = at < 0 ? "" : raw.slice(at);
+      f.src = base + (base.includes("?") ? "&" : "?") + "v=" + Date.now() + hash;
+    }
     f.hidden = key !== k;
   }
   placePill();
