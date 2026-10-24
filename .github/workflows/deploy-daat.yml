@@ -74,15 +74,35 @@ jobs:
           name: live-daat-before-deploy
           path: /tmp/live.bin
           if-no-files-found: ignore
-      - name: פריסה (קוד בלבד)
+      - name: פריסה (קוד בלבד, כגרסה מלאה)
+        # העלאה מלאה של הסקריפט (ולא רק content), כדי שתיווצר גרסה אמיתית ב-Cloudflare.
+        # כך שינוי משתנים בלוח הבקרה לא יחזיר את הקוד לגרסה ישנה. keep_bindings שומר את כל המשתנים, הסודות, ה-KV וה-AI.
         run: |
           A="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$SCRIPT"
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$A/settings" -o /tmp/settings.json
+          python3 - <<'PY'
+          import json
+          s = json.load(open('/tmp/settings.json')).get('result') or {}
+          meta = {
+            "main_module": "worker.js",
+            "compatibility_date": s.get("compatibility_date") or "2025-09-01",
+            "compatibility_flags": s.get("compatibility_flags") or [],
+            "keep_bindings": ["plain_text", "secret_text", "json", "kv_namespace", "ai", "d1", "r2_bucket", "service", "queue",
+                              "durable_object_namespace", "analytics_engine", "browser", "vectorize", "hyperdrive", "version_metadata", "send_email"],
+          }
+          if s.get("usage_model"): meta["usage_model"] = s["usage_model"]
+          json.dump(meta, open('/tmp/meta.json', 'w'))
+          print("metadata:", meta)
+          print("bindings now:", [(b.get("type"), b.get("name")) for b in s.get("bindings", [])])
+          PY
           cp "live/daat/$HTML" "/tmp/$HTML"; cp live/daat/worker.js /tmp/worker.js
-          curl -sS -X PUT "$A/content" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "CF-WORKER-MAIN-MODULE-PART: worker.js" \
-            -F 'metadata={"main_module":"worker.js"};type=application/json' \
+          curl -sS -X PUT "$A" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -F "metadata=@/tmp/meta.json;type=application/json" \
             -F "worker.js=@/tmp/worker.js;type=application/javascript+module" \
-            -F "$HTML=@/tmp/$HTML;type=text/plain" | tee /tmp/out.json
+            -F "$HTML=@/tmp/$HTML;type=text/plain" > /tmp/out.json
+          python3 -c 'import json;d=json.load(open("/tmp/out.json"));print("success:",d.get("success"),"errors:",d.get("errors"));r=d.get("result") or {};print("bindings kept:",[(b.get("type"),b.get("name")) for b in r.get("bindings",[])] if r.get("bindings") else "n/a")'
           grep -q '"success": *true' /tmp/out.json
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$A/settings" | python3 -c 'import sys,json;s=json.load(sys.stdin).get("result") or {};print("bindings after:",[(b.get("type"),b.get("name")) for b in s.get("bindings",[])])'
       - name: בדיקה שהשרת עונה
         run: |
           SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | python3 -c 'import sys,json;print(json.load(sys.stdin)["result"]["subdomain"])')
