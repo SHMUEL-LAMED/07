@@ -2077,7 +2077,7 @@ function fxRender(d) {
         <label>שם קצר באנגלית (לכתובת)<input name="slug" required pattern="[a-z0-9][a-z0-9-]{1,18}[a-z0-9]" placeholder="chaverim" style="direction:ltr"></label>
         <label>מספר הקו<input name="linePhone" required value="${esc(c.linePhone || "")}" style="direction:ltr"></label>
         <label>טלפון בעל הקו (מנהל תמיד)<input name="ownerPhone" style="direction:ltr" placeholder="05..."></label>
-        <label>מייל גוגל של בעל הקו<input name="ownerEmail" type="email" style="direction:ltr" placeholder="name@gmail.com"></label>
+        <label>מייל גוגל של מנהל הקו (לא חובה – יקבל גישה לקו הזה בלבד)<input name="ownerEmail" type="email" style="direction:ltr" placeholder="name@gmail.com"></label>
       </div>
       <div class="mut small">ייווצר Worker חדש בשם <span class="num">yemot-line-&lt;שם קצר&gt;</span> עם אחסון משלו, כל ה-AI וכל מפתחות הקול של הקו הזה, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</div>
       <div class="row"><button type="button" class="btn" data-fx="back">חזרה</button><button class="btn p" ${d.ready ? "" : "disabled"}>בניית הקו</button></div></form>`;
@@ -2165,6 +2165,7 @@ async function startApp() {
   api("overview").then(d => { if (!state.data.home) state.data.home = d; state.names = d.names; badges(d); }).catch(() => {});
   try {
     const me = await api("whoami"); state.ro = me.ro; state.me = me; document.body.classList.toggle("ro", me.ro); $("#rob").hidden = !me.ro;
+    if (me.suspended && !$("#susp")) document.body.insertAdjacentHTML("afterbegin", `<div id="susp" class="banner warn" style="margin:0;border-radius:0;justify-content:center"><div><b>הקו מושהה.</b> מתקשרים שומעים "הקו מושהה זמנית", ומשימות הרקע לא רצות. להחזרה – לפנות לבעל השירות.</div></div>`);
     if (me.lineName) { // קו שנבנה במפעל: שם ומספר משלו
       LINE_LABEL = fmtLine(me.line) || LINE_LABEL;
       for (const el of document.querySelectorAll(".side-brand b")) el.textContent = me.lineName;

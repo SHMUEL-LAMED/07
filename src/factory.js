@@ -52,8 +52,9 @@ const ymOk = r => r && (r.responseStatus === "OK" || r.responseStatus === "ok");
 
 // ---------- Cloudflare ----------
 function cfReady(env) { return !!(env.CF_FACTORY_TOKEN && env.CF_ACCOUNT_ID); }
-async function cf(env, method, path, body, raw = false) {
+async function cf(env, method, path, body, raw = false, rawBody) {
   const init = { method, headers: { Authorization: "Bearer " + env.CF_FACTORY_TOKEN } };
+  if (rawBody !== undefined) { init.body = rawBody; init.headers["Content-Type"] = "text/plain"; }
   if (body instanceof FormData) init.body = body;
   else if (body !== undefined) { init.body = JSON.stringify(body); init.headers["Content-Type"] = "application/json"; }
   const r = await fetch(CF_API + path.replace("{acc}", "accounts/" + env.CF_ACCOUNT_ID), init);
@@ -82,9 +83,40 @@ async function templateModules(env) {
   return { main, parts };
 }
 
+// KV של קו אחר (לפי מזהה) דרך ה-API של Cloudflare
+const CRON = "*/1 * * * *";
+export async function kvGetRemote(env, id, key) {
+  const r = await cf(env, "GET", `/{acc}/storage/kv/namespaces/${id}/values/${encodeURIComponent(key)}`, undefined, true);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`Cloudflare KV (${r.status})`);
+  return r.text();
+}
+async function kvPut(env, id, key, value) {
+  const r = await cf(env, "PUT", `/{acc}/storage/kv/namespaces/${id}/values/${encodeURIComponent(key)}`, undefined, true, value);
+  if (!r.ok) throw new Error(`לא ניתן לכתוב ל-KV של הקו (${r.status})`);
+}
+// השהיה ושחזור של קו: הסוד SUSPENDED=1 (השרת עונה "הקו מושהה" ולא מריץ משימות) + ביטול התזמון.
+// הקוד, ההגדרות והנתונים נשמרים. רק לקווים שנבנו במפעל
+export async function setSuspended(env, slug, on, log) {
+  if (!cfReady(env)) throw new Error("המפעל לא מוגדר: חסרים CF_FACTORY_TOKEN / CF_ACCOUNT_ID");
+  const reg = await loadReg(env), line = reg.find(l => l.slug === slug);
+  if (!line) throw new Error("הקו לא נמצא ברשימה");
+  if (on) {
+    await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/secrets`, { name: "SUSPENDED", text: "1", type: "secret_text" });
+    await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/schedules`, []);
+  } else {
+    const r = await cf(env, "DELETE", `/{acc}/workers/scripts/${line.script}/secrets/SUSPENDED`, undefined, true);
+    if (!r.ok && r.status !== 404) throw new Error(`לא ניתן להחזיר את הקו (${r.status})`);
+    await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/schedules`, [{ cron: CRON }]);
+  }
+  line.enabled = !on; line.suspendedAt = on ? Date.now() : null;
+  await saveReg(env, reg);
+  if (log) await log(`מרכז הקווים: הקו "${line.name}" ${on ? "הושהה" : "הוחזר לפעולה"}`).catch(() => {});
+  return { ok: true, slug, enabled: !on };
+}
 const loadReg = async env => { try { return (await env.KV.get(REG, "json")) || []; } catch { return []; } };
 const saveReg = (env, list) => env.KV.put(REG, JSON.stringify(list));
-const view = l => ({ slug: l.slug, script: l.script, url: l.url, name: l.name, line: l.line, owner: l.owner, created: l.created, ivr: l.ivr || null, test: l.test !== false });
+const view = l => ({ slug: l.slug, script: l.script, url: l.url, name: l.name, line: l.line, owner: l.owner, manager: l.ownerEmail || "", created: l.created, ivr: l.ivr || null, test: l.test !== false, enabled: l.enabled !== false });
 
 // ---------- בדיקת טוקן ----------
 async function checkToken(token) {
@@ -116,7 +148,11 @@ async function createLine(env, body, origin, D) {
   notSource(env, token, D, linePhone);
   const ownerPhone = digits(body.ownerPhone);
   if (ownerPhone && !okPhone(ownerPhone)) throw new Error("מספר הטלפון של בעל הקו לא תקין");
-  const ownerEmail = String(body.ownerEmail || env.OWNER_EMAIL || "").trim().toLowerCase();
+  // מנהל הקו (הלקוח): נכנס לדף הניהול של הקו ולמרכז הקווים, ויכול להוסיף מנהלים בעצמו.
+  // בעל השירות (OWNER_EMAIL של קו המקור) הוא תמיד הבעלים של כל קו חדש
+  const ownerEmail = String(body.ownerEmail || "").trim().toLowerCase();
+  if (ownerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) throw new Error("מייל מנהל הקו לא תקין");
+  const superEmail = String(env.OWNER_EMAIL || "").trim().toLowerCase();
   const name = String(body.name || "").trim().slice(0, 40) || "קו " + linePhone;
   const script = scriptName(slug), reg = await loadReg(env);
   if (reg.some(l => l.slug === slug)) throw new Error("כבר קיים קו בשם הזה");
@@ -142,14 +178,15 @@ async function createLine(env, body, origin, D) {
       { type: "secret_text", name: "RUN_KEY", text: runKey },
     ];
     if (ownerPhone) bindings.push({ type: "plain_text", name: "OWNER_PHONE", text: ownerPhone });
-    if (ownerEmail) bindings.push({ type: "secret_text", name: "OWNER_EMAIL", text: ownerEmail });
+    if (superEmail) bindings.push({ type: "secret_text", name: "OWNER_EMAIL", text: superEmail });
     for (const k of COPY_SECRETS) if (env[k]) bindings.push({ type: "secret_text", name: k, text: String(env[k]) });
     for (const k of COPY_VARS) if (env[k]) bindings.push({ type: "plain_text", name: k, text: String(env[k]) });
     const form = new FormData();
     form.append("metadata", new Blob([JSON.stringify({ main_module: tpl.main, compatibility_date: "2025-09-01", bindings })], { type: "application/json" }));
     for (const p of tpl.parts) form.append(p.name, new Blob([p.data], { type: p.type }), p.name);
     await cf(env, "PUT", `/{acc}/workers/scripts/${script}`, form); created.script = true; step("השרת החדש הועלה עם המשתנים והסודות");
-    await cf(env, "PUT", `/{acc}/workers/scripts/${script}/schedules`, [{ cron: "*/1 * * * *" }]); step("הוגדר תזמון כל דקה");
+    if (ownerEmail && ownerEmail !== superEmail) { await kvPut(env, kv.id, "dash_emails", JSON.stringify([{ e: ownerEmail, role: "admin" }])); step(`${ownerEmail} נוסף כמנהל הקו`); }
+    await cf(env, "PUT", `/{acc}/workers/scripts/${script}/schedules`, [{ cron: CRON }]); step("הוגדר תזמון כל דקה");
     await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה כתובת workers.dev");
     const sub = (await cf(env, "GET", "/{acc}/workers/subdomain")).subdomain;
     const url = `https://${script}.${sub}.workers.dev`;
@@ -280,6 +317,11 @@ export async function factory(req, env, body, D, origin) {
   if (op === "create") return await createLine(env, body, origin, D);
   if (op === "ivr_plan") return await ivrPlan(env, body, origin, D);
   if (op === "ivr_apply") return await ivrApply(env, body, origin, D);
+  if (op === "suspend" || op === "resume") {
+    const l = (await loadReg(env)).find(x => x.slug === body.slug);
+    if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");
+    return await setSuspended(env, String(body.slug || ""), op === "suspend", m => D.log(env, m));
+  }
   if (op === "forget") {
     const reg = await loadReg(env), l = reg.find(x => x.slug === body.slug);
     if (!l) throw new Error("הקו לא נמצא");

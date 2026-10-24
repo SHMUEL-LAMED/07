@@ -1,9 +1,47 @@
 // Central Google identity and line directory. Sessions are independent of line-admin tokens.
+import { kvGetRemote, setSuspended } from "./factory.js";
 const TTL = 30 * 86400;
 const keyOf = token => "portal_session:" + token;
 const normalize = email => String(email || "").trim().toLowerCase();
 const publicLine = line => ({ slug: line.slug, name: line.name, line: line.line,
-  enabled: line.enabled !== false, url: "/07/line/?l=" + encodeURIComponent(line.slug) });
+  enabled: line.enabled !== false, url: "/07/line/?l=" + encodeURIComponent(line.slug),
+  manager: line.ownerEmail || "", created: line.created || 0, test: line.test !== false, legacy: !!line.legacy });
+// הקווים הוותיקים (לא מהמפעל). הדף יודע את הכתובות שלהם לפי slug
+const LEGACY = [{ slug: "shimchas", name: "שימחס", line: "073-351-2880", legacy: true, enabled: true },
+  { slug: "daat", name: "דעת תורה", line: "079-494-7582", legacy: true, enabled: true, script: "yemot-ai-daat" }];
+const emailsOf = raw => { let a; try { a = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { a = []; }
+  return (Array.isArray(a) ? a : []).map(m => typeof m === "string" ? { e: normalize(m), role: "admin" } : { e: normalize(m && m.e), role: m && m.role === "viewer" ? "viewer" : "admin" }).filter(m => m.e); };
+const cfReady = env => !!(env.CF_FACTORY_TOKEN && env.CF_ACCOUNT_ID);
+// מזהה ה-KV של קו דעת תורה (נשמר אחרי הפעם הראשונה)
+async function legacyKv(env, script) {
+  const k = "portal_kv:" + script, cached = await env.KV.get(k);
+  if (cached) return cached;
+  const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/workers/scripts/" + script + "/settings", { headers: { Authorization: "Bearer " + env.CF_FACTORY_TOKEN } });
+  const j = await r.json().catch(() => ({}));
+  const b = ((j.result || {}).bindings || []).find(x => x.type === "kv_namespace" && x.name === "KV");
+  if (!b) return "";
+  await env.KV.put(k, b.namespace_id);
+  return b.namespace_id;
+}
+// לאילו קווים יש לחשבון גישה: מנהלי הדף של כל קו (גם מי שמנהל קו הוסיף בעצמו), ומנהל הקו שנקבע בבנייה
+async function accessOf(env, email, lines) {
+  const out = [];
+  const has = list => emailsOf(list).find(m => m.e === email);
+  const m0 = has(await env.KV.get("dash_emails"));
+  if (m0) out.push({ slug: "shimchas", role: m0.role });
+  if (!cfReady(env)) return out.concat(lines.filter(l => normalize(l.ownerEmail) === email).map(l => ({ slug: l.slug, role: "admin" })));
+  const checks = [...lines.filter(l => l.kv).map(l => ({ slug: l.slug, kv: l.kv, owner: normalize(l.ownerEmail) })),
+    ...LEGACY.filter(l => l.script).map(l => ({ slug: l.slug, script: l.script }))];
+  await Promise.all(checks.map(async c => {
+    try {
+      if (c.owner && c.owner === email) { out.push({ slug: c.slug, role: "admin" }); return; }
+      const id = c.kv || await legacyKv(env, c.script);
+      const m = id && has(await kvGetRemote(env, id, "dash_emails"));
+      if (m) out.push({ slug: c.slug, role: m.role });
+    } catch {} // קו שלא ענה – פשוט לא מופיע
+  }));
+  return out;
+}
 const reply = (value, status = 200) => new Response(JSON.stringify(value), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
 });
@@ -62,7 +100,8 @@ export async function portal(req, env, verifyGoogle) {
     try { email = normalize(await verifyGoogle(env, body.google)); }
     catch { return reply({ error: "לא ניתן לאמת את חשבון גוגל" }, 401); }
     const blocked = await env.KV.get("portal_blocked:" + email);
-    const approved = email === owner || !!(await env.KV.get("portal_approved:" + email));
+    const approved = email === owner || !!(await env.KV.get("portal_approved:" + email)) ||
+      (await accessOf(env, email, await readLines())).length > 0; // מנהל שנוסף בתוך קו – בלי אישור נפרד
     if (blocked) return reply({ error: "הגישה לשירות הושעתה" }, 403);
     if (!approved) return reply({ error: "החשבון עדיין לא אושר לשירות. בקש מבעל השירות לאשר את הגישה." }, 403);
     const token = randomToken();
@@ -83,8 +122,11 @@ export async function portal(req, env, verifyGoogle) {
   }
   const lines = await readLines();
   const memberships = await env.KV.get("portal_memberships:" + session.email, "json") || [];
-  const allowed = isOwner ? lines : lines.filter(l => l.enabled !== false &&
-    (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug)));
+  const access = isOwner ? [] : await accessOf(env, session.email, lines);
+  const viaLine = new Set(access.map(a => a.slug));
+  const allowed = isOwner ? lines : [
+    ...LEGACY.filter(l => viaLine.has(l.slug)),
+    ...lines.filter(l => normalize(l.ownerEmail) === session.email || memberships.includes(l.slug) || viaLine.has(l.slug))];
   if (action === "me") {
     // The service owner must be recognized by every independent line Worker too,
     // so the same Google credential can open each line dashboard.
@@ -136,6 +178,13 @@ export async function portal(req, env, verifyGoogle) {
       await env.KV.delete("portal_blocked:" + email);
     }
     return reply({ ok: true });
+  }
+  if ((action === "suspend" || action === "resume") && req.method === "POST") {
+    const line = lines.find(l => l.slug === body.slug);
+    if (!line) return reply({ error: "אפשר להשהות רק קווים שנבנו במפעל" }, 400);
+    if (action === "suspend" && String(body.confirm || "") !== line.slug) return reply({ error: "להשהיה יש להקליד את השם הקצר של הקו" }, 400);
+    try { return reply(await setSuspended(env, line.slug, action === "suspend")); }
+    catch (e) { return reply({ error: String(e.message || "הפעולה נכשלה") }, 502); }
   }
   if (action === "assign" && req.method === "POST") {
     const email = normalize(body.email), slugs = [...new Set(Array.isArray(body.lines) ? body.lines : [])];
