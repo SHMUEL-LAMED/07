@@ -39,6 +39,7 @@
 ## מפעל הקווים (אוקטובר 2026)
 - `src/factory.js` + לשונית "קווים" בדף הניהול (רק בקו המקור, רק לבעלים – אסימון `exp.ow.sig` מכניסה בסיסמה או בגוגל של `OWNER_EMAIL`).
 - שלבים: בדיקת טוקן ימות (קריאה בלבד) ← בניית Worker חדש `yemot-line-<שם>` (העתקת הקוד של `FACTORY_TEMPLATE`/yemot-ai, KV חדש, משתנים `LINE_PHONE`/`LINE_NAME`/`OWNER_PHONE`/`TEST_MODE=1`, סודות `YM_TOKEN`/`ADMIN_PASS`/`RUN_KEY` חדשים + מפתחות ה-AI של הקו המקור, cron, workers.dev) ← חיבור השלוחות: העתקת ext.ini מהקו המקור עם החלפת כתובת ו-RUN_KEY, תצוגה מקדימה, גיבוי וכתיבה רק אחרי הקלדת השם הקצר.
+- הגנות: טביעת SHA-256 של טוקן ימות נשמרת ביצירה, וחיבור שלוחות מקבל רק את הטוקן של אותו קו. הטוקן של קו המקור נחסם, וקו שני על אותה מערכת נחסם. קובץ שלא נקרא לא נכתב. יש תקציב של 40 פניות לבקשה (מגבלת 50 בשרת החינמי), ועץ גדול מסומן "רק חלק" וממשיכים בלחיצה נוספת. `BRIDGE_KEY` מועתק לקו החדש. ב-whoami הדגל הוא `isOwner` (`owner` נשאר מספר הטלפון).
 - דרוש בקו המקור: הסוד `CF_FACTORY_TOKEN` (Workers Scripts:Edit, Workers KV Storage:Edit, Account Settings:Read) והמשתנה `CF_ACCOUNT_ID`.
 - `worker.js`: `LINE_PHONE` ו-`OWNER` נקראים מהמשתנים `LINE_PHONE`/`OWNER_PHONE` אם קיימים (`applyLineEnv`); בלעדיהם – ערכי שימחס.
 - דף הניהול של קו חדש: `/07/line/?l=<שם>` דרך הגשר `supabase/functions/admin-netfree-lines` (צריך לפרוס אותו פעם אחת).
