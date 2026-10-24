@@ -22,7 +22,9 @@ export async function portal(req, env, verifyGoogle) {
     try { email = normalize(await verifyGoogle(env, body.google)); }
     catch { return reply({ error: "לא ניתן לאמת את חשבון גוגל" }, 401); }
     const blocked = await env.KV.get("portal_blocked:" + email);
+    const approved = email === owner || !!(await env.KV.get("portal_approved:" + email));
     if (blocked) return reply({ error: "הגישה לשירות הושעתה" }, 403);
+    if (!approved) return reply({ error: "החשבון עדיין לא אושר לשירות. בקש מבעל השירות לאשר את הגישה." }, 403);
     const token = randomToken();
     await env.KV.put(keyOf(token), JSON.stringify({ email, exp: Date.now() + TTL * 1000 }), { expirationTtl: TTL });
     // Google credentials are never persisted.
@@ -43,15 +45,30 @@ export async function portal(req, env, verifyGoogle) {
   const memberships = await env.KV.get("portal_memberships:" + session.email, "json") || [];
   const allowed = isOwner ? lines : lines.filter(l => l.enabled !== false &&
     (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug)));
-  if (action === "me") return reply({ email: session.email, isOwner, lines: allowed.map(publicLine) });
+  if (action === "me") {
+    if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine) });
+    const accounts = await env.KV.list({ prefix: "portal_approved:" });
+    const clients = [];
+    for (const item of accounts.keys) {
+      const email = item.name.slice("portal_approved:".length);
+      clients.push({ email, lines: await env.KV.get("portal_memberships:" + email, "json") || [],
+        blocked: !!(await env.KV.get("portal_blocked:" + email)) });
+    }
+    return reply({ email: session.email, isOwner, lines: allowed.map(publicLine), clients });
+  }
   // All service-level operations enforce owner permission server-side.
   if (!isOwner) return reply({ error: "אין הרשאה למרכז הבעלים" }, 403);
   if (action === "access" && req.method === "POST") {
     const email = normalize(body.email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email === owner)
       return reply({ error: "חשבון לא תקין" }, 400);
+    if (body.approved === true) await env.KV.put("portal_approved:" + email, "1");
+    else if (body.approved === false) {
+      await env.KV.delete("portal_approved:" + email);
+      await env.KV.delete("portal_memberships:" + email);
+    }
     if (body.blocked === true) await env.KV.put("portal_blocked:" + email, "1");
-    else await env.KV.delete("portal_blocked:" + email);
+    else if (body.blocked === false) await env.KV.delete("portal_blocked:" + email);
     return reply({ ok: true });
   }
   if (action === "assign" && req.method === "POST") {
