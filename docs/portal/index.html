@@ -23,7 +23,7 @@ const CONFIG="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfre
 const LINES_API="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/";
 const LEGACY_LINES=[
   {slug:"shimchas",name:"שימחס",line:"073-351-2880",url:"/07/source/",api:"https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/",enabled:true,legacy:true},
-  {slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:"https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/",enabled:true,assignable:false}
+  {slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:"https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/",enabled:true,legacy:true}
 ];
 const app=document.querySelector("#app"),lineTabs=document.querySelector("#lineTabs"),profileButton=document.querySelector("#profileButton"),profileMenu=document.querySelector("#profileMenu");
 let token=sessionStorage.getItem("portalToken")||"",identity=null,googleCredential=sessionStorage.getItem("portalGoogle")||"";
