@@ -17,8 +17,10 @@ async function syncClientLines(env, lines, email, slugs) {
     if (!current.ok && current.status !== 404) throw new Error("לא ניתן לקרוא הרשאות קו");
     let managers = current.status === 404 ? [] : await current.json().catch(() => []);
     if (!Array.isArray(managers)) managers = [];
-    managers = managers.filter(m => (typeof m === "string" ? m : m.e) !== email);
-    if (slugs.includes(line.slug)) managers.push({ e: email, role: "admin" });
+    if (slugs.includes(line.slug) || old) {
+      managers = managers.filter(m => (typeof m === "string" ? m : m.e) !== email);
+      if (slugs.includes(line.slug)) managers.push({ e: email, role: "admin" });
+    }
     const saved = await fetch(endpoint, { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(managers) });
     if (!saved.ok) throw new Error("לא ניתן לעדכן הרשאות קו");
     if (slugs.includes(line.slug)) await env.KV.put("portal_synced:" + email + ":" + line.slug, "1");
