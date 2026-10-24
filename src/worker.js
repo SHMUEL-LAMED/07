@@ -2371,7 +2371,7 @@ function applyLineEnv(env) {
   DASH.LINE_PHONE = LINE_PHONE; DASH.OWNER = OWNER;
 }
 export default {
-  async scheduled(event, env, ctx) { applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
+  async scheduled(event, env, ctx) { if (env.SUSPENDED === "1") return; applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
   async fetch(req, env, ctx) {
     applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env);
     const u = new URL(req.url), raw = decodeURIComponent(req.url);
@@ -2384,6 +2384,8 @@ export default {
     if (key !== env.RUN_KEY) return new Response("ok");
     // כשהמתקשר מנתק, ימות קוראים שוב לאותה כתובת עם אותם נתונים. מתעלמים, כדי שלא יתבצע אותו דבר פעמיים
     if (u.searchParams.get("hangup") === "yes") return reply("");
+    // קו מושהה ממרכז הקווים: לא מפעילים כלום, רק מודיעים למתקשר (דף הניהול ממשיך לעבוד)
+    if (env.SUSPENDED === "1") return reply("id_list_message=t-הקו מושהה זמנית&go_to_folder=hangup");
     if (parts[0] === "ymx") { const m = u.searchParams.get("m"); if (m !== "DownloadFile" && m !== "GetIVR2Dir") return reply("no"); const q = {}; for (const [k, v] of u.searchParams) if (k !== "m" && k !== "key") q[k] = v; const r = await ym(env, m, q); return m === "DownloadFile" ? new Response(r) : Response.json(r); } // זמני: הורדת הקלטות לרמיקס
     if (parts[0] === "check") {
       const kind = parts[1] === "general" ? "general" : "important", phone = param("ApiPhone");
