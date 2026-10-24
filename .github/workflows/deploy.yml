@@ -1,10 +1,13 @@
-# פריסה ידנית של השרת ל-Cloudflare דרך GitHub Actions (בלי טוקן בסביבת Claude Code).
-# הפעלה: Actions ← "פריסה ל-Cloudflare" ← Run workflow ← לבחור ענף ולכתוב deploy באישור.
+# פריסת שרת ל-Cloudflare דרך GitHub Actions. שינויי מרכז הקווים נפרסים אוטומטית עם עדכון src/portal.js; פריסה ידנית לשאר השינויים דורשת אישור deploy.
 # סודות בריפו (Settings ← Secrets and variables ← Actions ← New repository secret):
 #   CLOUDFLARE_API_TOKEN  – טוקן עם הרשאת Workers Scripts:Edit (התבנית "Edit Cloudflare Workers")
 #   CLOUDFLARE_ACCOUNT_ID – מזהה החשבון (מופיע בכתובת של לוח הבקרה של Cloudflare, אחרי dash.cloudflare.com/)
 name: פריסה ל-Cloudflare
 on:
+  push:
+    branches: [main]
+    paths:
+      - src/portal.js
   workflow_dispatch:
     inputs:
       confirm:
@@ -16,7 +19,7 @@ permissions:
 concurrency: deploy-yemot-ai
 jobs:
   deploy:
-    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.confirm == 'deploy' }}
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

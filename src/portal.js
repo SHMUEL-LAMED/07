@@ -3,12 +3,16 @@ import { kvGetRemote, setSuspended } from "./factory.js";
 const TTL = 30 * 86400;
 const keyOf = token => "portal_session:" + token;
 const normalize = email => String(email || "").trim().toLowerCase();
+const LEGACY_LINES = [
+  { slug: "shimchas", name: "שימחס", line: "073-351-2880", url: "/07/source/", api: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" },
+  { slug: "daat", name: "דעת תורה", line: "079-494-7582", url: "/07/daattorah/", api: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" }
+];
 const publicLine = line => ({ slug: line.slug, name: line.name, line: line.line,
-  enabled: line.enabled !== false, url: "/07/line/?l=" + encodeURIComponent(line.slug),
-  manager: line.ownerEmail || "", created: line.created || 0, test: line.test !== false, legacy: !!line.legacy });
-// הקווים הוותיקים (לא מהמפעל). הדף יודע את הכתובות שלהם לפי slug
-const LEGACY = [{ slug: "shimchas", name: "שימחס", line: "073-351-2880", legacy: true, enabled: true },
-  { slug: "daat", name: "דעת תורה", line: "079-494-7582", legacy: true, enabled: true, script: "yemot-ai-daat" }];
+  enabled: line.enabled !== false, legacy: !!line.legacy, api: line.api || null,
+  url: line.url || "/07/line/?l=" + encodeURIComponent(line.slug),
+  manager: line.ownerEmail || "", created: line.created || 0, test: line.test !== false });
+// הקווים הוותיקים (לא מהמפעל). ל-KV של דעת תורה מגיעים לפי שם ה-Worker שלו
+const LEGACY = LEGACY_LINES.map(l => ({ ...l, legacy: true, enabled: true, script: l.slug === "daat" ? "yemot-ai-daat" : undefined }));
 const emailsOf = raw => { let a; try { a = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { a = []; }
   return (Array.isArray(a) ? a : []).map(m => typeof m === "string" ? { e: normalize(m), role: "admin" } : { e: normalize(m && m.e), role: m && m.role === "viewer" ? "viewer" : "admin" }).filter(m => m.e); };
 const cfReady = env => !!(env.CF_FACTORY_TOKEN && env.CF_ACCOUNT_ID);
@@ -122,10 +126,11 @@ export async function portal(req, env, verifyGoogle) {
   }
   const lines = await readLines();
   const memberships = await env.KV.get("portal_memberships:" + session.email, "json") || [];
+  const available = [...lines, ...LEGACY];
   const access = isOwner ? [] : await accessOf(env, session.email, lines);
   const viaLine = new Set(access.map(a => a.slug));
-  const allowed = isOwner ? lines : [
-    ...LEGACY.filter(l => viaLine.has(l.slug)),
+  const allowed = isOwner ? available : [
+    ...LEGACY.filter(l => viaLine.has(l.slug) || memberships.includes(l.slug)),
     ...lines.filter(l => normalize(l.ownerEmail) === session.email || memberships.includes(l.slug) || viaLine.has(l.slug))];
   if (action === "me") {
     // The service owner must be recognized by every independent line Worker too,
@@ -188,9 +193,10 @@ export async function portal(req, env, verifyGoogle) {
   }
   if (action === "assign" && req.method === "POST") {
     const email = normalize(body.email), slugs = [...new Set(Array.isArray(body.lines) ? body.lines : [])];
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || slugs.some(s => !lines.some(l => l.slug === s)))
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || slugs.some(s => !available.some(l => l.slug === s)))
       return reply({ error: "חשבון או קו לא תקינים" }, 400);
-    try { await syncClientLines(env, lines, email, slugs); } catch (e) { return reply({ error: String(e.message || "עדכון הרשאות נכשל") }, 502); }
+    try { await syncClientLines(env, lines, email, slugs.filter(s => lines.some(l => l.slug === s))); }
+    catch (e) { return reply({ error: String(e.message || "עדכון הרשאות נכשל") }, 502); }
     await env.KV.put("portal_memberships:" + email, JSON.stringify(slugs));
     return reply({ ok: true });
   }
