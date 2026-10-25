@@ -2,7 +2,7 @@ name: סקרים וכתבות — שלוחה 1
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '*/15 * * * *'
   push:
     branches: [main]
     paths: ['election-news/**', '.github/workflows/election-news.yml']
