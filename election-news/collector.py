@@ -478,9 +478,10 @@ def main():
     for url in state['todo']:
         try:candidates.setdefault(canonical(url),'')
         except ValueError:pass
-    count=0;reports=[]
+    count=0;reports=[];failures={}
     with tempfile.TemporaryDirectory() as folder:
         for url in fair_candidates(candidates):
+            if failures.get(source(url),0)>=4:continue
             if time.monotonic()-start>args.deadline_seconds or count>=args.max_files:break
             if url in seen or (source(url)=='reshet' and url in uploaded):continue
             try:
@@ -496,7 +497,7 @@ def main():
                     if args.dry_run:print('discovered',source(url),title,index,flush=True);continue
                     try:
                         dest=Path(folder)/'audio.mp3';duration=make_audio(clip,dest)
-                        meta=base64.b64encode(json.dumps({'url':key,'title':'פורסם ב־'+publication_time(PUBLICATION_DATES[canonical(url)]).strftime('%d.%m.%Y')+' — '+title+(' — קטע '+str(index+1) if index else ''),'duration':duration,'publishedAt':PUBLICATION_DATES[canonical(url)]},ensure_ascii=False).encode()).decode()
+                        meta=base64.b64encode(json.dumps({'url':key,'title':title+(' — קטע '+str(index+1) if index else ''),'duration':duration,'publishedAt':PUBLICATION_DATES[canonical(url)]},ensure_ascii=False).encode()).decode()
                         for attempt in range(4):
                             try:result=worker(endpoint,'/collector/ingest',dest.read_bytes(),{'X-Article-Meta':meta,'Content-Type':'audio/mpeg'});break
                             except urllib.error.HTTPError as e:
@@ -509,8 +510,10 @@ def main():
                         reports.append({'url':key,'status':'blocked','error':error_code(error)})
                         print('clip_failed',source(url),error_code(error),canonical(url),index,flush=True)
             except Exception as e:
+                failures[source(url)]=failures.get(source(url),0)+1
                 reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})
     print('complete',count,'uploads',len(reports),'reports',flush=True)
     if collection_failed(count,reports):raise SystemExit('collection_failed: no uploads and unresolved media/source errors; see article_failed records')
 if __name__=='__main__':main()
+
