@@ -1,4 +1,53 @@
-import {mirrorPolls} from './poll-folder.mjs';
+export function isPoliticalPoll(title){
+ const exit=/מדגם הבחירות|תוצאות המדגם|מדגמי הערוצים|מדגם.*(?:חדשות|ערוץ|כאן)|exit.?poll/i.test(String(title||''));
+ if(exit)return Date.now()>=Date.parse('2026-10-27T22:00:00+02:00');
+ const t=String(title||'');
+ return /סקר|מנדטים|מפת הגושים/.test(t)&&/מנדטים|מפלג|בחירות|כנסת|גושים|נתניהו|בנט|לפיד|איזנקוט/.test(t)&&!/בעקבות הסקר|בצל הסקר|תגובות לסקר|תגובה לסקר|ניתוח הסקר|מגיב לסקר/.test(t);
+}
+export async function mirrorPolls(env,rows,api,intro){
+ const directory=await api(env,'GetIVR2Dir',{path:'ivr2:2'});
+ if(directory.extIni?.type!=='playfile')return {enabled:false};
+ await env.DB.prepare('CREATE TABLE IF NOT EXISTS poll_copies(url TEXT PRIMARY KEY,file TEXT NOT NULL)').run();
+ const existing=new Map((directory.files||[]).map(f=>[f.name,f]));
+ const wanted=new Set(rows.filter(r=>isPoliticalPoll(r.title)).map(r=>r.url));
+ const managed=(await env.DB.prepare('SELECT url,file FROM poll_copies').all()).results;
+ let archived=0;
+ for(const old of managed){
+  if(wanted.has(old.url)||archived>=2)continue;
+  if(existing.has(old.file)){
+   await api(env,'UpdateExtension',{path:'ivr2:2/_poll_archive',type:'playfile',title:'ארכיון סקרים'});
+   await api(env,'FileAction',{action:'move',what:'ivr2:2/'+old.file,target:'ivr2:2/_poll_archive'});
+   const check=await api(env,'GetIVR2Dir',{path:'ivr2:2'});if((check.files||[]).some(f=>f.name===old.file))throw Error('poll_archive_not_verified');
+   existing.delete(old.file);archived++;
+  }
+  await env.DB.prepare('DELETE FROM poll_copies WHERE url=?').bind(old.url).run();
+ }
+
+ let copied=0;const lines=[];
+ for(const row of rows){
+  if(!isPoliticalPoll(row.title)||!/^\d+\.wav$/.test(row.file||''))continue;
+  const saved=await env.DB.prepare('SELECT file FROM poll_copies WHERE url=?').bind(row.url).first();
+  if(saved?.file===row.file&&Number(existing.get(row.file)?.duration)>0){lines.push(row.file.replace(/\.wav$/,'')+'='+intro(row));continue;}
+  if(existing.has(row.file)&&saved?.file!==row.file)throw Error('poll_destination_conflict');
+  if(copied>=6)continue;
+  const response=await fetch('https://www.call2all.co.il/ym/api/DownloadFile',{method:'POST',body:new URLSearchParams({token:env.YEMOT_TOKEN,path:'ivr2:1/'+row.file}),signal:AbortSignal.timeout(30000)});
+  if(!response.ok||/json/.test(response.headers.get('Content-Type')||''))throw Error('poll_download_failed');
+  const blob=await response.blob();if(!blob.size||blob.size>32*1024*1024)throw Error('poll_size_invalid');
+  const form=new FormData();form.set('token',env.YEMOT_TOKEN);form.set('path','ivr2:2/'+row.file);form.set('fileUpload',blob,row.file);
+  await env.DB.prepare('INSERT INTO poll_copies(url,file) VALUES(?,?) ON CONFLICT(url) DO UPDATE SET file=excluded.file').bind(row.url,row.file).run();
+  const upload=await fetch('https://www.call2all.co.il/ym/api/UploadFile',{method:'POST',body:form,signal:AbortSignal.timeout(60000)});const result=await upload.json();if(result.responseStatus!=='OK')throw Error('poll_upload_failed');
+  const verify=await api(env,'GetIVR2Dir',{path:'ivr2:2'});const file=(verify.files||[]).find(f=>f.name===row.file&&Number(f.duration)>0);if(!file)throw Error('poll_copy_not_verified');
+  await env.DB.prepare('INSERT INTO poll_copies(url,file) VALUES(?,?) ON CONFLICT(url) DO UPDATE SET file=excluded.file').bind(row.url,row.file).run();
+  existing.set(row.file,file);lines.push(row.file.replace(/\.wav$/,'')+'='+intro(row));copied++;
+ }
+ // Do not replace an existing title index while older copies are waiting in the batch.
+ const current=await api(env,'GetTextFile',{what:'ivr2:2/TitleVoice.ini'});
+ if(typeof current.contents!=='string')throw Error('poll_title_index_unreadable');
+ const titles=new Map(String(current.contents||'').split('\n').filter(Boolean).map(line=>[line.split('=')[0],line]));for(const line of lines)titles.set(line.split('=')[0],line);
+ await api(env,'UploadTextFile',{what:'ivr2:2/TitleVoice.ini',contents:[...titles.values()].join('\n')+'\n'});
+ return {enabled:true,copied};
+}
+
 import {verifyCollectorToken} from './collector-auth.mjs';
 import {cacheSourceFeed,publicationMillis} from './source-feed.mjs';
 const SOURCES = [
@@ -16,10 +65,11 @@ export function recordingName(date,files,previous){
  while(occupied.has(String(stamp)+'.wav'))stamp++;
  return String(stamp)+'.wav';
 }
+export function cleanSpokenTitle(value){return decode(String(value||'')).replace(/^פורסם\s*ב[־-]?[^—]+—\s*/,'').replace(/\b\d{1,2}[./-]\d{1,2}[./-](?:20)?\d{2}\b/g,'').replace(/[\r\n=]/g,' ').replace(/\s+/g,' ').trim();}
 export function spokenIntro(item){
  const channel={kan:'כאן חדשות',n12:'חדשות שתים עשרה',reshet:'חדשות שלוש עשרה',c14:'ערוץ ארבע עשרה',i24:'איי עשרים וארבע ניוז'}[item.source];
  const date=typeof item.published_at==='number'?item.published_at:publicationMillis(item.published_at);if(!channel||!Number.isFinite(date))throw Error('intro_metadata_missing');
- const title=decode(String(item.title||'')).replace(/^פורסם ב־[^—]+—\s*/,'').replace(/[\r\n=]/g,' ').replace(/\s+/g,' ').trim();
+ const title=cleanSpokenTitle(item.title);
  const day=new Intl.DateTimeFormat('he-IL-u-ca-hebrew',{timeZone:'Asia/Jerusalem',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(date).replace(/^יום /,'');
  const poll=/סקר|מנדטים|מפת הגושים/.test(title)&&!/בצל|בעקבות הסקר/.test(title);
  return (poll?'האזינו לסקר של ':'האזינו לכתבה של ')+channel+', מיום '+day+'. '+title+'.';
@@ -136,7 +186,7 @@ async function yemot(env,command,values){const r=await fetch('https://www.call2a
 async function reshetData(url){const path=new URL(url).pathname;const data=await(await get('https://13tv.co.il/qdata'+path+'?qdata=json')).json();if(!data?.PageMeta||!data.Content)throw Error('invalid_reshet_data');return data;}
 export function reshetCandidates(data){
  const result=new Map();const walk=o=>{if(!o||typeof o!=='object')return;
-  if(o.link&&o.title&&typeof o.link==='string'&&relevant(o.title+' '+(o.secondaryTitle||''))){try{const u=new URL(o.link,'https://13tv.co.il');const date=Date.parse(o.publishDate||'');if(u.hostname==='13tv.co.il'&&u.pathname.startsWith('/item/news/')&&freshPublication(o.publishDate)){u.search='';u.hash='';result.set(u.href,o.title);}}catch{}}
+  if(o.link&&o.title&&typeof o.link==='string'&&String(o.title).trim().length>=4){try{const u=new URL(o.link,'https://13tv.co.il');const date=Date.parse(o.publishDate||'');if(u.hostname==='13tv.co.il'&&u.pathname.startsWith('/item/news/')&&freshPublication(o.publishDate)){u.search='';u.hash='';result.set(u.href,o.title);}}catch{}}
   for(const v of Object.values(o))if(typeof v==='object'){if(Array.isArray(v))v.forEach(walk);else walk(v);}
  };walk(data.Content);return [...result];
 }
@@ -165,7 +215,7 @@ async function scanSource(env,source){
  if(source.id==='i24')return scanI24(env);
  if(source.id==='reshet')return scanReshet(env);
  const html=await (await get(source.url)).text();const links=new Map();let current=null;let articleLinks=0;
- await new HTMLRewriter().on('a',{element(e){const raw=e.getAttribute('href');current=null;try{const u=new URL(raw,source.url);u.hash='';u.search='';if((u.hostname===source.host||u.hostname.endsWith('.'+source.host))&&source.article.test(u.pathname)){articleLinks++;current={url:u.href,title:e.getAttribute('title')||''};e.onEndTag(()=>{if(current&&relevant(current.title))links.set(current.url,current.title.trim());current=null;});}}catch{}},text(t){if(current)current.title+=t.text;}}).transform(new Response(html)).text();
+ await new HTMLRewriter().on('a',{element(e){const raw=e.getAttribute('href');current=null;try{const u=new URL(raw,source.url);u.hash='';u.search='';if((u.hostname===source.host||u.hostname.endsWith('.'+source.host))&&source.article.test(u.pathname)){articleLinks++;current={url:u.href,title:e.getAttribute('title')||''};e.onEndTag(()=>{if(current&&current.title.trim().length>=4)links.set(current.url,current.title.trim());current=null;});}}catch{}},text(t){if(current)current.title+=t.text;}}).transform(new Response(html)).text();
  if(!articleLinks)throw Error(/We are sorry|Access Denied|Request Rejected/i.test(html)?'source_blocked':'source_requires_adapter');
  const writes=[...links].slice(0,30).map(([url,title])=>env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,?,?,'queued',?)").bind(url,source.id,title.slice(0,500),Date.now()));if(writes.length)await env.DB.batch(writes);
  await env.DB.prepare('INSERT INTO sources(id,last_ok,error) VALUES(?,?,NULL) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=NULL').bind(source.id,Date.now()).run();
@@ -177,22 +227,21 @@ export async function processItem(env,item){
   if(item.source==='i24'){
    const article=await i24Article(item.url);title=article.title||item.title;date=article.publishedAt;
    const category=article.category;const electionCategory=[483,487,523,607].includes(category?.id)||[483,487,523,607].includes(category?.parent?.id);
-   if(!electionCategory&&!relevant(title))throw Error('not_election_article');media=i24Clips(article);
+   media=i24Clips(article);
   }else if(item.source==='reshet'){
    const cached=await env.DB.prepare('SELECT title,video_id,published_at FROM source_feed WHERE url=?').bind(item.url).first();
    const data=cached?{Content:{Item:{title:cached.title,secondaryTitle:'בחירות',video:{kalturaId:cached.video_id}}},PageMeta:{title:cached.title},SEO:{schema:{newsArticle:{datePublished:cached.published_at}}}}:await reshetData(item.url);const article=data.Content?.Item;title=article?.title||data.PageMeta.title||item.title;
-   if(!relevant(title+' '+(article?.secondaryTitle||'')))throw Error('not_election_article');
+   
    date=data.SEO?.schema?.newsArticle?.datePublished;
    html='<script id="__NEXT_DATA__" type="application/json">'+JSON.stringify({props:{pageProps:{page:data}}}).replace(/</g,'\\u003c')+'</script>';
    media=await reshetMedia(html);
   }else{
    let page;try{page=await get(item.url);}catch(e){if(item.source==='n12'&&e.message==='http_403'){const mobile=new URL(item.url);mobile.hostname='mobile.mako.co.il';page=await get(mobile.href);}else throw e;}html=await page.text();title=articleTitle(html,item.title);
-   if(!relevant(title)&&!(item.source==='n12'&&new URL(item.url).pathname.startsWith('/news-israel-elections/')))throw Error('not_election_article');
    date=html.match(/"datePublished"\s*:\s*"([^"]+)"/)?.[1];
    media=item.source==='reshet'?await reshetMedia(html):item.source==='n12'?await makoMedia(html):item.source==='c14'?await c14Media(html):mediaFrom(html);
   }
   if(!freshPublication(date))throw Error('stale_or_missing_publication_date');
-  title='פורסם ב־'+new Date(publicationMillis(date)).toLocaleDateString('he-IL',{timeZone:'Asia/Jerusalem'})+' — '+title;
+  title=cleanSpokenTitle(title);
   if(!media.length)throw Error('needs_source_adapter');
   const clipIndex=Number(new URL(item.url).hash.match(/^#media=(\d+)$/)?.[1]||0);if(clipIndex>=media.length)throw Error('missing_clip');
   const downloaded=await downloadMedia(media[clipIndex]);const audio=downloaded.blob;
@@ -228,11 +277,17 @@ export async function run(env,sourceId){
   // Rotate through channels, staying below platform subrequest limits.
   const index=Math.floor(Date.now()/600000)%SOURCES.length;const source=SOURCES.find(s=>s.id===sourceId)||SOURCES[index];
   try{stats.push({source:source.id,found:await scanSource(env,source)});}catch(e){await env.DB.prepare('INSERT INTO sources(id,last_ok,error) VALUES(?,NULL,?) ON CONFLICT(id) DO UPDATE SET error=excluded.error').bind(source.id,e.message).run();stats.push({source:source.id,error:e.message});}
-  const items=await env.DB.prepare("SELECT * FROM items WHERE status='queued' ORDER BY id ASC LIMIT 2").all();for(const item of items.results)await processItem(env,item);
+  const items=await env.DB.prepare("SELECT * FROM (SELECT i.*,ROW_NUMBER() OVER(PARTITION BY source ORDER BY created_at DESC) source_rank,COALESCE((SELECT MAX(d.uploaded_at) FROM items d WHERE d.source=i.source),0) source_last_upload FROM items i WHERE status='queued') WHERE source_rank<=2 ORDER BY source_rank,source_last_upload,created_at DESC LIMIT 2").all();for(const item of items.results)await processItem(env,item);
   return {stats,processed:items.results.length};
  }finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
 }
 async function collectorRoute(request,env,path){
+ if(path==='/collector/state'){
+  const delivery=await activeDeliveryHealth(env);
+  await env.DB.prepare("INSERT INTO sources(id,last_ok,error) VALUES('active-delivery',?,?) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=excluded.error").bind(delivery.ok?Date.now():null,delivery.ok?null:delivery.error).run();
+  if(!delivery.ok)return Response.json({error:delivery.error,line:ACTIVE_NEWS_LINE},{status:503});
+ }
+
  if(path==='/collector/source'&&request.method==='GET'){
   let target;try{target=new URL(new URL(request.url).searchParams.get('url'));}catch{return Response.json({error:'invalid_source'},{status:400});}
   const source=SOURCES.find(s=>target.hostname===s.host||target.hostname.endsWith('.'+s.host));
@@ -264,6 +319,10 @@ async function collectorRoute(request,env,path){
   let meta;try{meta=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(request.headers.get('X-Article-Meta')||''),c=>c.charCodeAt(0))));}catch{return Response.json({error:'invalid_metadata'},{status:400});}
   const source=sourceFor(meta.url);if(!source||typeof meta.title!=='string'||meta.title.length>500)return Response.json({error:'invalid_source'},{status:400});
   if(!freshPublication(meta.publishedAt))return Response.json({error:'stale_or_missing_publication_date'},{status:400});
+  const delivery=await activeDeliveryHealth(env);
+  await env.DB.prepare("INSERT INTO sources(id,last_ok,error) VALUES('active-delivery',?,?) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=excluded.error").bind(delivery.ok?Date.now():null,delivery.ok?null:delivery.error).run();
+  if(!delivery.ok)return Response.json({error:delivery.error,line:ACTIVE_NEWS_LINE},{status:503});
+
   const now=Date.now();const lease=await env.DB.prepare('UPDATE locks SET until=? WHERE id=1 AND until<?').bind(now+600000,now).run();if(!lease.meta.changes)return Response.json({error:'busy'},{status:409});
   try{
    await env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,?,?,'processing',?)").bind(meta.url,source.id,meta.title,now).run();
@@ -272,14 +331,14 @@ async function collectorRoute(request,env,path){
    const existing=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});const name=recordingName(meta.publishedAt,existing.files||[],item.file||String(item.id).padStart(6,'0')+'.wav');
    let file=(existing.files||[]).find(f=>f.name===name&&Number(f.duration)>0);
    if(!file){
-    const form=new FormData();form.set('token',env.YEMOT_TOKEN);form.set('path','ivr2:1/'+name);form.set('convertAudio','1');form.set('fileUpload',blob,source.id+' - '+meta.title.replace(/[\r\n/\\]/g,' ').slice(0,120)+'.mp3');
+    const form=new FormData();form.set('token',env.YEMOT_TOKEN);form.set('path','ivr2:1/'+name);form.set('convertAudio','1');form.set('fileUpload',blob,source.id+' - '+cleanSpokenTitle(meta.title).replace(/[\r\n/\\]/g,' ').slice(0,120)+'.mp3');
     const r=await fetch('https://www.call2all.co.il/ym/api/UploadFile',{method:'POST',body:form,signal:AbortSignal.timeout(60000)});const j=await r.json();if(j.responseStatus!=='OK'||!Number(j.duration))throw Error('audio_conversion_unverified');
     const verify=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});file=(verify.files||[]).find(f=>f.name===name&&Number(f.duration)>0);
    }
    if(!file)throw Error('upload_not_verified');
    if(Number(meta.duration)>0&&Math.abs(Number(file.duration)-Number(meta.duration))>Math.max(2,Number(meta.duration)*0.02))throw Error('duration_mismatch');
    await env.DB.prepare('INSERT INTO article_dates(url,published_at) VALUES(?,?) ON CONFLICT(url) DO UPDATE SET published_at=excluded.published_at').bind(meta.url,Date.parse(meta.publishedAt)).run();
-   await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,title=?,file=?,uploaded_at=? WHERE id=?").bind(meta.title,name,Date.now(),item.id).run();
+   await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,title=?,file=?,uploaded_at=? WHERE id=?").bind(cleanSpokenTitle(meta.title),name,Date.now(),item.id).run();
    await syncIntros(env);
    return Response.json({ok:true,file:name,duration:file.duration});
   }catch(e){await env.DB.prepare("UPDATE items SET status='blocked',error=? WHERE url=? AND status!='uploaded'").bind(e.message,meta.url).run();return Response.json({error:e.message},{status:502});}finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
@@ -287,7 +346,7 @@ async function collectorRoute(request,env,path){
  return new Response('Not found',{status:404});
 }
 export function sourceFor(url){try{const u=safeURL(url);if(u.hostname==='www.youtube.com'&&u.pathname==='/watch'&&/^[A-Za-z0-9_-]{11}$/.test(u.searchParams.get('v')||'')&&u.searchParams.get('channel_id')==='UCvQmPpU20hw1Trss_CVwaew')return SOURCES.find(s=>s.id==='reshet');return SOURCES.find(s=>(u.hostname===s.host||u.hostname.endsWith('.'+s.host))&&s.article.test(u.pathname));}catch{return null;}}
-export default{
+const originalNewsWorker = {
  async scheduled(event,env,ctx){ctx.waitUntil(run(env));},
  async fetch(request,env,ctx){
   const u=new URL(request.url);
@@ -312,3 +371,59 @@ export default{
   return new Response('Not found',{status:404});
  }
 };
+
+
+const ACTIVE_NEWS_LINE='0737061119';
+async function activeDeliveryHealth(env) {
+ try {
+  const session=await yemot(env,'GetSession',{});
+  return session.username===ACTIVE_NEWS_LINE?{ok:true,line:ACTIVE_NEWS_LINE}:{ok:false,line:ACTIVE_NEWS_LINE,error:'active_line_identity_mismatch'};
+ } catch{return {ok:false,line:ACTIVE_NEWS_LINE,error:'active_yemot_credentials_invalid'};}
+}
+async function activeNewsRecovery(env) {
+ const delivery=await activeDeliveryHealth(env);
+ await env.DB.prepare("INSERT INTO sources(id,last_ok,error) VALUES('active-delivery',?,?) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=excluded.error").bind(delivery.ok?Date.now():null,delivery.ok?null:delivery.error).run();
+ if(!delivery.ok)return {delivery};
+ const dir=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});
+ if(dir.extIni?.type!=='playfile')throw Error('active_news_folder_not_playfile');
+ const rows=await env.DB.prepare("SELECT i.id,i.file,i.status FROM items i LEFT JOIN article_dates d ON d.url=i.url WHERE (d.published_at>=? OR (d.published_at IS NULL AND i.created_at>=?)) AND (i.status='uploaded' OR i.error LIKE 'yemot_%' OR i.error LIKE '%upload%' OR i.error='not_election_article')").bind(Date.now()-7*86400000,Date.now()-7*86400000).all();
+ const present=new Set((dir.files||[]).filter(f=>Number(f.duration)>0&&Number(f.size)>0).map(f=>f.name));
+ const retry=rows.results.filter(x=>x.status!=='uploaded'||!present.has(x.file));
+ if(retry.length)await env.DB.batch(retry.map(x=>env.DB.prepare("UPDATE items SET status='queued',error=NULL,attempts=0 WHERE id=?").bind(x.id)));
+ const repaired=await env.DB.prepare("SELECT last_ok FROM sources WHERE id='active-folder-repair-v2'").first();
+ if(!repaired) {
+  const backup='_before_news_repair_'+Date.now();await yemot(env,'UpdateExtension',{path:'ivr2:'+backup});
+  await yemot(env,'FileAction',{action:'copy',what0:'ivr2:1',what1:'ivr2:2',target:'ivr2:'+backup});
+  await yemot(env,'UpdateExtension',{path:'ivr2:1',type:'playfile',title:'כתבות ראיונות תוכניות וסקרים',play_type:'normal',say_title_voice:'yes',playfile_end_goto:'/'});
+  await yemot(env,'UpdateExtension',{path:'ivr2:2',type:'playfile',title:'סקרים ומדגמים',play_type:'normal',say_title_voice:'yes',playfile_end_goto:'/'});
+  await env.DB.prepare("INSERT INTO sources(id,last_ok,error) VALUES('active-folder-repair-v2',?,NULL)").bind(Date.now()).run();
+ }
+ return {delivery,requeued:retry.length};
+}
+async function activeNewsTick(env,source) {
+ const recovery=await activeNewsRecovery(env);
+ if(!recovery.delivery.ok)return recovery;
+ const result=await run(env,source);
+ await syncIntros(env);
+ return {...recovery,...result};
+}
+const activeNewsWorker={
+ async scheduled(event,env,ctx){ctx.waitUntil(activeNewsTick(env).catch(e=>console.error('active_news_tick',e.message)));},
+ async fetch(request,env,ctx){
+  const u=new URL(request.url);
+  if(u.pathname==='/active/status'||u.pathname==='/active/recover') {
+   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');
+   if(!token||!((env.ADMIN_TOKEN&&token===env.ADMIN_TOKEN)||(env.YEMOT_TOKEN&&token===env.YEMOT_TOKEN)))return new Response('Unauthorized',{status:401});
+   if(u.pathname.endsWith('/recover')) {
+    if(request.method!=='POST')return new Response('Method not allowed',{status:405});
+    const result=await activeNewsTick(env,u.searchParams.get('source'));
+    return Response.json(result,{status:result.delivery.ok?200:503});
+   }
+   return Response.json({delivery:await activeDeliveryHealth(env),sources:(await env.DB.prepare('SELECT * FROM sources').all()).results});
+  }
+  // All existing collector, source-hook and administrative routes now use only
+  // the original active line. The additional number receives no scheduled job.
+  return originalNewsWorker.fetch(request,env,ctx);
+ }
+};
+export default activeNewsWorker;
