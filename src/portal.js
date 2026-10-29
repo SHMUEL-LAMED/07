@@ -38,7 +38,6 @@ async function accessOf(env, email, lines) {
     ...LEGACY.filter(l => l.script).map(l => ({ slug: l.slug, script: l.script }))];
   await Promise.all(checks.map(async c => {
     try {
-      if (c.owner && c.owner === email) { out.push({ slug: c.slug, role: "admin" }); return; }
       const id = c.kv || await legacyKv(env, c.script);
       const m = id && has(await kvGetRemote(env, id, "dash_emails"));
       if (m) out.push({ slug: c.slug, role: m.role });
@@ -129,9 +128,13 @@ export async function portal(req, env, verifyGoogle) {
   const available = [...lines, ...LEGACY];
   const access = isOwner ? [] : await accessOf(env, session.email, lines);
   const viaLine = new Set(access.map(a => a.slug));
+  // רק קווים שהחשבון באמת יכול להיכנס אליהם: רשום ברשימת המנהלים של הקו עצמו.
+  // שיוך במרכז או מנהל מהבנייה לא מספיקים – מנהל הקו יכול להסיר אותו מהקו, ואז הקו לא מוצג.
+  // בלי חיבור ל-Cloudflare אי אפשר לבדוק קווים אחרים, ואז נשארים עם השיוך (חוץ משימחס, שנבדק תמיד)
+  const strict = cfReady(env);
   const allowed = isOwner ? available : [
-    ...LEGACY.filter(l => viaLine.has(l.slug) || memberships.includes(l.slug)),
-    ...lines.filter(l => normalize(l.ownerEmail) === session.email || memberships.includes(l.slug) || viaLine.has(l.slug))];
+    ...LEGACY.filter(l => viaLine.has(l.slug) || (!strict && l.slug !== "shimchas" && memberships.includes(l.slug))),
+    ...lines.filter(l => viaLine.has(l.slug) || (!strict && (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug))))];
   if (action === "me") {
     // The service owner must be recognized by every independent line Worker too,
     // so the same Google credential can open each line dashboard.

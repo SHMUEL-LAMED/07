@@ -178,7 +178,7 @@ function toast(m,bad){const t=$("#toast");t.textContent=m;t.className=bad?"bad":
 try{const th=localStorage.getItem("portalTheme");if(th)document.documentElement.dataset.theme=th}catch{}
 
 // ===== תקשורת =====
-async function request(url,body){const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});const d=await r.json().catch(()=>({error:"תשובה לא תקינה מהשרת"}));if(!r.ok)throw Error(d.error||"שגיאה "+r.status);return d}
+async function request(url,body){const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});const d=await r.json().catch(()=>({error:"תשובה לא תקינה מהשרת"}));if(!r.ok){const e=Error(d.error||"שגיאה "+r.status);e.status=r.status;throw e}return d}
 const call=(action="me",body)=>request(API+"?action="+encodeURIComponent(action)+"&token="+encodeURIComponent(S.token),body);
 const googleExp=()=>{try{return JSON.parse(atob(S.google.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000}catch{return 0}};
 const googleOk=()=>!!S.google&&googleExp()>Date.now()+30000;
@@ -210,10 +210,22 @@ async function load(){
   try{S.me=await call()}catch(e){S.token="";try{sessionStorage.removeItem("portalToken")}catch{}return showLogin(/נדרשת כניסה|החיבור פג/.test(e.message)?"":e.message)}
   const dyn=(S.me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);return L?{...L,...l,url:L.url,api:L.api,legacy:true}:l});
   S.lines=S.me.isOwner?[...LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)),...dyn]:dyn;
+  await dropDenied();
   shell();
   if(!location.hash){let last="";try{last=sessionStorage.getItem("portalView:"+S.me.email)||""}catch{}
     location.replace("#"+(last||(S.me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"all")))}
   route();
+}
+
+// קו שלא מקבל את החשבון (401/403 בכניסה) לא מוצג בכלל. נבדק פעם אחת בכל חיבור לגוגל
+async function dropDenied(){
+  if(S.me.isOwner||!googleOk()||!S.lines.length)return;
+  const key="portalDenied:"+S.google.slice(-16);let denied=null;
+  try{denied=JSON.parse(sessionStorage.getItem(key)||"null")}catch{}
+  if(!Array.isArray(denied)){denied=[];
+    await Promise.all(S.lines.map(async l=>{try{await lineToken(l)}catch(e){if(e.status===401||e.status===403)denied.push(l.slug)}}));
+    try{sessionStorage.setItem(key,JSON.stringify(denied))}catch{}}
+  S.lines=S.lines.filter(l=>!denied.includes(l.slug));
 }
 
 // ===== מבנה הדף =====
