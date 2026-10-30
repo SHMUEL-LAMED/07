@@ -1,8 +1,18 @@
 name: סקרים וכתבות — שלוחה 1
 on:
   workflow_dispatch:
+    inputs:
+      video_email:
+        description: 'שליחת כתבות חדשות בווידאו למייל מהשרת'
+        type: boolean
+        default: false
+      video_mail_check_only:
+        description: 'בדיקת חיבור הדואר בלבד, בלי שליחה'
+        type: boolean
+        default: false
   schedule:
     - cron: '*/15 * * * *'
+    - cron: '37 * * * *'
   push:
     branches: [main]
     paths: ['election-news/**', '.github/workflows/election-news.yml']
@@ -26,7 +36,7 @@ jobs:
       - run: node --test election-news/*.test.mjs
   collect:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && !inputs.video_email
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -70,3 +80,32 @@ jobs:
           python election-news/collector.py
           --endpoint https://election-news-ivr.smwlyqswkwt232.workers.dev
           --max-files 16 --deadline-seconds 540
+  video-mail:
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event.schedule == '37 * * * *' || inputs.video_email)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'yt-dlp[default]==2026.10.21'
+      - name: כלי וידאו
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y --no-install-recommends ffmpeg
+          fi
+      - name: וידאו מקורי ושליחה שעתית למייל
+        env:
+          CHECK_ONLY: ${{ inputs.video_mail_check_only }}
+        run: |
+          args=()
+          if [ "$CHECK_ONLY" = "true" ]; then args+=(--check-only); fi
+          python election-news/video_mail.py \
+            --endpoint https://election-news-ivr.smwlyqswkwt232.workers.dev \
+            --mail-endpoint https://yemot-mail.smwlyqswkwt232.workers.dev \
+            "${args[@]}"
