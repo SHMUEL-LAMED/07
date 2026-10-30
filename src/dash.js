@@ -262,6 +262,26 @@ async function callLog(env, D, months = 1, keys = null) {
   }
   return { last, per, byDay, byHour, byFolder, imp11, ents, callers: Object.fromEntries(Object.entries(callers).map(([k, s]) => [k, s.size])), total: calls.size, months: keys };
 }
+// שלוחה 9 בזמן סקר: כשסקר נפתח, ext.ini של שלוחה 9 מוחלף בשלוחת api לנתיב poll (הכתובת נלקחת מ-api_link של שלוחה 8).
+// הקובץ המקורי (האירוע) נשמר ב-KV וחוזר כשהסקר נסגר או נמחק. קובץ שלא נקרא לא נכתב
+const POLL_EXT = "ivr2:/9/ext.ini";
+async function pollExt(env, D, on) {
+  if (on) {
+    if (await env.KV.get("poll_prev_ini9") !== null) return;
+    const cur = await D.ym(env, "GetTextFile", { what: POLL_EXT }), ref = await D.ym(env, "GetTextFile", { what: "ivr2:/8/ext.ini" });
+    if (!cur || cur.responseStatus !== "OK" || typeof cur.contents !== "string") throw new Error("לא הצלחתי לקרוא את ההגדרות של שלוחה 9, לכן לא שיניתי אותה");
+    const m = /api_link\s*=\s*(https?:\/\/[^\/\s]+)/i.exec((ref && ref.contents) || "");
+    if (!m || !env.RUN_KEY) throw new Error("לא נמצאה כתובת השרת בשלוחה 8, לכן שלוחה 9 לא הוחלפה");
+    await env.KV.put("poll_prev_ini9", cur.contents);
+    const r = await D.ym(env, "UploadTextFile", { what: POLL_EXT, contents: `type=api\napi_link=${m[1]}/poll/x/${env.RUN_KEY}\n` });
+    if (!r || r.responseStatus !== "OK") { await env.KV.delete("poll_prev_ini9"); throw new Error("ימות לא אישרו את שינוי שלוחה 9"); }
+  } else {
+    const prev = await env.KV.get("poll_prev_ini9"); if (prev === null) return;
+    const r = await D.ym(env, "UploadTextFile", { what: POLL_EXT, contents: prev });
+    if (!r || r.responseStatus !== "OK") throw new Error("ימות לא אישרו את החזרת שלוחה 9 לאירוע. נסו שוב");
+    await env.KV.delete("poll_prev_ini9");
+  }
+}
 async function audit(env, auth, route, body) {
   const by = auth.key ? "מפתח " + auth.name : auth.email || (auth.owner ? "בעלים (סיסמה)" : "סיסמה");
   const what = [body.op, body.type, body.a && body.a.type, body.list].filter(x => typeof x === "string").join(" ").slice(0, 80);
@@ -1015,10 +1035,11 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
           const qq = String(body.q || "").trim().slice(0, 200), opts = (Array.isArray(body.opts) ? body.opts : []).map(x => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 9);
           if (!qq || opts.length < 2) return json({ error: "צריך שאלה ולפחות 2 תשובות" }, 400);
           if (polls.some(p => !p.closed)) return json({ error: "יש כבר סקר פתוח. סגרו אותו קודם" }, 409);
+          await pollExt(env, D, true);
           polls.unshift({ id: now.toString(36), q: qq, opts, votes: {}, created: D.nowIL() });
-          await D.log(env, `מנהל ${who(admin)} פתח מ${VIA} סקר: ${qq}`).catch(() => {});
-        } else if (body.op === "close") { const p = polls.find(x => x.id === body.id); if (p && !p.closed) p.closed = D.nowIL(); }
-        else if (body.op === "delete") { const i = polls.findIndex(x => x.id === body.id); if (i >= 0) polls.splice(i, 1); }
+          await D.log(env, `מנהל ${who(admin)} פתח מ${VIA} סקר (שלוחה 9 עברה לסקר): ${qq}`).catch(() => {});
+        } else if (body.op === "close") { const p = polls.find(x => x.id === body.id); if (p && !p.closed) { await pollExt(env, D, false); p.closed = D.nowIL(); await D.log(env, `מנהל ${who(admin)} סגר מ${VIA} את הסקר, ושלוחה 9 חזרה לאירוע`).catch(() => {}); } }
+        else if (body.op === "delete") { const i = polls.findIndex(x => x.id === body.id); if (i >= 0) { if (!polls[i].closed) await pollExt(env, D, false); polls.splice(i, 1); } }
         else if (body.op === "send") { // צינתוק לחברים (במצב בדיקות – רק למנהלים)
           const p = polls.find(x => x.id === body.id && !x.closed); if (!p) return json({ error: "הסקר לא פתוח" }, 400);
           const r = await D.tzintuk(env, "members"); p.sent = D.nowIL();
@@ -1026,7 +1047,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         } else return json({ error: "פעולה לא מוכרת" }, 400);
         await env.KV.put("polls", JSON.stringify(polls.slice(0, 30)));
       }
-      return json({ polls: polls.map(view) });
+      return json({ polls: polls.map(view), ext9: (await env.KV.get("poll_prev_ini9")) !== null });
     }
 
     // ---------- גיבוי ושחזור ----------

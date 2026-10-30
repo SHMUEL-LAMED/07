@@ -2224,7 +2224,7 @@ async function drawPolls(body) {
     el.innerHTML = `<h2>סקר בהקשה <small>החברים מקישים מספר בשלוחת הסקר</small></h2>
       ${open ? "" : `<form id="pollnew" class="w-only" style="display:grid;gap:8px"><input name="q" placeholder="השאלה, למשל: מתי נוח לכם השיעור?" required maxlength="200"><input name="opts" placeholder="תשובות מופרדות בפסיק: בערב, בבוקר" required><button class="btn p">פתיחת סקר</button></form>`}
       ${d.polls.slice(0, 5).map(one).join("") || '<div class="mut">עוד לא היו סקרים.</div>'}
-      <div class="mut small" style="margin-top:8px">כדי שהמתקשרים יגיעו לסקר צריך שלוחה בקו מסוג api שמפנה לנתיב poll של השרת.</div>`;
+      <div class="mut small" style="margin-top:8px">${d.ext9 ? "שלוחה 9 משמשת עכשיו לסקר. כשהסקר ייסגר היא תחזור לאירוע." : "כשנפתח סקר, שלוחה 9 עוברת לסקר. כשהוא נסגר או נמחק, היא חוזרת לאירוע."}</div>`;
   } catch (e) { el.innerHTML = `<h2>סקר בהקשה</h2><div class="err">${esc(e.message)}</div>`; }
 }
 async function drawAutoBak() {
