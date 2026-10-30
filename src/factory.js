@@ -91,7 +91,7 @@ export async function kvGetRemote(env, id, key) {
   if (!r.ok) throw new Error(`Cloudflare KV (${r.status})`);
   return r.text();
 }
-async function kvPut(env, id, key, value) {
+export async function kvPut(env, id, key, value) {
   const r = await cf(env, "PUT", `/{acc}/storage/kv/namespaces/${id}/values/${encodeURIComponent(key)}`, undefined, true, value);
   if (!r.ok) throw new Error(`לא ניתן לכתוב ל-KV של הקו (${r.status})`);
 }

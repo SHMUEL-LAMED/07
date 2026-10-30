@@ -39,5 +39,23 @@ if '    case "keys": {' in b:
     b = b[:ki] + b[kj:]
 assert b.count('    case "whoami":') == 1
 b = b.replace('    case "whoami":', cases + '    case "whoami":')
+
+# 4) כניסה עם גוגל: validToken (כולל אסימון g) ו-googleToken מגיעים מ-src/dash.js, כדי ש-adminApp לא יקרא לפונקציה שלא קיימת
+vi, vj = cut(src, 'async function validToken(env, tok) {', 'const cookie = (req, name)')
+tok_fns = src[vi:vj]
+if 'async function validToken(env, tok) {' in b:
+    bi = b.index('async function validToken(env, tok) {')
+    bj = b.index('\n}\n', bi) + 3
+    if 'async function googleToken(env, email) {' in b[bj:bj + 400]:
+        bj = b.index('\n}\n', bj) + 3
+    b = b[:bi] + tok_fns + b[bj:]
+# 5) מרכז הקווים רץ רק בקו המקור: בדעת תורה הנתיב portal מחזיר 404 (portal.js ו-factory.js לא קיימים שם)
+pi = b.find('  if (sub === "api" && parts[1] === "portal") {')
+if pi >= 0:
+    pj = b.index('\n  }\n', pi) + 4
+    b = b[:pi] + '  if (sub === "api" && parts[1] === "portal") return withCors(json({ error: "מרכז הקווים זמין רק בקו המקור" }, 404), req);\n' + b[pj:]
+for name in ('googleToken', 'validToken', 'roleOf'):
+    assert ('function ' + name) in b or ('const ' + name + ' =') in b, 'חסרה הפונקציה ' + name + ' בדעת תורה'
+assert 'portal(req' not in b and 'factory(' not in b, 'נשארה קריאה למרכז הקווים או למפעל'
 open(path, 'w', encoding='utf-8').write(b)
 print('live/daat/worker.js עודכן מ-src/dash.js')

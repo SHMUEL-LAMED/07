@@ -262,6 +262,13 @@ async function callLog(env, D, months = 1, keys = null) {
   }
   return { last, per, byDay, byHour, byFolder, imp11, ents, callers: Object.fromEntries(Object.entries(callers).map(([k, s]) => [k, s.size])), total: calls.size, months: keys };
 }
+async function audit(env, auth, route, body) {
+  const by = auth.key ? "מפתח " + auth.name : auth.email || (auth.owner ? "בעלים (סיסמה)" : "סיסמה");
+  const what = [body.op, body.type, body.a && body.a.type, body.list].filter(x => typeof x === "string").join(" ").slice(0, 80);
+  const a = (await env.KV.get("audit", "json").catch(() => null)) || [];
+  a.unshift({ t: Date.now(), by, r: route, w: what });
+  await env.KV.put("audit", JSON.stringify(a.slice(0, 1000)));
+}
 const membersList = (env, D) => D.ym(env, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: "members" }).then(r => r.enteres || []).catch(() => []);
 const isPhone = p => /^0\d{8,9}$/.test(p);
 
@@ -269,6 +276,8 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
   const nm = D.names(env), who = p => nm[p] || p || "לא ידוע";
   const admin = D.OWNER, VIA = "דף הניהול", now = Date.now();
+  // יומן פעולות: כל POST נרשם עם מי שביצע אותו (מייל, מפתח API או סיסמה)
+  if (req.method === "POST" && name !== "ai") ctx.waitUntil(audit(env, auth, name, body).catch(() => {}));
   switch (name) {
     case "overview": {
       const [online, counts, joins, rsvp, ev, jobs, holy, deferred, undo, watch, allCount, members, admins] = await Promise.all([
@@ -594,8 +603,8 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       you: auth.key ? { key: auth.name, scopes: auth.scopes, expires: auth.exp ? new Date(auth.exp).toISOString() : "never" } : { session: true },
       bases: { worker: "https://yemot-ai.smwlyqswkwt232.workers.dev/admin/api/", netfree_bridge: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" },
       scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
-      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "audio?p=<נתיב>", "download?p=<נתיב>"],
-      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "ads"],
+      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "alerts", "audit?by=<מי>", "autobackups", "polls", "audio?p=<נתיב>", "download?p=<נתיב>"],
+      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "alerts {op:clear}", "autobackups {op:restore,day}", "polls {op:create|close|send|delete}", "ads"],
       yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
       safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
     });
@@ -973,6 +982,51 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const bySize = {}; for (const [k, a] of Object.entries(archive)) if (a && a.t) bySize[k] = a;
       const all = Object.keys(nm);
       return json({ list: files.map(x => { const heard = [...new Set(lg.imp11.filter(e => e.t >= x.t).map(e => e.p))]; return { f: x.f, t: x.t, heard: heard.map(p => ({ p, n: who(p) })), not: all.filter(p => !heard.includes(p)).map(p => ({ p, n: nm[p] })) }; }), total: all.length });
+    }
+
+    // ---------- התראות תקלה, יומן פעולות, גיבויים אוטומטיים, סקרים ----------
+    case "alerts": {
+      if (req.method === "POST" && body.op === "clear") { await env.KV.put("alerts", "[]"); return ok(); }
+      return json({ alerts: await D.kvGet(env, "alerts", []), retry: await D.kvGet(env, "tz_retry", []) });
+    }
+    case "audit": {
+      const a = await D.kvGet(env, "audit", []), by = q("by");
+      return json({ items: (by ? a.filter(x => x.by === by) : a).slice(0, 1000).map(x => ({ ...x, d: D.ilAt(x.t) })), who: [...new Set(a.map(x => x.by))] });
+    }
+    case "autobackups": {
+      if (req.method === "POST" && body.op === "restore") {
+        const day = String(body.day || ""); if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "תאריך לא תקין" }, 400);
+        const data = await D.kvGet(env, "autobak:" + day, null); if (!data) return json({ error: "אין גיבוי מהיום הזה" }, 404);
+        const keys = (Array.isArray(body.keys) && body.keys.length ? body.keys : D.AUTO_BACKUP_KEYS).filter(k => D.AUTO_BACKUP_KEYS.includes(k));
+        const done = []; for (const k of keys) { if (data[k] === undefined) continue; if (data[k] === null) await env.KV.delete(k); else await env.KV.put(k, JSON.stringify(data[k])); done.push(k); }
+        await env.KV.delete("admintext");
+        await D.log(env, `מנהל ${who(admin)} שחזר מ${VIA} את הגיבוי האוטומטי מ-${day}: ${done.join(", ")}`);
+        return ok({ done });
+      }
+      const days = []; for (let i = 0; i < 8; i++) { const d = D.ilAt(now - i * 864e5).slice(0, 10); if (await env.KV.get("autobak:" + d)) days.push(d); }
+      return json({ days, keys: D.AUTO_BACKUP_KEYS });
+    }
+    case "polls": {
+      const polls = await D.kvGet(env, "polls", []);
+      const view = p => { const counts = p.opts.map(() => 0); for (const v of Object.values(p.votes || {})) if (counts[v.c - 1] != null) counts[v.c - 1]++;
+        return { id: p.id, q: p.q, opts: p.opts, counts, total: Object.keys(p.votes || {}).length, voters: Object.entries(p.votes || {}).map(([ph, v]) => ({ p: ph, n: who(ph), c: v.c, t: v.t })), created: p.created, closed: p.closed || "", sent: p.sent || "" }; };
+      if (req.method === "POST") {
+        if (body.op === "create") {
+          const qq = String(body.q || "").trim().slice(0, 200), opts = (Array.isArray(body.opts) ? body.opts : []).map(x => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 9);
+          if (!qq || opts.length < 2) return json({ error: "צריך שאלה ולפחות 2 תשובות" }, 400);
+          if (polls.some(p => !p.closed)) return json({ error: "יש כבר סקר פתוח. סגרו אותו קודם" }, 409);
+          polls.unshift({ id: now.toString(36), q: qq, opts, votes: {}, created: D.nowIL() });
+          await D.log(env, `מנהל ${who(admin)} פתח מ${VIA} סקר: ${qq}`).catch(() => {});
+        } else if (body.op === "close") { const p = polls.find(x => x.id === body.id); if (p && !p.closed) p.closed = D.nowIL(); }
+        else if (body.op === "delete") { const i = polls.findIndex(x => x.id === body.id); if (i >= 0) polls.splice(i, 1); }
+        else if (body.op === "send") { // צינתוק לחברים (במצב בדיקות – רק למנהלים)
+          const p = polls.find(x => x.id === body.id && !x.closed); if (!p) return json({ error: "הסקר לא פתוח" }, 400);
+          const r = await D.tzintuk(env, "members"); p.sent = D.nowIL();
+          await D.log(env, `מנהל ${who(admin)} שלח מ${VIA} צינתוק על הסקר${r && r.deferred ? " (נדחה למוצאי שבת/חג)" : ""}`).catch(() => {});
+        } else return json({ error: "פעולה לא מוכרת" }, 400);
+        await env.KV.put("polls", JSON.stringify(polls.slice(0, 30)));
+      }
+      return json({ polls: polls.map(view) });
     }
 
     // ---------- גיבוי ושחזור ----------

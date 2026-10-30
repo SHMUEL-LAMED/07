@@ -1,5 +1,5 @@
 // Central Google identity and line directory. Sessions are independent of line-admin tokens.
-import { kvGetRemote, setSuspended } from "./factory.js";
+import { kvGetRemote, kvPut, setSuspended } from "./factory.js";
 const TTL = 30 * 86400;
 const keyOf = token => "portal_session:" + token;
 const normalize = email => String(email || "").trim().toLowerCase();
@@ -203,5 +203,38 @@ export async function portal(req, env, verifyGoogle) {
     await env.KV.put("portal_memberships:" + email, JSON.stringify(slugs));
     return reply({ ok: true });
   }
+  if (action === "copy" && req.method === "POST") return reply(await copySettings(env, lines, body));
   return reply({ error: "פעולה לא מוכרת" }, 404);
+}
+// שכפול הגדרות בין קווים (רק בעל השירות). קודם תצוגה מקדימה, ואז כתיבה רק אחרי הקלדת השם הקצר של קו היעד.
+// הערך הקודם בקו היעד נשמר ב-copybak:<מפתח> לשבוע, כדי שאפשר יהיה להחזיר
+const COPY_KEYS = { rules: "כללי העוזר", scheduled: "תזמונים פעילים", strict: "הגדרות בדיקת ההודעות", ads: "פרסומות", event: "אירוע (שלוחה 9)" };
+async function kvOfLine(env, lines, slug) {
+  if (slug === "shimchas") return { get: k => env.KV.get(k), put: (k, v, o) => env.KV.put(k, v, o) };
+  const l = lines.find(x => x.slug === slug), legacy = LEGACY.find(x => x.slug === slug && x.script);
+  const id = l ? l.kv : legacy && cfReady(env) ? await legacyKv(env, legacy.script) : "";
+  if (!id) throw new Error("אין גישה ל-KV של הקו " + slug);
+  return { get: k => kvGetRemote(env, id, k), put: (k, v) => kvPut(env, id, k, v) };
+}
+async function copySettings(env, lines, body) {
+  const from = String(body.from || ""), to = String(body.to || ""), keys = (Array.isArray(body.keys) ? body.keys : []).filter(k => COPY_KEYS[k]);
+  if (!from || !to || from === to) return { error: "צריך לבחור קו מקור וקו יעד שונים" };
+  if (!keys.length) return { error: "לא נבחר מה להעתיק", keys: COPY_KEYS };
+  let src, dst; try { [src, dst] = await Promise.all([kvOfLine(env, lines, from), kvOfLine(env, lines, to)]); } catch (e) { return { error: e.message }; }
+  const out = [];
+  for (const k of keys) {
+    let v = await src.get(k), old = await dst.get(k);
+    if (k === "scheduled" && v) { try { v = JSON.stringify(JSON.parse(v).filter(j => !j.done && !j.phone)); } catch {} } // בלי משימות שבוצעו ובלי הודעות אישיות לטלפון מסוים
+    const n = s => { try { const j = JSON.parse(s); return Array.isArray(j) ? j.length + " פריטים" : j ? "יש" : "ריק"; } catch { return s ? "יש" : "ריק"; } };
+    out.push({ k, label: COPY_KEYS[k], from: n(v), to: n(old), same: v === old, _v: v, _old: old });
+  }
+  if (body.preview !== false) return { preview: true, items: out.map(({ _v, _old, ...x }) => x) };
+  if (String(body.confirm || "") !== to) return { error: "לאישור יש להקליד את השם הקצר של קו היעד" };
+  const done = [];
+  for (const x of out) {
+    if (x.same || x._v == null) continue;
+    if (x._old != null) await dst.put("copybak:" + x.k, x._old, { expirationTtl: 7 * 86400 });
+    await dst.put(x.k, x._v); done.push(x.label);
+  }
+  return { ok: true, done };
 }

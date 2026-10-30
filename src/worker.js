@@ -17,6 +17,15 @@ async function ym(env, method, params = {}) {
     return { responseStatus: "OK", deferred: true };
   }
   if (params.force) { params = { ...params }; delete params.force; }
+  if (method === "RunTzintuk" && env.KV && !params._retry) { // צינתוק שנכשל נכנס לתור ונשלח שוב בריצה הבאה
+    let r; try { r = await ymRaw(env, method, params); } catch (e) { r = { responseStatus: "ERROR", message: String(e.message || e) }; }
+    if (!r || r.responseStatus !== "OK") await tzRetryAdd(env, params.phones, (r && r.message) || "").catch(() => {});
+    return r;
+  }
+  if (params._retry) { params = { ...params }; delete params._retry; }
+  return ymRaw(env, method, params);
+}
+async function ymRaw(env, method, params) {
   used++;
   const u = new URL(YM + method);
   u.searchParams.set("token", env.YM_TOKEN);
@@ -28,8 +37,47 @@ async function ym(env, method, params = {}) {
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     r = await fetch(u);
   }
+  if (!r.ok && env.KV) await alert(env, "ym", `ימות החזירו ${r.status} ל-${method}`).catch(() => {});
   if (method === "DownloadFile") return new Uint8Array(await r.arrayBuffer());
   return r.json();
+}
+// ---------- התראות תקלה למנהל (מוצגות בדף הניהול, ובמייל לבעלים אם הוגדר ALERT_WEBHOOK) ----------
+// כל סוג התראה נרשם פעם בשעה לכל היותר, כדי לא להציף
+async function alert(env, kind, msg) {
+  if (!env.KV || await env.KV.get("alert_mute:" + kind)) return;
+  await env.KV.put("alert_mute:" + kind, "1", { expirationTtl: 3600 });
+  const a = await kvGet(env, "alerts", []);
+  a.unshift({ t: nowIL(), k: kind, m: String(msg).slice(0, 300) });
+  await env.KV.put("alerts", JSON.stringify(a.slice(0, 50)));
+  if (env.ALERT_WEBHOOK) await fetch(env.ALERT_WEBHOOK, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ line: LINE_PHONE, kind, msg, at: nowIL() }), signal: AbortSignal.timeout(5000) }).catch(() => {});
+}
+// ---------- תור צינתוקים שנכשלו: עד 3 ניסיונות נוספים, בכל ריצה של cron ----------
+async function tzRetryAdd(env, phones, why) {
+  const q = await kvGet(env, "tz_retry", []);
+  if (q.some(x => x.phones === phones)) return;
+  q.push({ phones, n: 0, t: Date.now(), why: String(why).slice(0, 120) });
+  await env.KV.put("tz_retry", JSON.stringify(q.slice(-30)));
+}
+async function tzRetryRun(env) {
+  const q = await kvGet(env, "tz_retry", []); if (!q.length) return;
+  const left = [];
+  for (const x of q) {
+    if (used > 35) { left.push(x); continue; }
+    let r; try { r = await ym(env, "RunTzintuk", { phones: x.phones, _retry: 1 }); } catch (e) { r = null; }
+    if (r && (r.responseStatus === "OK" || r.deferred)) { await log(env, `צינתוק שנכשל נשלח בניסיון חוזר (${x.phones})`).catch(() => {}); continue; }
+    if (++x.n < 3) left.push(x); else await alert(env, "tz", `צינתוק ל-${x.phones} נכשל 4 פעמים ונמחק מהתור${x.why ? ": " + x.why : ""}`);
+  }
+  await env.KV.put("tz_retry", JSON.stringify(left));
+}
+// ---------- גיבוי יומי של ה-KV (אותם מפתחות כמו בגיבוי הידני בדף הניהול), 7 ימים אחרונים ----------
+const AUTO_BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "facts", "dashnotes", "joinmap", "demap", "polls"];
+async function dailyBackup(env) {
+  const day = nowIL().slice(0, 10);
+  if ((await env.KV.get("autobak_last")) === day) return;
+  const data = {}; for (const k of AUTO_BACKUP_KEYS) data[k] = await kvGet(env, k, null);
+  data._meta = { at: nowIL(), line: LINE_PHONE, keys: AUTO_BACKUP_KEYS, auto: true };
+  await env.KV.put("autobak:" + day, JSON.stringify(data), { expirationTtl: 8 * 86400 });
+  await env.KV.put("autobak_last", day);
 }
 function b64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
 const nowIL = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" });
@@ -95,6 +143,7 @@ async function aiJSON(env, { system, contents, audio, textPrompt, models, startK
       }
     } else errs.push("groq-stt:" + tr.status);
   }
+  if (errs.some(e => /:429/.test(e))) await alert(env, "ai", "כל מפתחות ה-AI נכשלו (כנראה המכסה נגמרה): " + errs.join(" ")).catch(() => {});
   throw new Error(errs.join(" "));
 }
 
@@ -182,6 +231,7 @@ async function aiText(env, { system, compact, contents, models = CHAT_MODELS, gr
       if (out) return safeParse(out);
     } catch (e) { dead.set("cf-ai", Date.now() + 30 * 60e3); aiTrace.push("cf-ai " + e.message); errs.push("cf-ai:" + e.message); }
   }
+  await alert(env, "ai", "העוזר לא הצליח לענות – כל ספקי ה-AI נכשלו: " + errs.join(" ").slice(0, 200)).catch(() => {});
   throw new Error(errs.join(" "));
 }
 
@@ -882,6 +932,8 @@ async function cron(env) {
     for (const [name, it] of Object.entries(pc).slice(0, 2)) if (Date.now() - it.t > 90000 && used < 30) await postCheck(env, name).catch(e => aiTrace.push("postcheck: " + e.message)); }
   const holy = env.KV ? await isHoly(env) : false;
   if (env.KV && !holy) await releaseDeferred(env).catch(e => log(env, "שגיאה בצינתוקים שחיכו: " + e.message));
+  if (env.KV && !holy) await tzRetryRun(env).catch(e => aiTrace.push("tzretry: " + e.message));
+  if (env.KV) await dailyBackup(env).catch(e => alert(env, "backup", "הגיבוי היומי נכשל: " + e.message));
   if (env.KV && !holy) await runScheduled(env).catch(e => log(env, "שגיאה בתזמון: " + e.message));
   if (env.KV && !holy) await maybeWeekly(env).catch(() => {});
   if (env.KV && !holy) await runBg(env).catch(e => aiTrace.push("bg: " + e.message));
@@ -2358,9 +2410,27 @@ async function rsvpCount(env, ctx) {
   const parts = (await Promise.all([`ל${ev.title} רשומים כרגע ${ns.length} בחורים. המגיעים הם`, ...ns, "סוף הרשימה"].filter(x => clean(x)).map(x => sayC(env, ctx, x)))).filter(x => x.length > 2);
   return `id_list_message=${parts.join(".")}&go_to_folder=/9`;
 }
+// ---------- סקר מהיר בהקשה: המנהל יוצר סקר בדף הניהול, החברים מקישים מספר בשלוחת הסקר (api_link=/poll/x/<RUN_KEY>) ----------
+const pollActive = async env => (await kvGet(env, "polls", [])).find(p => !p.closed) || null;
+async function pollVote(env, id, phone, choice) {
+  const polls = await kvGet(env, "polls", []), p = polls.find(x => x.id === id && !x.closed);
+  if (!p || !phone || !(choice >= 1 && choice <= p.opts.length)) return false;
+  p.votes = p.votes || {}; p.votes[phone] = { c: choice, t: nowIL() }; // הצבעה חוזרת מחליפה את הקודמת
+  await env.KV.put("polls", JSON.stringify(polls)); return true;
+}
+async function pollMenu(env, u, ctx) {
+  const q = Object.fromEntries(u.searchParams), p = await pollActive(env);
+  if (!p) return `id_list_message=${await sayC(env, ctx, "כרגע אין סקר פתוח.")}&go_to_folder=/`;
+  if (q.V !== undefined) {
+    const ok = await pollVote(env, p.id, q.ApiPhone || "", +q.V);
+    return `id_list_message=${await sayC(env, ctx, ok ? "תודה, הבחירה שלך נרשמה." : "הבחירה לא תקינה.")}&go_to_folder=/`;
+  }
+  const prompt = [p.q, ...p.opts.map((o, i) => `ל${o} הקישו ${i + 1}`)].join(". ");
+  return `read=${await sayC(env, ctx, prompt)}=V,no,1,1,7,No,no,no,,${p.opts.map((_, i) => i + 1).join(".")}`;
+}
 const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 // מה שדף הניהול (src/dash.js) צריך מהקוד הזה
-const DASH = { ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
+const DASH = { alert, pollActive, AUTO_BACKUP_KEYS, ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
   // לניהול המתקדם בדף הניהול (ספטמבר 2026): העלאות, קול, תזמונים, גיבוי, אירוע
   ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, event9Menu, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText, loadLine, retrieveContext, adminText };
 // קו שנוצר במפעל הקווים: מספר הקו ובעל הקו מגיעים מהמשתנים. בלי משתנים – ערכי שימחס כמו תמיד
@@ -2371,7 +2441,7 @@ function applyLineEnv(env) {
   DASH.LINE_PHONE = LINE_PHONE; DASH.OWNER = OWNER;
 }
 export default {
-  async scheduled(event, env, ctx) { if (env.SUSPENDED === "1") return; applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => log(env, "שגיאה בריצה: " + e.message))); },
+  async scheduled(event, env, ctx) { if (env.SUSPENDED === "1") return; applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => Promise.all([log(env, "שגיאה בריצה: " + e.message), alert(env, "cron", "הריצה התקופתית נכשלה: " + e.message)]))); },
   async fetch(req, env, ctx) {
     applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env);
     const u = new URL(req.url), raw = decodeURIComponent(req.url);
@@ -2418,6 +2488,7 @@ export default {
     if (parts[0] === "introtest") { aiTrace = []; let ok; try { ok = await addIntro(env, u.searchParams.get("p"), u.searchParams.get("f")); } catch (e) { ok = "ERR " + e.message; } return Response.json({ ok, trace: aiTrace }); }
     if (parts[0] === "sef") return Response.json(await sefaria(u.searchParams.get("ref") || ""));
     if (parts[0] === "sched") return Response.json({ jobs: await kvGet(env, "scheduled", []), now: nowIL(), nextImportant: await nextFileNum(env, IMPORTANT), nextAll: await nextFileNum(env, ALL) });
+    if (parts[0] === "poll") { try { return reply(await pollMenu(env, u, ctx)); } catch (e) { return reply("go_to_folder=/"); } }
     if (parts[0] === "join") return reply(await joinGate(env, u, ctx));
     if (parts[0] === "rsvp") return reply(await rsvp(env, u, ctx));
     if (parts[0] === "rsvpcount") return reply(await rsvpCount(env, ctx));
@@ -2430,12 +2501,6 @@ export default {
     if (parts[0] === "prof") { aiTrace = []; used = 0; let n, err; try { n = await buildProfiles(env, 1); } catch (e) { err = String(e.message || e); } const p = await kvGet(env, "profiles", {}); return Response.json({ n, err, trace: aiTrace, count: Object.keys(p).length, sample: Object.values(p).slice(-1) }); }
     if (parts[0] === "cls") { aiTrace = []; used = 0; let r; try { r = await classify(env, await ym(env, "DownloadFile", { path: "ivr2:" + u.searchParams.get("f") })); } catch (e) { r = { error: String(e.message || e) }; } return Response.json({ ...r, trace: aiTrace }); }
     if (parts[0] === "cronnow") { aiTrace = []; const t0 = Date.now(); let err = null; try { await cron(env); } catch (e) { err = String(e.stack || e); } return Response.json({ err, used, ms: Date.now() - t0, trace: aiTrace, promo: await env.KV.get("promo"), lock: await env.KV.get("cronlock") }); }
-    if (parts[0] === "migrate") {
-      const a = await kvGet(env, "archive", {}); const keys = Object.keys(a).sort((x, y) => parseInt(y) - parseInt(x));
-      keys.forEach((k, i) => { if (!a[k].s) a[k].s = i < 150 && realText(a[k].t) ? "g" : "w"; });
-      await env.KV.put("archive", JSON.stringify(a)); await env.KV.put("promo", "hold");
-      return Response.json({ total: keys.length, gemini: keys.filter(k => a[k].s === "g").length });
-    }
     if (parts[0] === "tb") { used = 0; try { const r = await transcribeBatch(env, 3); return Response.json({ r, used, err: await env.KV.get("lastErr") }); } catch (e) { return new Response(String(e.stack || e)); } }
     if (parts[0] === "status") { const a = await kvGet(env, "archive", {}), p = await kvGet(env, "profiles", {}); const bySrc = {}; for (const e of Object.values(a)) bySrc[e.s || "?"] = (bySrc[e.s || "?"] || 0) + 1; const pend = await kvGet(env, "aai_pending", {}); return Response.json({ bySrc, pending: Object.keys(pend).length, transcribed: Object.keys(a).length, profiles: Object.keys(p).length, sample: Object.entries(a).slice(0, 2), prof: Object.values(p).slice(0, 2) }); }
     if (parts[0] === "notify") {
