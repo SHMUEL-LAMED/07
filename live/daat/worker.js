@@ -30,9 +30,26 @@ async function newToken(env, ro = false, days = TTL_DAYS) {
 }
 __name(newToken, "newToken");
 async function validToken(env, tok) {
-  const parts = String(tok || "").split("."), exp = parts[0], ro = parts.length === 3 && parts[1] === "ro", sig = parts[parts.length - 1];
-  if (!exp || !sig || parts.length > 3 || !(+exp > Date.now())) return null;
-  return same(sig, await sign(env, ro ? "ro|" + exp : exp)) ? { ro, exp: +exp } : null;
+  const parts = String(tok || "").split("."), exp = parts[0], sig = parts[parts.length - 1];
+  if (parts.length === 4 && parts[1] === "g" && +exp > Date.now()) {
+    const encoded = parts[2];
+    if (!same(sig, await sign(env, "g|" + exp + "|" + encoded))) return null;
+    let email;
+    try { email = new TextDecoder().decode(Uint8Array.from(atob(encoded.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((encoded.length + 3) % 4)), c => c.charCodeAt(0))).toLowerCase(); }
+    catch { return null; }
+    if (await env.KV.get("portal_blocked:" + email)) return null;
+    const role = await roleOf(env, email);
+    if (!role) return null;
+    return { ro: role === "viewer", owner: role === "owner", email, exp: +exp };
+  }
+  const kind = parts.length === 3 ? parts[1] : "";
+  if (!exp || !sig || parts.length > 3 || (parts.length === 3 && kind !== "ro" && kind !== "ow") || !(+exp > Date.now())) return null;
+  return same(sig, await sign(env, kind ? kind + "|" + exp : exp)) ? { ro: kind === "ro", owner: kind === "ow", exp: +exp } : null;
+}
+async function googleToken(env, email) {
+  const exp = String(Date.now() + TTL_DAYS * 864e5);
+  const encoded = b64u(new TextEncoder().encode(String(email).trim().toLowerCase()));
+  return exp + ".g." + encoded + "." + await sign(env, "g|" + exp + "|" + encoded);
 }
 __name(validToken, "validToken");
 var cookie = /* @__PURE__ */ __name((req, name) => {
@@ -127,7 +144,8 @@ async function googleLogin(env, ip, cred, D) {
   if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
   let email = "", role = "";
   try {
-    email = await googleEmail(env, cred);
+    email = String(await googleEmail(env, cred)).trim().toLowerCase();
+    if (await env.KV.get("portal_blocked:" + email)) throw new Error("הגישה לשירות הושעתה");
     role = await roleOf(env, email);
     if (!role) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
   } catch (e) {
@@ -152,6 +170,8 @@ async function adminApp(req, env, ctx, u, parts, D) {
     if (!corsOrigin(req)) return json({ error: "מקור לא מורשה" }, 403);
     return withCors(new Response(null, { status: 204 }), req);
   }
+  if (sub === "api" && parts[1] === "portal") return withCors(json({ error: "מרכז הקווים זמין רק בקו המקור" }, 404), req);
+
   // הגדרות ציבוריות לדף הכניסה (מזהה הלקוח של גוגל אינו סוד)
   if (sub === "api" && parts[1] === "config") return withCors(json({ google: env.GOOGLE_CLIENT_ID || "" }), req);
   if (sub === "glogin") {
@@ -161,7 +181,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
     let g;
     try { g = await googleLogin(env, ip, String(body.credential || ""), D); }
     catch (e) { return json({ error: String(e.message || e) }, 401); }
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner")) } });
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": setCookie(await googleToken(env, g.email)) } });
   }
   if (sub === "api" && parts[1] === "session") {
     const origin = req.headers.get("Origin") || "";
@@ -174,7 +194,7 @@ async function adminApp(req, env, ctx, u, parts, D) {
       let g;
       try { g = await googleLogin(env, ip, String(body.google), D); }
       catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
-      return withCors(json({ token: await newToken(env, g.role === "viewer", TTL_DAYS, g.role === "owner") }), req);
+      return withCors(json({ token: await googleToken(env, g.email) }), req);
     }
     const pass = String(body.password || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
@@ -262,10 +282,18 @@ async function callLog(env, D, months = 1, keys = null) {
 __name(callLog, "callLog");
 var membersList = /* @__PURE__ */ __name((env, D) => D.ym(env, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: "members" }).then((r) => r.enteres || []).catch(() => []), "membersList");
 var isPhone = /* @__PURE__ */ __name((p) => /^0\d{8,9}$/.test(p), "isPhone");
+async function audit(env, auth, route, body) {
+  const by = auth.key ? "מפתח " + auth.name : auth.email || (auth.owner ? "בעלים (סיסמה)" : "סיסמה");
+  const what = [body.op, body.type, body.a && body.a.type, body.list].filter(x => typeof x === "string").join(" ").slice(0, 80);
+  const a = (await env.KV.get("audit", "json").catch(() => null)) || [];
+  a.unshift({ t: Date.now(), by, r: route, w: what });
+  await env.KV.put("audit", JSON.stringify(a.slice(0, 1000)));
+}
 async function api(req, env, ctx, u, name, D, auth = {}) {
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
   const nm = D.names(env), who = /* @__PURE__ */ __name((p) => nm[p] || p || "\u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2", "who");
   const admin = D.OWNER, VIA = "\u05D3\u05E3 \u05D4\u05E0\u05D9\u05D4\u05D5\u05DC", now = Date.now();
+  if (req.method === "POST" && name !== "ai") ctx.waitUntil(audit(env, auth, name, body).catch(() => {}));
   switch (name) {
     case "overview": {
       const [online, counts, joins, rsvp2, ev, jobs, holy, deferred, undo, watch, allCount, members, admins] = await Promise.all([
@@ -758,8 +786,8 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       you: auth.key ? { key: auth.name, scopes: auth.scopes, expires: auth.exp ? new Date(auth.exp).toISOString() : "never" } : { session: true },
       bases: { worker: u.origin + "/admin/api/", netfree_bridge: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" },
       scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
-      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "audio?p=<נתיב>", "download?p=<נתיב>"],
-      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "ads"],
+      read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "alerts", "audit?by=<מי>", "autobackups", "polls", "audio?p=<נתיב>", "download?p=<נתיב>"],
+      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "alerts {op:clear}", "autobackups {op:restore,day}", "polls {op:create|close|send|delete}", "ads"],
       yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
       safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
     });
@@ -1340,6 +1368,51 @@ title=${ev.title}
       }), total: all.length });
     }
     // ---------- גיבוי ושחזור ----------
+    // ---------- התראות תקלה, יומן פעולות, גיבויים אוטומטיים, סקרים ----------
+    case "alerts": {
+      if (req.method === "POST" && body.op === "clear") { await env.KV.put("alerts", "[]"); return ok(); }
+      return json({ alerts: await D.kvGet(env, "alerts", []), retry: await D.kvGet(env, "tz_retry", []) });
+    }
+    case "audit": {
+      const a = await D.kvGet(env, "audit", []), by = String(u.searchParams.get("by") || "");
+      return json({ items: (by ? a.filter(x => x.by === by) : a).slice(0, 1000).map(x => ({ ...x, d: D.ilAt(x.t) })), who: [...new Set(a.map(x => x.by))] });
+    }
+    case "autobackups": {
+      if (req.method === "POST" && body.op === "restore") {
+        const day = String(body.day || ""); if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "תאריך לא תקין" }, 400);
+        const data = await D.kvGet(env, "autobak:" + day, null); if (!data) return json({ error: "אין גיבוי מהיום הזה" }, 404);
+        const keys = (Array.isArray(body.keys) && body.keys.length ? body.keys : D.AUTO_BACKUP_KEYS).filter(k => D.AUTO_BACKUP_KEYS.includes(k));
+        const done = []; for (const k of keys) { if (data[k] === undefined) continue; if (data[k] === null) await env.KV.delete(k); else await env.KV.put(k, JSON.stringify(data[k])); done.push(k); }
+        await env.KV.delete("admintext");
+        await D.log(env, `מנהל ${who(admin)} שחזר מ${VIA} את הגיבוי האוטומטי מ-${day}: ${done.join(", ")}`);
+        return ok({ done });
+      }
+      const days = []; for (let i = 0; i < 8; i++) { const d = D.ilAt(now - i * 864e5).slice(0, 10); if (await env.KV.get("autobak:" + d)) days.push(d); }
+      return json({ days, keys: D.AUTO_BACKUP_KEYS });
+    }
+    case "polls": {
+      const polls = await D.kvGet(env, "polls", []);
+      const view = p => { const counts = p.opts.map(() => 0); for (const v of Object.values(p.votes || {})) if (counts[v.c - 1] != null) counts[v.c - 1]++;
+        return { id: p.id, q: p.q, opts: p.opts, counts, total: Object.keys(p.votes || {}).length, voters: Object.entries(p.votes || {}).map(([ph, v]) => ({ p: ph, n: who(ph), c: v.c, t: v.t })), created: p.created, closed: p.closed || "", sent: p.sent || "" }; };
+      if (req.method === "POST") {
+        if (body.op === "create") {
+          const qq = String(body.q || "").trim().slice(0, 200), opts = (Array.isArray(body.opts) ? body.opts : []).map(x => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 9);
+          if (!qq || opts.length < 2) return json({ error: "צריך שאלה ולפחות 2 תשובות" }, 400);
+          if (polls.some(p => !p.closed)) return json({ error: "יש כבר סקר פתוח. סגרו אותו קודם" }, 409);
+          polls.unshift({ id: now.toString(36), q: qq, opts, votes: {}, created: D.nowIL() });
+          await D.log(env, `מנהל ${who(admin)} פתח מ${VIA} סקר: ${qq}`).catch(() => {});
+        } else if (body.op === "close") { const p = polls.find(x => x.id === body.id); if (p && !p.closed) p.closed = D.nowIL(); }
+        else if (body.op === "delete") { const i = polls.findIndex(x => x.id === body.id); if (i >= 0) polls.splice(i, 1); }
+        else if (body.op === "send") { // צינתוק לחברים (במצב בדיקות – רק למנהלים)
+          const p = polls.find(x => x.id === body.id && !x.closed); if (!p) return json({ error: "הסקר לא פתוח" }, 400);
+          const r = await D.tzintuk(env, "members"); p.sent = D.nowIL();
+          await D.log(env, `מנהל ${who(admin)} שלח מ${VIA} צינתוק על הסקר${r && r.deferred ? " (נדחה למוצאי שבת/חג)" : ""}`).catch(() => {});
+        } else return json({ error: "פעולה לא מוכרת" }, 400);
+        await env.KV.put("polls", JSON.stringify(polls.slice(0, 30)));
+      }
+      return json({ polls: polls.map(view) });
+    }
+
     case "backup": {
       const data = {};
       for (const k of BACKUP_KEYS) data[k] = await D.kvGet(env, k, null);
@@ -1387,6 +1460,15 @@ async function ym(env, method, params = {}) {
     params = { ...params };
     delete params.force;
   }
+  if (method === "RunTzintuk" && env.KV && !params._retry) {
+    let r; try { r = await ymRaw(env, method, params); } catch (e) { r = { responseStatus: "ERROR", message: String(e.message || e) }; }
+    if (!r || r.responseStatus !== "OK") await tzRetryAdd(env, params.phones, (r && r.message) || "").catch(() => {});
+    return r;
+  }
+  if (params._retry) { params = { ...params }; delete params._retry; }
+  return ymRaw(env, method, params);
+}
+async function ymRaw(env, method, params) {
   used++;
   const u = new URL(YM + method);
   u.searchParams.set("token", env.YM_TOKEN);
@@ -1398,10 +1480,50 @@ async function ym(env, method, params = {}) {
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     r = await fetch(u);
   }
+  if (!r.ok && env.KV) await alert(env, "ym", `ימות החזירו ${r.status} ל-${method}`).catch(() => {});
   if (method === "DownloadFile") return new Uint8Array(await r.arrayBuffer());
   return r.json();
 }
 __name(ym, "ym");
+// ---------- התראות תקלה למנהל (מוצגות בדף הניהול, ובמייל לבעלים אם הוגדר ALERT_WEBHOOK) ----------
+// כל סוג התראה נרשם פעם בשעה לכל היותר, כדי לא להציף
+async function alert(env, kind, msg) {
+  if (!env.KV || await env.KV.get("alert_mute:" + kind)) return;
+  await env.KV.put("alert_mute:" + kind, "1", { expirationTtl: 3600 });
+  const a = await kvGet(env, "alerts", []);
+  a.unshift({ t: nowIL(), k: kind, m: String(msg).slice(0, 300) });
+  await env.KV.put("alerts", JSON.stringify(a.slice(0, 50)));
+  if (env.ALERT_WEBHOOK) await fetch(env.ALERT_WEBHOOK, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ line: LINE_PHONE, kind, msg, at: nowIL() }), signal: AbortSignal.timeout(5000) }).catch(() => {});
+}
+// ---------- תור צינתוקים שנכשלו: עד 3 ניסיונות נוספים, בכל ריצה של cron ----------
+async function tzRetryAdd(env, phones, why) {
+  const q = await kvGet(env, "tz_retry", []);
+  if (q.some(x => x.phones === phones)) return;
+  q.push({ phones, n: 0, t: Date.now(), why: String(why).slice(0, 120) });
+  await env.KV.put("tz_retry", JSON.stringify(q.slice(-30)));
+}
+async function tzRetryRun(env) {
+  const q = await kvGet(env, "tz_retry", []); if (!q.length) return;
+  const left = [];
+  for (const x of q) {
+    if (used > 35) { left.push(x); continue; }
+    let r; try { r = await ym(env, "RunTzintuk", { phones: x.phones, _retry: 1 }); } catch (e) { r = null; }
+    if (r && (r.responseStatus === "OK" || r.deferred)) { await log(env, `צינתוק שנכשל נשלח בניסיון חוזר (${x.phones})`).catch(() => {}); continue; }
+    if (++x.n < 3) left.push(x); else await alert(env, "tz", `צינתוק ל-${x.phones} נכשל 4 פעמים ונמחק מהתור${x.why ? ": " + x.why : ""}`);
+  }
+  await env.KV.put("tz_retry", JSON.stringify(left));
+}
+// ---------- גיבוי יומי של ה-KV (אותם מפתחות כמו בגיבוי הידני בדף הניהול), 7 ימים אחרונים ----------
+const AUTO_BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "facts", "dashnotes", "joinmap", "demap", "polls"];
+async function dailyBackup(env) {
+  const day = nowIL().slice(0, 10);
+  if ((await env.KV.get("autobak_last")) === day) return;
+  const data = {}; for (const k of AUTO_BACKUP_KEYS) data[k] = await kvGet(env, k, null);
+  data._meta = { at: nowIL(), line: LINE_PHONE, keys: AUTO_BACKUP_KEYS, auto: true };
+  await env.KV.put("autobak:" + day, JSON.stringify(data), { expirationTtl: 8 * 86400 });
+  await env.KV.put("autobak_last", day);
+}
+
 function b64(bytes) {
   let s = "";
   for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
@@ -2514,6 +2636,8 @@ async function cron(env) {
     for (const [name, it] of Object.entries(pc).slice(0, 2)) if (Date.now() - it.t > 9e4 && used < 30) await postCheck(env, name).catch((e) => aiTrace.push("postcheck: " + e.message));
   }
   const holy = env.KV ? await isHoly(env) : false;
+  if (env.KV && !holy) await tzRetryRun(env).catch(() => {});
+  if (env.KV) await dailyBackup(env).catch((e) => alert(env, "backup", "הגיבוי היומי נכשל: " + e.message));
   if (env.KV && !holy) await releaseDeferred(env).catch((e) => log(env, "\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E6\u05D9\u05E0\u05EA\u05D5\u05E7\u05D9\u05DD \u05E9\u05D7\u05D9\u05DB\u05D5: " + e.message));
   if (env.KV && !holy) await runScheduled(env).catch((e) => log(env, "\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05EA\u05D6\u05DE\u05D5\u05DF: " + e.message));
   if (env.KV && !holy) await maybeWeekly(env).catch(() => {
@@ -4661,8 +4785,30 @@ async function rsvpCount(env, ctx) {
   return `id_list_message=${parts.join(".")}&go_to_folder=/9`;
 }
 __name(rsvpCount, "rsvpCount");
+
+// ---------- סקר מהיר בהקשה: המנהל יוצר סקר בדף הניהול, החברים מקישים מספר בשלוחת הסקר (api_link=/poll/x/<RUN_KEY>) ----------
+const pollActive = async env => (await kvGet(env, "polls", [])).find(p => !p.closed) || null;
+async function pollVote(env, id, phone, choice) {
+  const polls = await kvGet(env, "polls", []), p = polls.find(x => x.id === id && !x.closed);
+  if (!p || !phone || !(choice >= 1 && choice <= p.opts.length)) return false;
+  p.votes = p.votes || {}; p.votes[phone] = { c: choice, t: nowIL() }; // הצבעה חוזרת מחליפה את הקודמת
+  await env.KV.put("polls", JSON.stringify(polls)); return true;
+}
+async function pollMenu(env, u, ctx) {
+  const q = Object.fromEntries(u.searchParams), p = await pollActive(env);
+  if (!p) return `id_list_message=${await sayC(env, ctx, "כרגע אין סקר פתוח.")}&go_to_folder=/`;
+  if (q.V !== undefined) {
+    const ok = await pollVote(env, p.id, q.ApiPhone || "", +q.V);
+    return `id_list_message=${await sayC(env, ctx, ok ? "תודה, הבחירה שלך נרשמה." : "הבחירה לא תקינה.")}&go_to_folder=/`;
+  }
+  const prompt = [p.q, ...p.opts.map((o, i) => `ל${o} הקישו ${i + 1}`)].join(". ");
+  return `read=${await sayC(env, ctx, prompt)}=V,no,1,1,7,No,no,no,,${p.opts.map((_, i) => i + 1).join(".")}`;
+}
 var reply = /* @__PURE__ */ __name((t) => new Response(t, { headers: { "Content-Type": "text/plain; charset=utf-8" } }), "reply");
 var DASH = {
+  alert,
+  pollActive,
+  AUTO_BACKUP_KEYS,
   ym,
   kvGet,
   names,
@@ -4725,7 +4871,7 @@ var worker_default = {
   async scheduled(event, env, ctx) {
     NAMES_CACHE = {};
     await loadNames(env);
-    ctx.waitUntil(cron(env).catch((e) => log(env, "\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E8\u05D9\u05E6\u05D4: " + e.message)));
+    ctx.waitUntil(cron(env).catch((e) => Promise.all([log(env, "\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E8\u05D9\u05E6\u05D4: " + e.message), alert(env, "cron", "הריצה התקופתית נכשלה: " + e.message)])));
   },
   async fetch(req, env, ctx) {
     NAMES_CACHE = {};
@@ -4925,6 +5071,7 @@ var worker_default = {
     }
     if (parts[0] === "sef") return Response.json(await sefaria(u.searchParams.get("ref") || ""));
     if (parts[0] === "sched") return Response.json({ jobs: await kvGet(env, "scheduled", []), now: nowIL(), nextImportant: await nextFileNum(env, IMPORTANT), nextAll: await nextFileNum(env, ALL) });
+    if (parts[0] === "poll") { try { return reply(await pollMenu(env, u, ctx)); } catch (e) { return reply("go_to_folder=/"); } }
     if (parts[0] === "join") return reply(await joinGate(env, u, ctx));
     if (parts[0] === "rsvp") return reply(await rsvp(env, u, ctx));
     if (parts[0] === "rsvpcount") return reply(await rsvpCount(env, ctx));
