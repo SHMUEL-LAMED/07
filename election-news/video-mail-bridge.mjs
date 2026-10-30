@@ -1,5 +1,4 @@
 // Narrow server-to-server bridge: the pinned collector can mail only its owner.
-const RECIPIENT = '0534169095@xn--4dbjbascrao3i.com';
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me/';
 const LIMIT = 8 * 1024 * 1024;
 const HOSTS = ['mako.co.il','n12.co.il','13tv.co.il','c14.co.il','i24news.tv','kan.org.il','youtube.com'];
@@ -28,9 +27,11 @@ export function validateVideoManifest(value, now=Date.now()) {
 
 export function createVideoMailBridge({verify, google}) {
  async function mailbox(env){
-  if(String(env.BUSINESS_EMAIL||'').toLowerCase()!==RECIPIENT)throw Error('wrong_owner');
+  const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
+  if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
   const profile=await google(env,GMAIL+'profile');
-  if(String(profile.emailAddress||'').toLowerCase()!==RECIPIENT)throw Error('mailbox_mismatch');
+  if(String(profile.emailAddress||'').toLowerCase()!==recipient)throw Error('mailbox_mismatch');
+  return recipient;
  }
  async function recordPart(env,pending,part,gmailId){
   await put(env,`receipt:${pending.id}:${part}`,{gmailId,at:Date.now()});
@@ -49,7 +50,7 @@ export function createVideoMailBridge({verify, google}) {
   const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');
   try{if(!token)throw Error();await verify(token,env,u.origin);}catch{return json({error:'unauthorized'},401);}
   try{
-   await mailbox(env);
+   const recipient=await mailbox(env);
    if(path==='/news-video/state'&&request.method==='GET'){
     let state=await get(env,'state');
     if(!state){state={sent:[],initializedAt:Date.now()};await put(env,'state',state);}
@@ -58,7 +59,7 @@ export function createVideoMailBridge({verify, google}) {
      const receipts=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`receipt:${pending.id}:${i+1}`)));
      if(receipts.every(x=>x?.gmailId)){await recordPart(env,pending,1,receipts[0].gmailId);state=await get(env,'state',state);pending=null;}
     }
-    return json({...state,pending,recipient:RECIPIENT});
+    return json({...state,pending,recipient});
    }
    if(path==='/news-video/start'&&request.method==='POST'){
     const body=await request.text();if(enc.encode(body).length>262144)return json({error:'manifest_too_large'},413);
@@ -93,7 +94,7 @@ export function createVideoMailBridge({verify, google}) {
      const subject=`כתבות הפוליטיקה — עדכון שעתי — ${date} — חלק ${part}/${pending.parts}`;
      const body=`כתבות הווידאו החדשות. חלק ${part} מתוך ${pending.parts}.\n\n`+pending.items.map((x,i)=>`${i+1}. ${x.title}\n${x.id}`).join('\n\n');
      const boundary='news-'+pending.id.slice(0,32);
-     const raw=[`To: ${RECIPIENT}`,`From: ${RECIPIENT}`,`Subject: =?UTF-8?B?${utf64(subject)}?=`,`Message-ID: <${messageId}>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',wrap(utf64(body)),`--${boundary}`,'Content-Type: video/mp4',`Content-Disposition: attachment; filename="news-${pending.id.slice(0,12)}-${part}.mp4"`,'Content-Transfer-Encoding: base64','',wrap(b64(video)),`--${boundary}--`,''].join('\r\n');
+     const raw=[`To: ${recipient}`,`From: ${recipient}`,`Subject: =?UTF-8?B?${utf64(subject)}?=`,`Message-ID: <${messageId}>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',wrap(utf64(body)),`--${boundary}`,'Content-Type: video/mp4',`Content-Disposition: attachment; filename="news-${pending.id.slice(0,12)}-${part}.mp4"`,'Content-Transfer-Encoding: base64','',wrap(b64(video)),`--${boundary}--`,''].join('\r\n');
      const intent=await get(env,`intent:${pending.id}:${part}`);
      if(intent)throw Error('delivery_uncertain: waiting for sent-message verification');
      await put(env,`intent:${pending.id}:${part}`,{at:Date.now()});
