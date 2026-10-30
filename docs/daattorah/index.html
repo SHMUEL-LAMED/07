@@ -2195,6 +2195,70 @@ if (REMOTE && googleHandoff && !adminToken) {
   history.replaceState(null, "", location.pathname + location.search);
   createSession("", googleHandoff[1]).then(() => { hideLogin(); startApp(); }).catch(e => showLogin(e.message));
 } else if (!REMOTE || adminToken) { hideLogin(); startApp(); } else showLogin();
+
+// ---------- התראות תקלה, סקר בהקשה, גיבויים אוטומטיים ויומן פעולות (לשונית מערכת) ----------
+{
+  const baseSys2 = RENDER.system;
+  RENDER.system = d => { setTimeout(() => { drawAlerts(); drawPolls(); drawAutoBak(); drawAudit(); }); return baseSys2(d) +
+    '<div class="card" id="galerts"><h2>התראות תקלה <small>טוען…</small></h2></div><div class="card" id="gpolls"><h2>סקר בהקשה <small>טוען…</small></h2></div>' +
+    '<div class="card w-only" id="gautobak"><h2>גיבויים אוטומטיים <small>טוען…</small></h2></div><div class="card" id="gaudit"><h2>יומן פעולות <small>טוען…</small></h2></div>'; };
+}
+const AL_HE = { cron: "ריצה תקופתית", ym: "ימות המשיח", ai: "בינה מלאכותית", tz: "צינתוק", backup: "גיבוי" };
+async function drawAlerts(body) {
+  const el = $("#galerts"); if (!el) return;
+  try {
+    const d = await api("alerts", body);
+    el.innerHTML = `<h2>התראות תקלה <small>${d.alerts.length ? d.alerts.length + " אחרונות" : "אין תקלות"}</small></h2>
+      ${d.alerts.length ? `<ul class="list">${d.alerts.slice(0, 15).map(a => `<li><span class="pill bad">${esc(AL_HE[a.k] || a.k)}</span><span class="grow">${esc(a.m)}</span><span class="mut small num">${esc(a.t)}</span></li>`).join("")}</ul><button class="btn s w-only" type="button" data-alclear style="margin-top:10px">ניקוי ההתראות</button>` : '<div class="mut">הכול תקין.</div>'}
+      ${d.retry.length ? `<div class="mut small" style="margin-top:10px">צינתוקים בתור לניסיון חוזר: ${d.retry.map(x => esc(x.phones) + " (" + x.n + ")").join(", ")}</div>` : ""}`;
+  } catch (e) { el.innerHTML = `<h2>התראות תקלה</h2><div class="err">${esc(e.message)}</div>`; }
+}
+async function drawPolls(body) {
+  const el = $("#gpolls"); if (!el) return;
+  try {
+    const d = await api("polls", body), open = d.polls.find(p => !p.closed);
+    const one = p => `<div class="sub" style="margin-top:10px"><b>${esc(p.q)}</b> <span class="pill ${p.closed ? "" : "acc"}">${p.closed ? "סגור" : "פתוח"}</span> <span class="mut small">${p.total} הצביעו · ${esc(p.created)}${p.sent ? " · צינתוק " + esc(p.sent) : ""}</span>
+      ${hbars(p.opts.map((o, i) => ({ n: (i + 1) + ". " + o, c: p.counts[i] })), "n", "c")}
+      ${p.voters.length ? `<details><summary class="mut small">מי הצביע</summary><div class="mut small">${p.voters.map(v => esc(v.n) + " – " + v.c).join(" · ")}</div></details>` : ""}
+      <div class="row w-only">${p.closed ? "" : `<button class="btn s p" type="button" data-poll="send" data-id="${p.id}">צינתוק לחברים</button><button class="btn s" type="button" data-poll="close" data-id="${p.id}">סגירת הסקר</button>`}<button class="btn s" type="button" data-poll="delete" data-id="${p.id}">מחיקה</button></div></div>`;
+    el.innerHTML = `<h2>סקר בהקשה <small>החברים מקישים מספר בשלוחת הסקר</small></h2>
+      ${open ? "" : `<form id="pollnew" class="w-only" style="display:grid;gap:8px"><input name="q" placeholder="השאלה, למשל: מתי נוח לכם השיעור?" required maxlength="200"><input name="opts" placeholder="תשובות מופרדות בפסיק: בערב, בבוקר" required><button class="btn p">פתיחת סקר</button></form>`}
+      ${d.polls.slice(0, 5).map(one).join("") || '<div class="mut">עוד לא היו סקרים.</div>'}
+      <div class="mut small" style="margin-top:8px">כדי שהמתקשרים יגיעו לסקר צריך שלוחה בקו מסוג api שמפנה לנתיב poll של השרת.</div>`;
+  } catch (e) { el.innerHTML = `<h2>סקר בהקשה</h2><div class="err">${esc(e.message)}</div>`; }
+}
+async function drawAutoBak() {
+  const el = $("#gautobak"); if (!el) return;
+  try {
+    const d = await api("autobackups");
+    el.innerHTML = `<h2>גיבויים אוטומטיים <small>גיבוי יומי, 7 ימים אחרונים</small></h2>
+      ${d.days.length ? `<ul class="list">${d.days.map(x => `<li><span class="grow num">${esc(x)}</span><button class="btn s" type="button" data-abrestore="${esc(x)}">שחזור</button></li>`).join("")}</ul>` : '<div class="mut">הגיבוי הראשון ייווצר בריצה הבאה של השרת.</div>'}`;
+  } catch (e) { el.innerHTML = `<h2>גיבויים אוטומטיים</h2><div class="err">${esc(e.message)}</div>`; }
+}
+let auditBy = "";
+async function drawAudit() {
+  const el = $("#gaudit"); if (!el) return;
+  try {
+    const d = await api("audit" + (auditBy ? "?by=" + encodeURIComponent(auditBy) : ""));
+    el.innerHTML = `<h2>יומן פעולות <small>מי ביצע מה בדף הניהול</small></h2>
+      <div class="row"><select id="auditby"><option value="">כולם</option>${d.who.map(w => `<option ${w === auditBy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select><button class="btn s" type="button" data-auditcsv>ייצוא ל-CSV</button></div>
+      <div style="max-height:360px;overflow:auto;margin-top:8px"><table class="tbl"><tr><th>מתי</th><th>מי</th><th>פעולה</th><th>פרטים</th></tr>${d.items.slice(0, 300).map(x => `<tr><td class="num">${esc(x.d)}</td><td>${esc(x.by)}</td><td>${esc(x.r)}</td><td>${esc(x.w || "")}</td></tr>`).join("")}</table></div>`;
+    el._items = d.items;
+  } catch (e) { el.innerHTML = `<h2>יומן פעולות</h2><div class="err">${esc(e.message)}</div>`; }
+}
+document.addEventListener("click", async e => {
+  const t = e.target.closest("[data-alclear],[data-poll],[data-abrestore],[data-auditcsv]"); if (!t) return;
+  try {
+    if (t.dataset.alclear !== undefined) return drawAlerts({ op: "clear" });
+    if (t.dataset.poll) { if (t.dataset.poll === "send" && !confirm("לשלוח צינתוק לכל החברים על הסקר?")) return; if (t.dataset.poll === "delete" && !confirm("למחוק את הסקר ואת התוצאות?")) return; return drawPolls({ op: t.dataset.poll, id: t.dataset.id }); }
+    if (t.dataset.abrestore) { if (!confirm("לשחזר את ההגדרות מהגיבוי של " + t.dataset.abrestore + "? המצב הנוכחי יידרס")) return; const r = await api("autobackups", { op: "restore", day: t.dataset.abrestore }); toast("שוחזרו: " + r.done.length); return; }
+    if (t.dataset.auditcsv !== undefined) { const items = ($("#gaudit") || {})._items || []; const q = v => '"' + String(v || "").replace(/"/g, '""') + '"';
+      const csv = "﻿" + [["מתי", "מי", "פעולה", "פרטים"], ...items.map(x => [x.d, x.by, x.r, x.w])].map(r => r.map(q).join(",")).join("\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "audit.csv"; a.click(); }
+  } catch (err) { toast(err.message, true); }
+});
+document.addEventListener("change", e => { if (e.target.id === "auditby") { auditBy = e.target.value; drawAudit(); } });
+document.addEventListener("submit", e => { if (e.target.id !== "pollnew") return; e.preventDefault(); drawPolls({ op: "create", q: e.target.q.value, opts: e.target.opts.value.split(/[,،]/) }).catch(err => toast(err.message, true)); });
 </script>
 </body>
 </html>

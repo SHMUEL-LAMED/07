@@ -141,6 +141,7 @@ pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;font-size:12px;b
   .burger{display:grid}.topbar{padding:10px 14px}.content{padding:16px}.frame-bar{padding:10px 14px}
   .fgrid{grid-template-columns:1fr}.quick{max-width:60vw}
 }
+.cmp{display:grid;gap:14px}.cmp-l{display:grid;gap:4px}.cmp-g{display:flex;gap:6px;align-items:flex-end;height:70px}.cmp-d{flex:1;display:flex;gap:2px;align-items:flex-end;height:100%}.cb{display:block;flex:1;min-height:2px;border-radius:3px 3px 0 0}.cb.c1{background:var(--acc,#465ce5)}.cb.c2{background:color-mix(in srgb,var(--acc,#465ce5) 35%,transparent)}
 </style>
 </head>
 <body>
@@ -330,17 +331,40 @@ async function overviewDraw(force){const B=$("#ovBody");if(!B)return;
   if(force)B.innerHTML=skel();
   let rows;try{rows=await fetchAll(force)}catch(e){B.innerHTML=googleBanner()+cards(S.lines.map(l=>({l})));$("#reG").onclick=refreshGoogle;return}
   if(S.view!=="overview"&&S.view!=="all")return;
-  B.innerHTML=kpis(rows)+cards(rows);
+  B.innerHTML=kpis(rows)+cards(rows)+compareCard(rows);
 }
 function cards(rows){return `<div class="lines-cards">${rows.map(r=>{const l=r.l,[hc,ht]=r.err?["warn","לא ענה"]:r.ov||r.off?healthOf(r.he,l):["","—"];
   return `<div class="lc" onclick="location.hash='line=${encodeURIComponent(l.slug)}'"><div class="lc-h"><b>${esc(l.name)}</b><span class="pill ${hc}">${esc(ht)}</span></div><div class="mut small ltr" style="text-align:start">${esc(l.line||"")}</div>
    <div class="lc-m"><div><b>${r.ov?(r.ov.online||[]).length:"—"}</b><span>מחוברים</span></div><div><b>${r.ov?pendOf(r.ov):"—"}</b><span>ממתינות</span></div><div><b>${r.ov?(+r.ov.members?.active||0):"—"}</b><span>חברים</span></div></div></div>`}).join("")}</div>`}
 
+// ===== השוואה בין הקווים: שיחות והודעות ב-7 הימים האחרונים =====
+function compareCard(rows){const ok=rows.filter(r=>r.st&&Array.isArray(r.st.calls));if(ok.length<2)return"";
+  const days=(ok[0].st.days||[]).slice(-7),max=Math.max(1,...ok.flatMap(r=>[...r.st.calls.slice(-7),...(r.st.msgs||[]).slice(-7)].map(x=>+x||0)));
+  const bar=(v,cls)=>`<i class="cb ${cls}" style="height:${Math.round(100*(+v||0)/max)}%" title="${+v||0}"></i>`;
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><div><h2>השוואה בין הקווים</h2><p>שיחות (כהה) והודעות (בהיר) בכל יום בשבוע האחרון</p></div></div>
+   <div class="cmp">${ok.map(r=>`<div class="cmp-l"><b>${esc(r.l.name)}</b><span class="mut small">${sum7(r.st.calls)} שיחות · ${sum7(r.st.msgs)} הודעות</span><div class="cmp-g">${r.st.calls.slice(-7).map((c,i)=>`<div class="cmp-d" title="${esc(days[i]||"")}">${bar(c,"c1")}${bar((r.st.msgs||[]).slice(-7)[i],"c2")}</div>`).join("")}</div></div>`).join("")}</div></div>`}
+
+// ===== שכפול הגדרות בין קווים (בעל השירות) =====
+const COPY_HE={rules:"כללי העוזר",scheduled:"תזמונים פעילים",strict:"הגדרות בדיקת ההודעות",ads:"פרסומות",event:"אירוע (שלוחה 9)"};
+function copyCard(){const opt=S.lines.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)}</option>`).join("");
+  return `<div class="card" style="margin-top:16px" id="cpy"><div class="card-head"><div><h2>שכפול הגדרות בין קווים</h2><p>העתקה מקו לקו, עם תצוגה מקדימה. הערך הקודם בקו היעד נשמר לגיבוי.</p></div></div>
+   <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">מקו <select id="cpFrom">${opt}</select> לקו <select id="cpTo">${opt}</select></div>
+   <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">${Object.entries(COPY_HE).map(([k,v])=>`<label><input type="checkbox" name="cpk" value="${k}"> ${v}</label>`).join("")}</div>
+   <button class="btn" id="cpPrev">תצוגה מקדימה</button><div id="cpOut" style="margin-top:10px"></div></div>`}
+function copyBind(){const g=()=>({from:$("#cpFrom").value,to:$("#cpTo").value,keys:[...document.querySelectorAll("[name=cpk]:checked")].map(x=>x.value)});
+  if(!$("#cpPrev"))return;if(S.lines[1])$("#cpTo").value=S.lines[1].slug;
+  $("#cpPrev").onclick=async()=>{const O=$("#cpOut");try{const r=await call("copy",{...g(),preview:true});if(r.error)throw Error(r.error);
+    O.innerHTML=`<table class="t"><thead><tr><th>מה</th><th>במקור</th><th>ביעד היום</th><th></th></tr></thead><tbody>${r.items.map(x=>`<tr><td>${esc(x.label)}</td><td>${esc(x.from)}</td><td>${esc(x.to)}</td><td>${x.same?"זהה":"יוחלף"}</td></tr>`).join("")}</tbody></table><button class="btn danger" id="cpGo" style="margin-top:10px">העתקה</button>`;
+    $("#cpGo").onclick=async()=>{const b=g(),c=prompt(`ההגדרות בקו "${b.to}" יוחלפו. לאישור הקלידו את השם הקצר: ${b.to}`);if(c!==b.to)return;
+      try{const r2=await call("copy",{...b,preview:false,confirm:c});if(r2.error)throw Error(r2.error);toast("הועתקו: "+(r2.done.join(", ")||"אין שינוי"));O.innerHTML=""}catch(e){toast(e.message,true)}}}
+   catch(e){O.innerHTML=`<p class="mut">${esc(e.message)}</p>`}}}
+
 // ===== קווים (טבלה) =====
 async function linesView(V){
   const own=S.me.isOwner;
   V.innerHTML=`<div class="card"><div class="card-head"><div><h2>קווים</h2><p>${own?"כל הקווים במערכת: נתונים, בריאות, כניסה, השהיה והחזרה לפעולה.":"הקווים שיש לך גישה אליהם."}</p></div>
-   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="lt"><p class="mut">טוען…</p></div></div>`;
+   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="lt"><p class="mut">טוען…</p></div></div>${own&&S.lines.length>1?copyCard():""}`;
+  copyBind();
   $("#rf").onclick=()=>linesDraw(true);linesDraw(false);
 }
 async function linesDraw(force){const B=$("#lt");if(!B)return;let rows,banner="";

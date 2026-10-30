@@ -1,0 +1,30 @@
+# בדיקות אוטומטיות: תחביר, בנייה יבשה ובדיקות יחידה (node --test). רץ על כל PR ועל main
+name: בדיקות
+on:
+  pull_request:
+    paths: ['src/**', 'tests/**', 'wrangler.toml', 'scripts/**']
+  push:
+    branches: [main]
+    paths: ['src/**', 'tests/**', 'wrangler.toml', 'scripts/**']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: תחביר
+        run: |
+          for f in src/*.js live/daat/worker.js; do node --check "$f"; done
+      - name: בדיקות יחידה
+        run: node --test tests/*.test.mjs
+      - name: בנייה יבשה
+        run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/build
+      - name: סקריפט ההעברה לדעת תורה לא שובר את הקוד
+        run: |
+          python3 scripts/port-daat.py
+          node --check live/daat/worker.js
+          git checkout -- live/daat/worker.js
