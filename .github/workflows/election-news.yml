@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: election-news-collector
+  group: ${{ (github.event.schedule == '37 * * * *' || inputs.video_email) && 'election-news-video-mail' || 'election-news-collector' }}
   cancel-in-progress: false
 jobs:
   test:

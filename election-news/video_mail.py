@@ -138,7 +138,7 @@ def main():
     endpoint, mail = args.endpoint.rstrip('/'), args.mail_endpoint.rstrip('/')
     c.ENDPOINT = endpoint
     state = c.worker(mail, '/news-video/state')
-    print('mail_server_ready', state['recipient'], flush=True)
+    print('mail_server_ready', flush=True)
     if args.check_only:
         return
     pending = state.get('pending')
@@ -152,14 +152,17 @@ def main():
         required = None
     sent = {x['id'] for x in state.get('sent', [])}
     items, clips, failures = [], [], 0
+    source_failures = {}
     start = time.monotonic()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         # Resolve metadata first. Downloads run in original chronological order.
         resolved = []
-        for url in candidates:
+        for url in c.fair_candidates(candidates):
             if time.monotonic() - start > 1500:
                 break
+            if source_failures.get(c.source(url), 0) >= 4:
+                continue
             try:
                 title, media = c.article(url)
                 date = c.PUBLICATION_DATES[c.canonical(url)]
@@ -173,6 +176,8 @@ def main():
                         resolved.append((date, key, title, video))
             except Exception as error:
                 failures += 1
+                kind = c.source(url)
+                source_failures[kind] = source_failures.get(kind, 0) + 1
                 print('video_source_failed', c.source(url), c.error_code(error), flush=True)
         for date, key, title, video in sorted(resolved, key=lambda x: (c.publication_time(x[0]), x[1])):
             if time.monotonic() - start > 2100:

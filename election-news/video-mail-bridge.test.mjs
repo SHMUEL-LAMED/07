@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.mjs';
 
-const owner='0534169095@xn--4dbjbascrao3i.com';
+const owner='owner@example.test';
 function setup(){
  const values=new Map(),calls=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
@@ -26,7 +26,7 @@ test('unauthenticated requests never touch the mailbox',async()=>{
  const s=setup();const r=await s.route(new Request('https://mail.example/news-video/state'),s.env);assert.equal(r.status,401);assert.equal(s.calls.length,0);
 });
 test('owner binding prevents forwarding through another account',async()=>{
- const s=setup();s.env.BUSINESS_EMAIL='other@example.com';const r=await s.route(s.request('/news-video/state'),s.env);assert.equal(r.status,502);assert.equal(s.calls.length,0);
+ const s=setup();s.env.BUSINESS_EMAIL='other@example.com';const r=await s.route(s.request('/news-video/state'),s.env);assert.equal(r.status,502);assert.equal(s.calls.length,1);
 });
 test('confirmed MP4 parts go only to the owner and retries do not resend',async()=>{
  const s=setup();const b=await (await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();

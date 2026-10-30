@@ -1,10 +1,37 @@
 import datetime as dt
 import unittest
 from unittest.mock import patch
+from pathlib import Path
 import video_mail as v
 
 
 class VideoDigestTests(unittest.TestCase):
+    def test_failed_source_does_not_starve_other_sources(self):
+        candidates = {f'https://www.mako.co.il/news/Article-{i}.htm': 'כתבה' for i in range(12)}
+        good = 'https://www.i24news.tv/he/news/politics/test'
+        candidates[good] = 'כתבה נוספת'
+        attempts, delivered = [], []
+        def article(url):
+            attempts.append(url)
+            if 'mako.co.il' in url:
+                raise ValueError('source_access_error')
+            v.c.PUBLICATION_DATES[v.c.canonical(url)] = dt.datetime.now(dt.timezone.utc).isoformat()
+            return 'כתבת בחירות', ['https://cdn.example/video.mp4']
+        def worker(endpoint, path, body=None, headers=None):
+            if path == '/news-video/state': return {'sent': [], 'recipient': 'owner@example.test'}
+            if path == '/collector/state': return {}
+            if path == '/news-video/start': return {'id': 'batch', 'parts': 1, 'sent': []}
+            delivered.append(path)
+            return {'ok': True, 'gmailId': 'sent'}
+        def video(url, dest):
+            dest.write_bytes(b'test')
+            return 1
+        with patch.object(v.os.sys, 'argv', ['video_mail.py', '--endpoint', 'https://news.example', '--mail-endpoint', 'https://mail.example']), patch.object(v.c, 'worker', side_effect=worker), patch.object(v.c, 'discover', return_value=candidates), patch.object(v.c, 'article', side_effect=article), patch.object(v, 'make_video', side_effect=video), patch.object(v, 'split_digest', side_effect=lambda clips, folder: clips):
+            v.main()
+        self.assertEqual(len([x for x in attempts if 'mako.co.il' in x]), 4)
+        self.assertIn(good, attempts)
+        self.assertEqual(delivered, ['/news-video/part/batch/1'])
+
     def test_first_run_uses_israel_day_and_future_dates_are_rejected(self):
         now = dt.datetime(2026, 10, 30, 0, 0, tzinfo=dt.timezone.utc)
         self.assertTrue(v.eligible('2026-10-29T22:05:00Z', {}, now))
