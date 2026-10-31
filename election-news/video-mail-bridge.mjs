@@ -124,7 +124,8 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
     if(size<12||new TextDecoder().decode(video.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
     if(pending.delivery==='single-email'){
      const name=`news-${pending.id.slice(0,12)}-${part}.mp4`;
-     const saved=await storeVideo(env,{name,bytes:video});
+     const day=new Date(pending.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+     const saved=await storeVideo(env,{name,bytes:video,day});
      if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
      const link=new URL(saved.webViewLink);
      if(link.protocol!=='https:'||link.hostname!=='drive.google.com')throw Error('invalid_drive_link');

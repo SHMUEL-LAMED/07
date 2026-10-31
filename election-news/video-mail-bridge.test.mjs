@@ -4,10 +4,10 @@ import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.m
 
 const owner='owner@example.test';
 function setup(){
- const values=new Map(),calls=[],files=new Map();
+ const values=new Map(),calls=[],files=new Map(),days=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
- const route=createVideoMailBridge({storeVideo:async(e,{name,bytes})=>{files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
+ const route=createVideoMailBridge({storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
   calls.push({url,options});if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
@@ -15,7 +15,7 @@ function setup(){
  }});
  const request=(path,body,headers={})=>new Request('https://mail.example'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer valid',...headers},body});
  const item={id:'https://www.mako.co.il/news/Article-123.htm',title:'כתבת בחירות',publishedAt:new Date().toISOString()};
- return {env,values,calls,route,request,item,setFail:x=>fail=x};
+ return {env,values,calls,days,route,request,item,setFail:x=>fail=x};
 }
 test('video manifest refuses private sources, credentials, duplicate IDs and old dates',()=>{
  const s=setup();for(const id of ['http://www.mako.co.il/x','https://mako.co.il.attacker.example/x','https://u:p@www.mako.co.il/x','https://127.0.0.1/x'])assert.throws(()=>validateVideoManifest({parts:1,items:[{...s.item,id}]}));
@@ -65,4 +65,11 @@ test('oversized batch sends one mail with all private Drive links and no attachm
  const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();assert.doesNotMatch(raw,/Content-Disposition: attachment/);
  const body=Buffer.from(raw.split('Content-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace(/\s/g,''),'base64').toString();
  assert.match(body,/saved1/);assert.match(body,/saved2/);assert.match(body,/-3.mp4/);
+});
+
+test('daily archive uses Jerusalem batch date consistently across retries',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ b.createdAt=Date.parse('2026-10-31T22:30:00Z');s.values.set('news-video:pending',JSON.stringify(b));
+ await upload(s,b,1);await upload(s,b,2);
+ assert.deepEqual(s.days,['2026-11-01','2026-11-01']);
 });

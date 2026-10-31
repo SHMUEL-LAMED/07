@@ -12,7 +12,16 @@ const newsVideoBridgeFactory=(()=>{BRIDGE;return createVideoMailBridge;})();
 const newsVideoMail=newsVideoBridgeFactory({
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
  google:(env,url,options)=>gapi(env,url,options),
- storeVideo:async(env,{name,bytes})=>driveUpload(env,{name,mime:'video/mp4',bytes,folder:await driveFolder(env,'כתבות וידאו — עדכונים')}),
+ storeVideo:async(env,{name,bytes,day})=>{
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(day))throw Error('invalid_video_day');
+  const root=await driveFolder(env,'כתבות וידאו — עדכונים');
+  const query="name='"+day+"' and '"+root+"' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false";
+  const found=await gapi(env,'https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(query)+'&fields=files(id)');
+  let folder=found.files?.[0]?.id;
+  if(!folder)folder=(await gapi(env,'https://www.googleapis.com/drive/v3/files',{body:{name:day,mimeType:'application/vnd.google-apps.folder',parents:[root]}})).id;
+  if(!folder)throw Error('daily_folder_not_confirmed');
+  return driveUpload(env,{name,mime:'video/mp4',bytes,folder});
+ },
  loadVideo:async(env,id)=>{
   const response=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+await accessToken(env)}});
   if(!response.ok)throw Error('drive_download_'+response.status);
