@@ -4,10 +4,10 @@ import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.m
 
 const owner='owner@example.test';
 function setup(){
- const values=new Map(),calls=[];
+ const values=new Map(),calls=[],files=new Map();
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
- const route=createVideoMailBridge({verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
+ const route=createVideoMailBridge({storeVideo:async(e,{name,bytes})=>{files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
   calls.push({url,options});if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
@@ -42,4 +42,27 @@ test('failed Gmail delivery keeps the pending digest and does not mark it sent',
  const s=setup();const b=await (await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();s.setFail(true);
  const v=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);const r=await s.route(s.request(`/news-video/part/${b.id}/1`,v,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);
  assert.equal(r.status,502);assert.ok(s.values.has('news-video:pending'));assert.ok(!s.values.has('news-video:state'));
+});
+
+const tinyVideo=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);
+async function upload(s,b,part){return s.route(s.request(`/news-video/part/${b.id}/${part}`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);}
+test('two MP4 files produce exactly one mail after both arrive, including after retry',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ assert.equal((await(await upload(s,b,1)).json()).staged,true);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/send')).length,0);
+ assert.equal((await(await upload(s,b,2)).json()).complete,true);
+ await upload(s,b,2);
+ const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
+ const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();
+ assert.equal((raw.match(/Content-Disposition: attachment/g)||[]).length,2);
+ assert.match(raw,/filename="news-[a-f0-9]+-1.mp4"/);assert.match(raw,/filename="news-[a-f0-9]+-2.mp4"/);
+});
+test('oversized batch sends one mail with all private Drive links and no attachments',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:3})),s.env)).json();
+ for(let part=1;part<=2;part++)s.values.set(`news-video:file:${b.id}:${part}`,JSON.stringify({id:'saved'+part,name:'news-'+part+'.mp4',url:'https://drive.google.com/file/d/saved'+part+'/view',size:8*1024*1024}));
+ const result=await(await upload(s,b,3)).json();assert.equal(result.complete,true);
+ const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
+ const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();assert.doesNotMatch(raw,/Content-Disposition: attachment/);
+ const body=Buffer.from(raw.split('Content-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace(/\s/g,''),'base64').toString();
+ assert.match(body,/saved1/);assert.match(body,/saved2/);assert.match(body,/-3.mp4/);
 });

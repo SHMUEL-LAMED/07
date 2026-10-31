@@ -25,7 +25,7 @@ export function validateVideoManifest(value, now=Date.now()) {
  return {items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
 }
 
-export function createVideoMailBridge({verify, google}) {
+export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
  async function mailbox(env){
   const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
   if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
@@ -44,6 +44,40 @@ export function createVideoMailBridge({verify, google}) {
    state.lastSentAt=Date.now();await put(env,'state',state);await env.KV.delete('news-video:pending');
   }else await put(env,'pending',pending);
   return {ok:true,part,parts:pending.parts,gmailId,complete:pending.sent.length===pending.parts};
+ }
+ async function finishSingle(env,pending,recipient){
+  const files=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`file:${pending.id}:${i+1}`)));
+  if(files.some(x=>!x))return {ok:true,staged:true,complete:false};
+  const messageId=`news-video-${pending.id}-all@yemot-mail.smwlyqswkwt232.workers.dev`;
+  const old=await google(env,GMAIL+'messages?q='+encodeURIComponent('in:sent rfc822msgid:'+messageId)+'&maxResults=1');
+  let gmailId=old.messages?.[0]?.id;
+  if(!gmailId){
+   const intentKey=`intent:${pending.id}:all`;
+   if(await get(env,intentKey))throw Error('delivery_uncertain: waiting for sent-message verification');
+   const attach=files.reduce((n,x)=>n+x.size,0)<=16*1024*1024;
+   const date=new Date().toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'});
+   const subject=`כתבות הפוליטיקה — עדכון שעתי — ${date}`;
+   const body=`כל כתבות הווידאו במייל אחד. ${attach?'הקבצים מצורפים.':'הקבצים גדולים מדי לצירוף; קישורי ההורדה הפרטיים בדרייב מופיעים בהמשך.'}\n\n`+pending.items.map((x,i)=>`${i+1}. ${x.title}\n${x.id}`).join('\n\n')+'\n\n'+files.map((x,i)=>`${i+1}. ${x.name}\n${x.url}`).join('\n');
+   const boundary='news-'+pending.id.slice(0,32);
+   const mime=[`To: ${recipient}`,`From: ${recipient}`,`Subject: =?UTF-8?B?${utf64(subject)}?=`,`Message-ID: <${messageId}>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',wrap(utf64(body))];
+   if(attach)for(const file of files){
+    const bytes=await loadVideo(env,file.id);
+    if(bytes.length!==file.size)throw Error('stored_video_size_mismatch');
+    mime.push(`--${boundary}`,'Content-Type: video/mp4',`Content-Disposition: attachment; filename="${file.name}"`,'Content-Transfer-Encoding: base64','',wrap(b64(bytes)));
+   }
+   mime.push(`--${boundary}--`,'');
+   await put(env,intentKey,{at:Date.now()});
+   let result;
+   try{result=await google(env,GMAIL+'messages/send',{body:{raw:url64(mime.join('\r\n'))}});}catch(error){
+    if(error.status>=400&&error.status<500)await env.KV.delete('news-video:'+intentKey);
+    throw error;
+   }
+   if(!result.id)throw Error('send_not_confirmed');gmailId=result.id;
+  }
+  // A single confirmation covers every attachment; partial completion is recoverable.
+  let result;
+  for(let part=1;part<=pending.parts;part++)result=await recordPart(env,pending,part,gmailId);
+  return {...result,emails:1};
  }
  return async function videoMailRoute(request,env){
   const u=new URL(request.url),path=u.pathname;
@@ -64,6 +98,7 @@ export function createVideoMailBridge({verify, google}) {
    if(path==='/news-video/start'&&request.method==='POST'){
     const body=await request.text();if(enc.encode(body).length>262144)return json({error:'manifest_too_large'},413);
     const manifest=validateVideoManifest(JSON.parse(body));
+    manifest.delivery='single-email';
     const id=await digest(JSON.stringify(manifest.items.map(x=>x.id).sort()));
     const existing=await get(env,'pending');if(existing&&existing.id!==id)return json({error:'batch_pending'},409);
     const state=await get(env,'state',{sent:[]});const sent=new Set(state.sent.map(x=>x.id));
@@ -79,6 +114,7 @@ export function createVideoMailBridge({verify, google}) {
     if(!pending||pending.id!==match[1])return receipt?json({ok:true,existing:true,gmailId:receipt.gmailId}):json({error:'unknown_batch'},409);
     if(part<1||part>pending.parts)return json({error:'invalid_part'},400);
     if(receipt)return json(await recordPart(env,pending,part,receipt.gmailId));
+    if(pending.delivery==='single-email' && await get(env,`file:${pending.id}:${part}`))return json(await finishSingle(env,pending,recipient));
     if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
     const length=Number(request.headers.get('Content-Length'));if(!length||length>LIMIT)return json({error:'video_size'},413);
     const reader=request.body.getReader();let size=0;const chunks=[];
@@ -86,6 +122,15 @@ export function createVideoMailBridge({verify, google}) {
     if(size!==length)return json({error:'length_mismatch'},400);
     const video=new Uint8Array(size);let offset=0;for(const chunk of chunks){video.set(chunk,offset);offset+=chunk.length;}
     if(size<12||new TextDecoder().decode(video.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
+    if(pending.delivery==='single-email'){
+     const name=`news-${pending.id.slice(0,12)}-${part}.mp4`;
+     const saved=await storeVideo(env,{name,bytes:video});
+     if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
+     const link=new URL(saved.webViewLink);
+     if(link.protocol!=='https:'||link.hostname!=='drive.google.com')throw Error('invalid_drive_link');
+     await put(env,`file:${pending.id}:${part}`,{id:saved.id,url:link.href,name,size});
+     return json(await finishSingle(env,pending,recipient));
+    }
     const messageId=`news-video-${pending.id}-${part}@yemot-mail.smwlyqswkwt232.workers.dev`;
     const old=await google(env,GMAIL+'messages?q='+encodeURIComponent('in:sent rfc822msgid:'+messageId)+'&maxResults=1');
     let gmailId=old.messages?.[0]?.id;

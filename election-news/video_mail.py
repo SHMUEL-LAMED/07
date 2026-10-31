@@ -209,13 +209,13 @@ def main():
                     result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], number), part.read_bytes(), {'Content-Type': 'video/mp4'})
                     if not result.get('ok'):
                         raise ValueError('email_not_confirmed')
-                    print('video_emailed', number, len(parts), result.get('gmailId'), flush=True)
+                    print('video_emailed' if result.get('gmailId') else 'video_staged', number, len(parts), result.get('gmailId', ''), flush=True)
                     break
                 except (urllib.error.URLError, TimeoutError):
                     if attempt == 2:
                         raise
                     time.sleep(5)
-        print('video_digest_complete', len(items), 'clips', len(parts), 'emails', failures, 'source_failures', flush=True)
+        print('video_digest_complete', len(items), 'clips', 1 if batch.get('delivery') == 'single-email' else len(parts), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
 
 
 if __name__ == '__main__':
