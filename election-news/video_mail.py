@@ -102,11 +102,10 @@ def make_video(url, destination):
 
 
 def split_digest(clips, folder):
-    listing = folder / 'concat.txt'
-    # All paths are generated numeric names under this temporary directory.
-    listing.write_text(''.join("file '" + str(path) + "'\n" for path in clips))
-    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing), '-map', '0:v:0', '-map', '0:a:0', '-c', 'copy',
-                    '-f', 'segment', '-segment_time', '300', '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', '-y', str(folder / 'part-%03d.mp4')], check=True, capture_output=True, timeout=180)
+    # Keep each article as a separate attachment; split only long articles.
+    for index, clip in enumerate(clips):
+        subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(clip), '-map', '0:v:0', '-map', '0:a:0', '-c', 'copy',
+                        '-f', 'segment', '-segment_time', '300', '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', '-y', str(folder / ('part-%03d-%%03d.mp4' % index))], check=True, capture_output=True, timeout=180)
     parts = sorted(folder.glob('part-*.mp4'))
     if not parts:
         raise ValueError('no_video_parts')
