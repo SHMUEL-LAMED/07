@@ -20,6 +20,7 @@ class VideoDigestTests(unittest.TestCase):
         def worker(endpoint, path, body=None, headers=None):
             if path == '/news-video/state': return {'sent': [], 'recipient': 'owner@example.test'}
             if path == '/collector/state': return {}
+            if path == '/news-video/backfill': return {'ok': True, 'more': False, 'archived': 0}
             if path == '/news-video/start': return {'id': 'batch', 'parts': 1, 'sent': []}
             delivered.append(path)
             return {'ok': True, 'gmailId': 'sent'}

@@ -140,6 +140,16 @@ def main():
     print('mail_server_ready', flush=True)
     if args.check_only:
         return
+    # Recover earlier mailed videos before contacting publishers again.
+    cursor = ''
+    for _ in range(40):
+        archived = c.worker(mail, '/news-video/backfill', json.dumps({'pageToken': cursor}).encode(), {'Content-Type': 'application/json'})
+        if not archived.get('ok'):
+            raise ValueError('drive_backfill_not_confirmed')
+        print('drive_backfill', archived.get('archived', 0), 'files', flush=True)
+        if not archived.get('more'):
+            break
+        cursor = archived.get('pageToken', '')
     pending = state.get('pending')
     if pending:
         candidates = {x['id'].split('#')[0]: x['title'] for x in pending['items']}

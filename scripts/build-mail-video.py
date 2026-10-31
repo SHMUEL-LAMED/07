@@ -21,6 +21,9 @@ const newsVideoMail=newsVideoBridgeFactory({
   let folder=found.files?.[0]?.id;
   if(!folder)folder=(await gapi(env,'https://www.googleapis.com/drive/v3/files',{body:{name:day,mimeType:'application/vnd.google-apps.folder',parents:[root]}})).id;
   if(!folder)throw Error('daily_folder_not_confirmed');
+  const existingQuery="name='"+name+"' and '"+folder+"' in parents and trashed=false";
+  const existing=await gapi(env,'https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(existingQuery)+'&fields=files(id,name,webViewLink)');
+  if(existing.files?.[0]?.id)return existing.files[0];
   return driveUpload(env,{name,mime:'video/mp4',bytes,folder});
  },
  loadVideo:async(env,id)=>{

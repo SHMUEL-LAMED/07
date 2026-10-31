@@ -90,6 +90,41 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
   try{if(!token)throw Error();await verify(token,env,u.origin);}catch{return json({error:'unauthorized'},401);}
   try{
    const recipient=await mailbox(env);
+   if(path==='/news-video/backfill'&&request.method==='POST'){
+    const input=await request.text();if(input.length>8192)return json({error:'request_too_large'},413);
+    const cursor=JSON.parse(input||'{}').pageToken||'';
+    if(typeof cursor!=='string'||cursor.length>4096)return json({error:'invalid_cursor'},400);
+    const query='in:anywhere in:sent from:me subject:"כתבות הפוליטיקה" has:attachment filename:mp4 newer_than:7d';
+    const listing=await google(env,GMAIL+'messages?q='+encodeURIComponent(query)+'&includeSpamTrash=true&maxResults=100'+(cursor?'&pageToken='+encodeURIComponent(cursor):''));
+    let archived=0;
+    for(const entry of listing.messages||[]){
+     if(!/^[a-f0-9]+$/.test(entry.id))continue;
+     if(await get(env,'backfill-mail:'+entry.id))continue;
+     const message=await google(env,GMAIL+'messages/'+entry.id+'?format=full');
+     const subject=(message.payload?.headers||[]).find(x=>x.name.toLowerCase()==='subject')?.value||'';
+     if(!(message.labelIds||[]).includes('SENT')||!subject.startsWith('כתבות הפוליטיקה — עדכון שעתי'))continue;
+     const date=new Date(Number(message.internalDate));if(!Number.isFinite(date.getTime()))continue;
+     const day=date.toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+     const parts=[];function walk(node){if(node)parts.push(node);for(const child of node?.parts||[])walk(child);}walk(message.payload);
+     for(const part of parts){
+      if(part.mimeType!=='video/mp4'||!/^news-[a-f0-9]{12}-[0-9]+\.mp4$/.test(part.filename||''))continue;
+      const key='backfill-file:'+entry.id+':'+part.partId;
+      if(await get(env,key))continue;
+      if(!part.body?.size||part.body.size>LIMIT)throw Error('mail_attachment_size');
+      const attachment=part.body.attachmentId?await google(env,GMAIL+'messages/'+entry.id+'/attachments/'+encodeURIComponent(part.body.attachmentId)):part.body;
+      if(typeof attachment.data!=='string'||attachment.data.length>LIMIT*1.4)throw Error('invalid_mail_attachment');
+      const raw=atob(attachment.data.replace(/-/g,'+').replace(/_/g,'/'));
+      const bytes=Uint8Array.from(raw,x=>x.charCodeAt(0));
+      if(bytes.length!==part.body.size||bytes.length<12||new TextDecoder().decode(bytes.subarray(4,8))!=='ftyp')throw Error('invalid_mail_mp4');
+      const saved=await storeVideo(env,{name:part.filename,bytes,day});
+      if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
+      await put(env,key,{id:saved.id,url:saved.webViewLink,day,at:Date.now()});archived++;
+      if(archived>=4)return json({ok:true,archived,more:true,pageToken:cursor});
+     }
+     await put(env,'backfill-mail:'+entry.id,{at:Date.now()});
+    }
+    return json({ok:true,archived,more:Boolean(listing.nextPageToken),pageToken:listing.nextPageToken||''});
+   }
    if(path==='/news-video/state'&&request.method==='GET'){
     let state=await get(env,'state');
     if(!state){state={sent:[],initializedAt:Date.now()};await put(env,'state',state);}

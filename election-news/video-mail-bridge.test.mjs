@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
-function setup(sendMail=true){
+function setup(sendMail=true,extraGoogle=()=>null){
  const values=new Map(),calls=[],files=new Map(),days=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
  const route=createVideoMailBridge({sendMail,storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
-  calls.push({url,options});if(url.endsWith('/profile'))return {emailAddress:owner};
+  calls.push({url,options});const extra=await extraGoogle(e,url,options);if(extra!==null)return extra;if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
   throw Error('unexpected_google_operation');
@@ -81,4 +81,20 @@ test('Drive-only mode archives every file without sending any email',async()=>{
  assert.equal(s.calls.filter(x=>x.url.includes('messages')).length,0);
  assert.equal(JSON.parse(s.values.get('news-video:state')).sent[0].id,s.item.id);
  assert.equal(s.values.has('news-video:pending'),false);
+});
+
+test('backfill recovers only this service MP4 attachments into the correct day without mail or duplicates',async()=>{
+ const encoded=Buffer.from(tinyVideo).toString('base64url');
+ const s=setup(false,async(e,url)=>{
+  if(url.includes('messages?q='))return {messages:[{id:'a1'}]};
+  if(url.endsWith('messages/a1?format=full'))return {labelIds:['SENT'],internalDate:String(Date.parse('2026-10-30T22:30:00Z')),payload:{headers:[{name:'Subject',value:'כתבות הפוליטיקה — עדכון שעתי — בדיקה'}],parts:[{partId:'1',mimeType:'video/mp4',filename:'news-0123456789ab-1.mp4',body:{size:12,attachmentId:'video'}},{partId:'2',mimeType:'video/mp4',filename:'unrelated.mp4',body:{size:12,attachmentId:'unrelated'}}]}};
+  if(url.endsWith('attachments/video'))return {data:encoded};
+  return null;
+ });
+ const first=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
+ assert.equal(first.archived,1);assert.deepEqual(s.days,['2026-10-31']);
+ const again=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
+ assert.equal(again.archived,0);assert.equal(s.days.length,1);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/send')).length,0);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('attachments/unrelated')).length,0);
 });

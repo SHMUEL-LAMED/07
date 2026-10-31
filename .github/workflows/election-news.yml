@@ -6,6 +6,10 @@ on:
         description: 'שליחת כתבות חדשות בווידאו למייל מהשרת'
         type: boolean
         default: false
+      repair_archive:
+        description: 'פריסת תיקון ההשלמה לדרייב לפני ההרצה'
+        type: boolean
+        default: false
       video_mail_check_only:
         description: 'בדיקת חיבור הדואר בלבד, בלי שליחה'
         type: boolean
@@ -94,6 +98,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install 'yt-dlp[default]==2026.10.21'
+      - name: פריסת תיקון ארכיון דרייב
+        if: inputs.repair_archive
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python scripts/deploy-news-archive.py
       - name: כלי וידאו
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
