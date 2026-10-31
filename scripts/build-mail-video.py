@@ -12,6 +12,12 @@ const newsVideoBridgeFactory=(()=>{BRIDGE;return createVideoMailBridge;})();
 const newsVideoMail=newsVideoBridgeFactory({
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
  google:(env,url,options)=>gapi(env,url,options),
+ storeVideo:async(env,{name,bytes})=>driveUpload(env,{name,mime:'video/mp4',bytes,folder:await driveFolder(env,'כתבות וידאו — עדכונים')}),
+ loadVideo:async(env,id)=>{
+  const response=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+await accessToken(env)}});
+  if(!response.ok)throw Error('drive_download_'+response.status);
+  return new Uint8Array(await response.arrayBuffer());
+ },
 });
 export default {...originalMailWorker,async fetch(request,env,ctx){
  if(new URL(request.url).pathname.startsWith('/news-video/'))return newsVideoMail(request,env);
