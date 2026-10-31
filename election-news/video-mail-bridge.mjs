@@ -25,7 +25,7 @@ export function validateVideoManifest(value, now=Date.now()) {
  return {items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
 }
 
-export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
+export function createVideoMailBridge({verify, google, storeVideo, loadVideo, sendMail=false}) {
  async function mailbox(env){
   const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
   if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
@@ -48,6 +48,11 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
  async function finishSingle(env,pending,recipient){
   const files=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`file:${pending.id}:${i+1}`)));
   if(files.some(x=>!x))return {ok:true,staged:true,complete:false};
+  if(!sendMail){
+   let result;
+   for(let part=1;part<=pending.parts;part++)result=await recordPart(env,pending,part,'drive:'+files[part-1].id);
+   return {...result,gmailId:undefined,archived:true,emails:0};
+  }
   const messageId=`news-video-${pending.id}-all@yemot-mail.smwlyqswkwt232.workers.dev`;
   const old=await google(env,GMAIL+'messages?q='+encodeURIComponent('in:sent rfc822msgid:'+messageId)+'&maxResults=1');
   let gmailId=old.messages?.[0]?.id;
@@ -98,7 +103,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
    if(path==='/news-video/start'&&request.method==='POST'){
     const body=await request.text();if(enc.encode(body).length>262144)return json({error:'manifest_too_large'},413);
     const manifest=validateVideoManifest(JSON.parse(body));
-    manifest.delivery='single-email';
+    manifest.delivery=sendMail?'single-email':'drive-only';
     const id=await digest(JSON.stringify(manifest.items.map(x=>x.id).sort()));
     const existing=await get(env,'pending');if(existing&&existing.id!==id)return json({error:'batch_pending'},409);
     const state=await get(env,'state',{sent:[]});const sent=new Set(state.sent.map(x=>x.id));
@@ -114,7 +119,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
     if(!pending||pending.id!==match[1])return receipt?json({ok:true,existing:true,gmailId:receipt.gmailId}):json({error:'unknown_batch'},409);
     if(part<1||part>pending.parts)return json({error:'invalid_part'},400);
     if(receipt)return json(await recordPart(env,pending,part,receipt.gmailId));
-    if(pending.delivery==='single-email' && await get(env,`file:${pending.id}:${part}`))return json(await finishSingle(env,pending,recipient));
+    if((pending.delivery==='single-email'||!sendMail) && await get(env,`file:${pending.id}:${part}`))return json(await finishSingle(env,pending,recipient));
     if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
     const length=Number(request.headers.get('Content-Length'));if(!length||length>LIMIT)return json({error:'video_size'},413);
     const reader=request.body.getReader();let size=0;const chunks=[];
@@ -122,7 +127,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo}) {
     if(size!==length)return json({error:'length_mismatch'},400);
     const video=new Uint8Array(size);let offset=0;for(const chunk of chunks){video.set(chunk,offset);offset+=chunk.length;}
     if(size<12||new TextDecoder().decode(video.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
-    if(pending.delivery==='single-email'){
+    if(pending.delivery==='single-email'||!sendMail){
      const name=`news-${pending.id.slice(0,12)}-${part}.mp4`;
      const day=new Date(pending.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
      const saved=await storeVideo(env,{name,bytes:video,day});

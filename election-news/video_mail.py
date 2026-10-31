@@ -214,7 +214,7 @@ def main():
                     if attempt == 2:
                         raise
                     time.sleep(5)
-        print('video_digest_complete', len(items), 'clips', 1 if batch.get('delivery') == 'single-email' else len(parts), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
+        print('video_digest_complete', len(items), 'clips', 0 if batch.get('delivery') == 'drive-only' else (1 if batch.get('delivery') == 'single-email' else len(parts)), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
 
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ wrapper='''
 const newsVideoAuth=(()=>{AUTH;return verifyCollectorToken;})();
 const newsVideoBridgeFactory=(()=>{BRIDGE;return createVideoMailBridge;})();
 const newsVideoMail=newsVideoBridgeFactory({
+ sendMail:false,
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
  google:(env,url,options)=>gapi(env,url,options),
  storeVideo:async(env,{name,bytes,day})=>{

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
-function setup(){
+function setup(sendMail=true){
  const values=new Map(),calls=[],files=new Map(),days=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
- const route=createVideoMailBridge({storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
+ const route=createVideoMailBridge({sendMail,storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
   calls.push({url,options});if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
@@ -72,4 +72,13 @@ test('daily archive uses Jerusalem batch date consistently across retries',async
  b.createdAt=Date.parse('2026-10-31T22:30:00Z');s.values.set('news-video:pending',JSON.stringify(b));
  await upload(s,b,1);await upload(s,b,2);
  assert.deepEqual(s.days,['2026-11-01','2026-11-01']);
+});
+
+test('Drive-only mode archives every file without sending any email',async()=>{
+ const s=setup(false);const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ await upload(s,b,1);const result=await(await upload(s,b,2)).json();
+ assert.equal(result.archived,true);assert.equal(result.emails,0);
+ assert.equal(s.calls.filter(x=>x.url.includes('messages')).length,0);
+ assert.equal(JSON.parse(s.values.get('news-video:state')).sent[0].id,s.item.id);
+ assert.equal(s.values.has('news-video:pending'),false);
 });
