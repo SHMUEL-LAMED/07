@@ -3,479 +3,1114 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23465ce5'/%3E%3Crect x='18' y='7' width='28' height='50' rx='6' fill='none' stroke='white' stroke-width='4'/%3E%3Crect x='23' y='13' width='18' height='12' rx='2' fill='white'/%3E%3Cg fill='white'%3E%3Ccircle cx='24' cy='33' r='2.5'/%3E%3Ccircle cx='32' cy='33' r='2.5'/%3E%3Ccircle cx='40' cy='33' r='2.5'/%3E%3Ccircle cx='24' cy='41' r='2.5'/%3E%3Ccircle cx='32' cy='41' r='2.5'/%3E%3Ccircle cx='40' cy='41' r='2.5'/%3E%3Ccircle cx='24' cy='49' r='2.5'/%3E%3Ccircle cx='32' cy='49' r='2.5'/%3E%3Ccircle cx='40' cy='49' r='2.5'/%3E%3C/g%3E%3C/svg%3E">
 <title>מרכז הקווים</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-/* אותם צבעים, גופן ופינות כמו בדף הניהול של כל קו – כדי שהכול ייראה כמערכת אחת */
-:root{color-scheme:light;
---bg:#f3f5f9;--bg2:#e9edf4;--card:#fff;--ink:#101828;--ink2:#475467;--mut:#7d8598;--line:#e4e7ee;
---acc:#2f5fd1;--acc2:#1e46a8;--accbg:#e8eefc;--good:#15803d;--goodbg:#e7f7ed;--warn:#92400e;--warnbg:#fff4de;--bad:#dc2626;--badbg:#fdeaea;
---ring:rgba(47,95,209,.18);--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);--sh2:0 16px 40px rgba(16,24,40,.16);
---r:16px;--r2:12px;--side:268px}
-:root[data-theme=dark]{color-scheme:dark;--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;
---acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--good:#4ade80;--goodbg:#132a1c;--warn:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
---ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 16px 40px rgba(0,0,0,.55)}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0e1117;--bg2:#161b24;--card:#171c26;--ink:#f2f4f8;--ink2:#b6bdcc;--mut:#7f889b;--line:#262d3a;
---acc:#5b8def;--acc2:#8fb3f6;--accbg:#172443;--good:#4ade80;--goodbg:#132a1c;--warn:#fbbf24;--warnbg:#2f2410;--bad:#f06565;--badbg:#3a1a1a;
---ring:rgba(91,141,239,.28);--sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 16px 40px rgba(0,0,0,.55)}}
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Heebo,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
-button,input,select{font:inherit;color:inherit}a{color:var(--acc)}
-.hidden{display:none!important}
-svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-
-/* ---- כפתורים, שדות, תגיות ---- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:11px;padding:9px 16px;font-weight:600;cursor:pointer;background:var(--acc);color:#fff;text-decoration:none;white-space:nowrap;transition:background .15s,box-shadow .15s}
-.btn:hover{background:var(--acc2)}.btn:focus-visible,.field:focus-visible,.nav a:focus-visible{outline:none;box-shadow:0 0 0 4px var(--ring)}
-.btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line)}.btn.ghost:hover{background:var(--bg2)}
-.btn.soft{background:var(--accbg);color:var(--acc)}.btn.soft:hover{filter:brightness(.97)}
-.btn.danger{background:var(--badbg);color:var(--bad)}.btn.danger:hover{filter:brightness(.96)}
-.btn.sm{padding:6px 11px;font-size:13px;border-radius:9px}.btn:disabled{opacity:.55;cursor:default}
-.field{width:100%;border:1px solid var(--line);background:var(--card);border-radius:11px;padding:10px 12px;transition:box-shadow .15s,border-color .15s}
-.field:focus{border-color:var(--acc)}label.lbl{display:grid;gap:6px;font-weight:600;font-size:14px}label.lbl small{font-weight:400;color:var(--mut)}
-.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--bg2);color:var(--ink2);white-space:nowrap}
-.pill.ok{background:var(--goodbg);color:var(--good)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.acc{background:var(--accbg);color:var(--acc)}
-.mut{color:var(--mut)}.small{font-size:13px}.ltr{direction:ltr;unicode-bidi:isolate}.num{font-variant-numeric:tabular-nums}
-.err{color:var(--bad);font-weight:600}
-
-/* ---- מבנה: סרגל צד + אזור עבודה ---- */
-.shell{display:grid;grid-template-columns:var(--side) 1fr;min-height:100vh}
-.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--card);border-inline-end:1px solid var(--line);z-index:30}
-.brand{display:flex;align-items:center;gap:11px;padding:20px 20px 14px}
-.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(140deg,#5b8def,var(--acc) 55%,#1e3a8a);box-shadow:0 6px 16px rgba(47,95,209,.35)}
-.logo svg{width:21px;height:21px}.brand b{display:block;font-size:17px;font-weight:800;letter-spacing:-.3px}.brand small{display:block;color:var(--mut);font-size:12px}
-.picker{margin:4px 14px 10px;position:relative}
-.picker-btn{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);border-radius:13px;cursor:pointer;text-align:start}
-.picker-btn:hover{border-color:var(--acc)}.picker-btn .dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:none}.picker-btn .dot.off{background:var(--mut)}
-.picker-btn span{flex:1;min-width:0}.picker-btn b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.picker-btn small{display:block;color:var(--mut);font-size:12px}
-.pop{position:absolute;inset-inline:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh2);padding:8px;z-index:40}
-.pop .field{margin-bottom:6px}.pop-list{max-height:320px;overflow:auto;display:grid;gap:2px}
-.pop-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;border:0;background:none;width:100%;text-align:start}
-.pop-item:hover,.pop-item.on{background:var(--accbg)}.pop-item span{flex:1}.pop-item small{color:var(--mut);font-size:12px}
-.pop-sep{height:1px;background:var(--line);margin:6px 4px}
-.nav{padding:4px 12px;display:grid;gap:2px}.nav-h{font-size:11.5px;font-weight:700;color:var(--mut);padding:12px 10px 4px;letter-spacing:.3px}
-.nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:11px;color:var(--ink2);text-decoration:none;font-weight:500}
-.nav a:hover{background:var(--bg2);color:var(--ink)}.nav a.on{background:var(--accbg);color:var(--acc);font-weight:700}
-.ndot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;margin-inline:5px}.ndot.off{background:var(--mut)}
-.nav a .cnt{margin-inline-start:auto;font-size:12px;color:var(--mut)}
-.side-scroll{flex:1;overflow-y:auto;padding-bottom:10px}
-.me{border-top:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px}
-.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--accbg);color:var(--acc);font-weight:800;flex:none}
-.me div{flex:1;min-width:0}.me b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.me small{display:block;color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.icon-btn{border:0;background:none;padding:8px;border-radius:10px;cursor:pointer;color:var(--ink2);display:grid;place-items:center}.icon-btn:hover{background:var(--bg2);color:var(--ink)}
-
-.main{min-width:0;display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:12px 24px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-.topbar h1{font-size:18px;margin:0;font-weight:800;white-space:nowrap}
-.quick{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline-start:auto;padding:2px}.quick::-webkit-scrollbar{display:none}
-.qtab{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);cursor:pointer;white-space:nowrap;font-size:13.5px;font-weight:600;color:var(--ink2)}
-.qtab:hover{border-color:var(--acc);color:var(--ink)}.qtab.on{background:var(--acc);border-color:var(--acc);color:#fff}
-.qtab i{width:7px;height:7px;border-radius:50%;background:var(--good)}.qtab i.off{background:var(--mut)}.qtab.on i{background:#fff}
-.burger{display:none}
-.content{padding:24px;max-width:1240px;width:100%;margin:0 auto;flex:1}
-.content.full{max-width:none;padding:0;display:flex;flex-direction:column}
-
-/* ---- כרטיסים, מדדים, טבלאות ---- */
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:20px}
-.card+.card,.grid+.card,.card+.grid{margin-top:16px}
-.card h2{margin:0 0 4px;font-size:17px}.card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}.card-head>div{flex:1;min-width:200px}.card-head p{margin:0;color:var(--mut);font-size:14px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
-.kpi b{display:block;font-size:28px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.kpi span{color:var(--mut);font-size:13px}
-.kpi.skel b{width:50px;height:28px;border-radius:8px;background:var(--bg2);animation:pulse 1.2s infinite}
-@keyframes pulse{50%{opacity:.5}}
-.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r2)}
-table.t{width:100%;border-collapse:collapse;font-size:14px;min-width:720px}
-.t th{text-align:start;font-weight:600;color:var(--mut);font-size:12.5px;padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--line);white-space:nowrap}
-.t td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}.t tr:last-child td{border-bottom:0}.t tbody tr:hover{background:color-mix(in srgb,var(--bg) 60%,transparent)}
-.t td b{display:block}.t td small{display:block;color:var(--mut);font-size:12px}
-.acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
-.t .acts{flex-wrap:nowrap}
-.chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 10px;border-radius:99px;background:var(--accbg);color:var(--acc);font-size:12.5px;font-weight:600}
-.chip button{border:0;background:none;color:inherit;cursor:pointer;padding:0 3px;border-radius:50%;line-height:1;font-size:15px}.chip button:hover{background:rgba(0,0,0,.08)}
-.chip-add{border:1px dashed var(--line);background:none;border-radius:99px;padding:3px 10px;font-size:12.5px;color:var(--mut);cursor:pointer}
-.empty{text-align:center;padding:48px 20px;color:var(--mut)}.empty h2{color:var(--ink);margin:0 0 6px;font-size:19px}
-.empty .big{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;margin:0 auto 14px;background:var(--accbg);color:var(--acc)}.empty .big svg{width:26px;height:26px}
-.lines-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.lc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,transform .15s}
-.lc:hover{border-color:var(--acc);transform:translateY(-1px)}.lc-h{display:flex;align-items:center;gap:10px}.lc-h b{flex:1;font-size:16px}
-.lc-m{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}.lc-m div{background:var(--bg);border-radius:10px;padding:8px 4px}.lc-m b{display:block;font-size:18px;font-variant-numeric:tabular-nums}.lc-m span{font-size:11.5px;color:var(--mut)}
-
-/* ---- אשף קו חדש ---- */
-.steps{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}.steps span{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;background:var(--bg2);color:var(--mut);font-size:13px;font-weight:600}
-.steps span.on{background:var(--acc);color:#fff}.steps span.ok{background:var(--goodbg);color:var(--good)}
-.form{display:grid;gap:14px;max-width:640px}.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;background:var(--bg);border-radius:12px;padding:12px 14px}.kv b{color:var(--mut);font-weight:600}
-.secret{display:flex;gap:8px;align-items:center;background:var(--warnbg);border-radius:12px;padding:12px 14px}.secret code{flex:1;font-size:16px;font-weight:700;direction:ltr;text-align:start}
-.banner{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--warnbg);color:var(--warn);font-size:14px;margin-bottom:14px}.banner.info{background:var(--accbg);color:var(--acc)}
-pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;font-size:12px;background:var(--bg);border-radius:8px;padding:6px 8px;direction:ltr;text-align:left;white-space:pre-wrap}
-
-/* ---- קו בתוך המרכז ---- */
-.frame-bar{display:flex;align-items:center;gap:10px;padding:10px 24px;border-bottom:1px solid var(--line);background:var(--card)}
-.frame-bar b{font-size:15px}.frame-bar .sp{flex:1}
-.frame{flex:1;width:100%;border:0;min-height:calc(100vh - 120px);background:var(--bg)}
-
-/* ---- חלון קופץ, הודעה קצרה ---- */
-.modal{position:fixed;inset:0;background:rgba(16,24,40,.45);display:grid;place-items:center;z-index:60;padding:16px}
-.modal .card{width:min(520px,100%);max-height:90vh;overflow:auto;box-shadow:var(--sh2)}
-.checks{display:grid;gap:6px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px}
-.checks label{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer}.checks label:hover{background:var(--bg)}
-#toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:12px;font-weight:600;z-index:70;box-shadow:var(--sh2)}
-#toast.bad{background:var(--bad);color:#fff}
-
-/* ---- מסך כניסה ---- */
-.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 30%,var(--card) 0%,var(--bg) 60%)}
-.login-box{width:min(400px,100%);text-align:center;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 28px;box-shadow:var(--sh2)}
-.login-box .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px}.login-box .logo svg{width:28px;height:28px}
-.login-box h1{margin:0 0 6px;font-size:23px}.login-box p{margin:0 0 22px;color:var(--mut)}#gbtn{display:flex;justify-content:center;min-height:44px}
-
-/* ---- נייד ---- */
-@media(max-width:900px){
-  .shell{grid-template-columns:1fr}
-  .side{position:fixed;inset-block:0;inset-inline-start:0;width:min(300px,86vw);transform:translateX(100%);transition:transform .22s;box-shadow:var(--sh2)}
-  :root[dir=rtl] .side{transform:translateX(100%)}.shell.open .side{transform:none}
-  .scrim{position:fixed;inset:0;background:rgba(16,24,40,.4);z-index:25}
-  .burger{display:grid}.topbar{padding:10px 14px}.content{padding:16px}.frame-bar{padding:10px 14px}
-  .fgrid{grid-template-columns:1fr}.quick{max-width:60vw}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&display=swap">
+<script>"use strict";(function(){var d=document.documentElement;
+try{var t=localStorage.getItem("portalTheme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}
+try{var p=JSON.parse(localStorage.getItem("uiPrefs")||"{}")||{};if(typeof p.accent==="string")d.setAttribute("data-accent",p.accent)}catch(e){}
+})();</script>
+<style>/*@tokens:start*/
+:root{
+  --sans: Heebo, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --serif: "Frank Ruhl Libre", Georgia, "Times New Roman", serif;
+  --acc-l:#3646c9; --acc-d:#8c9cff;
+  --bg:#f6f4ef; --bg2:#eeebe3; --card:#fffefb; --ink:#14161d; --ink2:#4a4e59; --mut:#6e717b;
+  --line:#e9e5db; --axis:#d6d1c4; --acc:var(--acc-l); --acc-ink:#fff;
+  --gold:#a8844a; --goldbg:#f6eedf; --good:#16865a; --goodt:#13704c; --goodbg:#e6f4ec;
+  --warn:#d98b06; --warnt:#8a5603; --warnbg:#fbf1dc; --bad:#c92a3a; --badbg:#fbe9ea;
+  --glass:rgba(255,254,251,.82);
+  --sh:0 1px 2px rgba(20,22,29,.04),0 6px 18px rgba(20,22,29,.05); --sh2:0 18px 50px rgba(20,22,29,.16);
+  --acc2:var(--acc); --accbg:var(--bg2); --ring:rgba(54,70,201,.22);
+  --rad:1; --r:calc(20px*var(--rad)); --r2:calc(14px*var(--rad)); --r3:calc(10px*var(--rad));
+  --pad:24px; --gap:22px; --zoom:1; --ease:cubic-bezier(.2,.8,.2,1); --dur:.18s;
+  --side-w:268px; --top-h:64px; --bnav-h:0px; --gutter:16px; --maxw:1320px;
+  color-scheme:light;
 }
-.cmp{display:grid;gap:14px}.cmp-l{display:grid;gap:4px}.cmp-g{display:flex;gap:6px;align-items:flex-end;height:70px}.cmp-d{flex:1;display:flex;gap:2px;align-items:flex-end;height:100%}.cb{display:block;flex:1;min-height:2px;border-radius:3px 3px 0 0}.cb.c1{background:var(--acc,#465ce5)}.cb.c2{background:color-mix(in srgb,var(--acc,#465ce5) 35%,transparent)}
+:root[data-accent=emerald]{--acc-l:#0f7a5c;--acc-d:#4fd1a5} :root[data-accent=wine]{--acc-l:#8a1c3c;--acc-d:#f07a9b}
+:root[data-accent=gold]{--acc-l:#94702f;--acc-d:#e2bf7c} :root[data-accent=slate]{--acc-l:#2f3a4f;--acc-d:#aab6cc}
+:root[data-accent=teal]{--acc-l:#0d6f86;--acc-d:#5cc8e0}
+/* כהה: אותו בלוק פעמיים – מפורש, ולפי המכשיר כשאין בחירה בהירה */
+:root[data-theme=dark]{--bg:#0c0d11;--bg2:#15171d;--card:#14161c;--ink:#f3f1ec;--ink2:#b9b7b0;--mut:#8d909a;--line:#24272f;--axis:#363a44;
+  --acc:var(--acc-d);--acc-ink:#0c0d11;--gold:#d6b27a;--goldbg:#2a2318;--good:#3ccf8e;--goodt:#5fe0a4;--goodbg:#10261c;
+  --warn:#f0a92a;--warnt:#f6c25c;--warnbg:#2c2210;--bad:#ff6b78;--badbg:#341719;--glass:rgba(20,22,28,.82);
+  --sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 18px 50px rgba(0,0,0,.55);--ring:rgba(140,156,255,.28);color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0c0d11;--bg2:#15171d;--card:#14161c;--ink:#f3f1ec;--ink2:#b9b7b0;--mut:#8d909a;--line:#24272f;--axis:#363a44;
+  --acc:var(--acc-d);--acc-ink:#0c0d11;--gold:#d6b27a;--goldbg:#2a2318;--good:#3ccf8e;--goodt:#5fe0a4;--goodbg:#10261c;
+  --warn:#f0a92a;--warnt:#f6c25c;--warnbg:#2c2210;--bad:#ff6b78;--badbg:#341719;--glass:rgba(20,22,28,.82);
+  --sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 18px 50px rgba(0,0,0,.55);--ring:rgba(140,156,255,.28);color-scheme:dark}}
+@supports (color:color-mix(in srgb,red 50%,blue)){
+  :root{--acc2:color-mix(in srgb,var(--acc) 82%,#000);--accbg:color-mix(in srgb,var(--acc) 9%,var(--card));--ring:color-mix(in srgb,var(--acc) 22%,transparent)}
+  :root[data-theme=dark]{--acc2:color-mix(in srgb,var(--acc) 80%,#fff)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--acc2:color-mix(in srgb,var(--acc) 80%,#fff)}}
+}
+:root[data-density=compact]{--pad:16px;--gap:14px} :root[data-density=airy]{--pad:32px;--gap:30px}
+:root[data-text=s]{--zoom:.92} :root[data-text=l]{--zoom:1.1} :root[data-text=xl]{--zoom:1.22}
+:root[data-corners=sharp]{--rad:.35}
+/*@tokens:end*/
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{font-size:calc(15px*var(--zoom));-webkit-text-size-adjust:100%;scrollbar-width:thin}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:1rem/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+body.locked{overflow:hidden}
+button,input,select{font-family:inherit;color:inherit}
+a{color:var(--acc)}
+h1,h2{margin:0}
+code{padding:1px 5px;border-radius:6px;background:var(--bg2);direction:ltr;unicode-bidi:isolate}
+.ico{width:1.15em;height:1.15em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em}
+.kosher-phone{width:1em;height:1em;flex:none}
+:focus{outline:2px solid var(--acc);outline-offset:2px}
+:focus:not(:focus-visible){outline:none}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;box-shadow:0 0 0 3px var(--ring)}
+#view:focus{outline:none;box-shadow:none}
+.mut{color:var(--mut)} .small{font-size:.83rem} .num{font-variant-numeric:tabular-nums}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.wrap{overflow-x:auto;max-width:100%}
+.skip-link{position:fixed;top:-80px;right:12px;z-index:110;padding:10px 16px;border-radius:10px;background:var(--acc);color:var(--acc-ink);font-weight:700}
+.skip-link:focus{top:12px}
+.btn,.side-logo,.xbtn,.chip button,.side-tools button,.empty .big,.avatar{display:inline-flex;align-items:center;justify-content:center;flex:none}
+.modal,.dlg,.login-layer,.scrim{position:fixed;top:0;right:0;bottom:0;left:0}
+.btn{gap:6px;max-width:100%;min-height:40px;padding:8px 15px;border:1px solid var(--line);border-radius:var(--r3);background:var(--card);color:var(--ink);font:600 .93rem/1.2 var(--sans);text-decoration:none;white-space:nowrap;cursor:pointer}
+.btn:hover{border-color:var(--acc);color:var(--acc);background:var(--accbg)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn.p{background:var(--acc);background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:var(--acc);color:var(--acc-ink)}
+.btn.p:hover{background:var(--acc2);color:var(--acc-ink)}
+.btn.d{color:var(--bad)}
+.btn.d:hover{border-color:var(--bad);background:var(--badbg)}
+.btn.p.d{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.s{min-height:32px;padding:4px 10px;font-size:.83rem}
+.btn.icon{width:40px;padding:0}
+.btn.icon .ico{width:20px;height:20px}
+.btn.ghost{background:transparent;border-color:transparent}
+.pill,.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:600;background:var(--bg2);color:var(--ink2);white-space:nowrap}
+.pill.ok{background:var(--goodbg);color:var(--goodt)}
+.pill.bad{background:var(--badbg);color:var(--bad)}
+.pill.warn{background:var(--warnbg);color:var(--warnt)}
+.pill.acc{background:var(--acc);color:var(--acc-ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{background:var(--accbg);color:var(--acc);padding:2px 4px 2px 10px}
+.chip button{width:24px;height:24px;padding:0;border:0;border-radius:50%;background:none;font-size:15px;cursor:pointer}
+.chip button:hover{background:var(--card)}
+select.chip-add{min-height:30px;padding:2px 10px;border:1px dashed var(--axis);border-radius:999px;background:none;font-size:.8rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);box-shadow:var(--sh);min-width:0}
+.card+.card,.lines-cards+.card,.tiles+.lines-cards{margin-top:var(--gap)}
+.card h2{font:700 1.2rem/1.3 var(--serif)}
+.card-h,.phead{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 12px;margin-bottom:14px}
+.card-h>div,.phead>div{flex:1 1 220px;min-width:0}
+.card-h p,.phead p{margin:4px 0 0;color:var(--mut)}
+.phead{align-items:flex-end;margin-bottom:var(--gap)}
+.phead h2{font:700 1.75rem/1.2 var(--serif)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.tile{display:flex;flex-direction:column;gap:4px;padding:16px 18px;background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh);min-width:0}
+.tile b{font:800 2.1rem/1.05 var(--sans);font-variant-numeric:tabular-nums}
+.tile span{color:var(--mut);font-size:.87rem}
+.kpi.skel b{width:56px;height:2.1rem;border-radius:var(--r3);background:var(--bg2);animation:blink 1.2s infinite}
+.tbl{width:100%;min-width:720px;border-collapse:separate;border-spacing:0;font-size:.9rem}
+.tbl th{position:sticky;top:0;background:var(--bg);color:var(--ink2);font-size:.8rem;font-weight:600;text-align:right;white-space:nowrap}
+.tbl th,.tbl td{padding:9px 12px;border-bottom:1px solid var(--line)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr:hover td{background:var(--accbg)}
+.tbl td b{display:block}
+.tbl td small{display:block;color:var(--mut);font-size:.8rem}
+.tbl td:first-child{min-width:170px}
+.tbl .ltr{white-space:nowrap}
+.tw{border:1px solid var(--line);border-radius:var(--r2)}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tbl .acts{flex-wrap:nowrap;justify-content:flex-end}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 16px;margin-bottom:14px;border-radius:var(--r2);background:var(--warnbg);color:var(--warnt);overflow-wrap:anywhere}
+.banner.info{background:var(--accbg);color:var(--ink)}
+.banner>div{flex:1 1 220px;min-width:0}
+.empty{padding:40px 16px;text-align:center;color:var(--mut)}
+.empty .big{width:56px;height:56px;margin-bottom:14px;border-radius:16px;background:var(--accbg);color:var(--acc)}
+.empty .big .ico{width:26px;height:26px}
+.empty h2{margin-bottom:6px;color:var(--ink);font:700 1.3rem/1.3 var(--serif)}
+.empty p{margin:0 0 14px}
+.err{padding:10px 14px;border-radius:var(--r3);background:var(--badbg);color:var(--bad);overflow-wrap:anywhere}
+input,select{max-width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--axis);border-radius:var(--r3);background:var(--card);color:var(--ink);font-size:max(16px,1rem)}
+input:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 4px var(--ring)}
+input::placeholder{color:var(--mut)}
+input[type=checkbox]{width:18px;height:18px;min-height:0;padding:0;accent-color:var(--acc);flex:none}
+input[type=email],input[type=tel]{direction:ltr;text-align:right}
+input.ltr{text-align:left}
+.form{display:flex;flex-direction:column;gap:14px;max-width:660px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fgrid>*{min-width:0}
+.lbl{display:flex;flex-direction:column;gap:5px;font-size:.87rem;font-weight:600;color:var(--ink2)}
+.lbl small{font-weight:400;color:var(--mut)}
+.lbl input{width:100%;color:var(--ink);font-weight:400}
+.checks{display:grid;gap:2px;max-height:240px;overflow:auto;padding:6px;border:1px solid var(--line);border-radius:var(--r2)}
+.checks label{display:flex;align-items:center;gap:9px;min-height:40px;padding:6px 8px;border-radius:var(--r3);cursor:pointer;font-weight:500;color:var(--ink)}
+.checks label:hover{background:var(--bg2)}
+.checks.inline{display:flex;flex-wrap:wrap;border:0;padding:0;margin:12px 0}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;margin-bottom:16px;padding:12px 14px;border-radius:var(--r2);background:var(--bg);font-size:.9rem;overflow-wrap:anywhere}
+.kv b{color:var(--mut)}
+.secret{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;border-radius:var(--r2);background:var(--warnbg)}
+.secret code{flex:1 1 160px;background:none;font-size:1.1rem;font-weight:700;text-align:left;overflow-wrap:anywhere}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+.steps span{padding:6px 12px;border-radius:999px;background:var(--bg2);color:var(--mut);font-size:.85rem;font-weight:600}
+.steps .on{background:var(--acc);color:var(--acc-ink)}
+.steps .ok{background:var(--goodbg);color:var(--goodt)}
+ol.small{margin:0 0 14px;padding-right:20px}
+pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;padding:6px 8px;border-radius:8px;background:var(--bg);font-size:12px;direction:ltr;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere}
+.warnt{color:var(--warnt)}
+.shell{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;z-index:40;display:flex;flex-direction:column;height:100vh;background:var(--card);border-left:1px solid var(--line)}
+.side-brand{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}
+.side-logo{width:42px;height:42px;border-radius:13px;background:var(--acc);background:linear-gradient(135deg,var(--acc),var(--acc2));color:var(--acc-ink)}
+.side-logo .kosher-phone{width:24px;height:24px}
+.side-id{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25}
+.side-id b{font:700 17px/1.25 var(--serif)}
+.side-id small,.me-id small,.picker-btn small,.pop-item small,.cnt{color:var(--mut);font-size:12px}
+.side-x{display:none!important;color:var(--mut)}
+.picker{position:relative;margin:2px 14px 10px}
+.picker-btn{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--bg);text-align:right;cursor:pointer}
+.picker-btn:hover,.picker-btn[aria-expanded=true]{border-color:var(--acc)}
+.picker-btn>span,.pop-item>span,.nav-label,.me-id{flex:1;min-width:0}
+.picker-btn b,.picker-btn small,.pop-item>span,.nav-label,.me-id b,.me-id small,.bar h1,.lc-h b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{display:inline-block;flex:none;width:9px;height:9px;border-radius:50%;background:var(--good)}
+.dot.off{background:var(--mut)}
+.dot.none{background:var(--axis)}
+.pop{position:absolute;top:calc(100% + 6px);right:0;left:0;z-index:50;padding:8px;border:1px solid var(--line);border-radius:var(--r2);background:var(--card);box-shadow:var(--sh2)}
+.pop input{width:100%;margin-bottom:6px}
+.pop-list{display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto}
+.pop-item{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:var(--r3);background:none;text-align:right;cursor:pointer}
+.pop-item:hover,.pop-item.on{background:var(--accbg)}
+.pop-item.on{color:var(--acc);font-weight:700}
+.pop-sep{height:1px;margin:6px 4px;background:var(--line)}
+.pop .mut{padding:6px 10px;margin:0}
+.side-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 12px 12px}
+.tabs{display:flex;flex-direction:column;gap:2px}
+.nav-group{padding:14px 12px 6px;color:var(--mut);font:700 11.5px/1.2 var(--sans)}
+.tabs a{position:relative;display:flex;align-items:center;gap:12px;min-height:42px;padding:8px 12px;border-radius:var(--r3);color:var(--ink2);font:500 14.5px/1.2 var(--sans);text-decoration:none}
+.tabs a:hover{background:var(--bg2);color:var(--ink)}
+.tabs [aria-current=page]{background:var(--accbg);color:var(--acc);font-weight:700}
+.tabs [aria-current=page]::before{content:"";position:absolute;top:10px;bottom:10px;right:-12px;width:3px;border-radius:3px 0 0 3px;background:var(--acc)}
+.tabs .ico{width:20px;height:20px}
+.tabs .dot{margin:0 5px}
+.none-msg{padding:4px 12px;margin:0}
+.side-foot{display:flex;align-items:center;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--accbg);color:var(--acc);font-weight:800}
+.me-id{line-height:1.3}
+.me-id b{font-size:13px;text-align:right}
+.side-tools{display:inline-flex;gap:2px}
+.side-tools button{width:36px;height:36px;padding:0;border:0;border-radius:9px;background:none;color:var(--mut);cursor:pointer}
+.side-tools button:hover{background:var(--bg2);color:var(--ink)}
+.scrim{z-index:39;background:rgba(12,13,17,.42)}
+.main{display:flex;flex-direction:column;min-width:0}
+.top{position:sticky;top:0;z-index:30;background:var(--bg);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:12px;min-height:var(--top-h);padding:10px var(--gutter)}
+.bar h1{min-width:0;font:700 22px/1.2 var(--serif)}
+.top .btn{border-color:transparent;background:none}
+.menu-btn{display:none!important}
+.quick{display:flex;gap:6px;flex:1;justify-content:flex-end;min-width:0;margin-right:auto;padding:2px;overflow-x:auto;scrollbar-width:none}
+.quick::-webkit-scrollbar{display:none}
+.qtab{display:inline-flex;align-items:center;gap:7px;flex:none;min-height:34px;padding:5px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink2);font-size:.88rem;font-weight:600;text-decoration:none;white-space:nowrap}
+.qtab:hover{border-color:var(--acc)}
+.qtab[aria-current=page]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.qtab .dot{width:7px;height:7px}
+.qtab[aria-current=page] .dot{background:var(--acc-ink)}
+.gnote{margin:12px var(--gutter) 0}
+.content{flex:1;width:100%;max-width:var(--maxw);margin:0 auto;padding:var(--gap) var(--gutter)}
+.content.full{max-width:none;padding:0;display:flex;flex-direction:column}
+.lines-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lc{display:flex;flex-direction:column;gap:10px;min-width:0;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--sh);color:var(--ink);text-decoration:none}
+.lc:hover{border-color:var(--acc)}
+.lc-h{display:flex;align-items:center;gap:10px}
+.lc-h b{flex:1;min-width:0;font:700 1.1rem/1.3 var(--serif)}
+.lc-n{color:var(--mut);font-size:.85rem;text-align:right}
+.lc-m{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+.lc-m div{padding:8px 4px;border-radius:var(--r3);background:var(--bg)}
+.lc-m b{display:block;font-size:1.25rem}
+.lc-m span{color:var(--mut);font-size:.78rem}
+.cmp{display:flex;flex-direction:column;gap:16px}
+.cmp-l{display:flex;flex-direction:column;gap:4px}
+.cmp-g,.cmp-ax{display:flex;gap:6px;direction:ltr}
+.cmp-g{align-items:flex-end;height:70px}
+.cmp-d{display:flex;flex:1;gap:2px;align-items:flex-end;height:100%;min-width:0}
+.cb{flex:1;min-height:2px;border-radius:3px 3px 0 0;background:var(--acc)}
+.cb.c2{opacity:.35}
+.cmp-ax span{flex:1;min-width:0;color:var(--mut);font-size:11px;text-align:center;overflow:hidden;white-space:nowrap}
+.frame-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px var(--gutter);border-bottom:1px solid var(--line);background:var(--card)}
+.frame-bar b{font:700 1.05rem/1.3 var(--serif)}
+.frame-bar .sp{flex:1}
+.frame{flex:1;width:100%;min-height:calc(100vh - 120px);border:0;background:var(--bg)}
+.modal{z-index:60;display:flex;justify-content:center;padding:5vh 16px;overflow-y:auto;background:rgba(12,13,17,.45)}
+.modal .box,.dlg-box{width:100%;max-width:520px;max-height:90vh;overflow:auto;margin:auto 0;padding:var(--pad);border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--sh2);animation:pop .18s}
+.modal.wide .box{max-width:860px}
+.mh{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.mh h2{flex:1;min-width:0;font:700 1.45rem/1.25 var(--serif);overflow-wrap:anywhere}
+.xbtn{width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--card);cursor:pointer}
+.mb>p{margin:0 0 12px}
+.dlg{z-index:90;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(12,13,17,.5)}
+.dlg-box{max-width:460px;padding:22px}
+.dlg-msg{margin-bottom:14px;white-space:pre-line;overflow-wrap:anywhere;line-height:1.6}
+.dlg-box input{width:100%;margin-bottom:14px}
+.dlg-act{display:flex;flex-wrap:wrap;gap:8px}
+.dlg-act .btn{min-width:96px}
+#toast{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;z-index:80;transform:translateX(-50%);display:flex;align-items:center;gap:10px;width:-webkit-max-content;width:max-content;max-width:calc(100vw - 32px);padding:11px 18px;border-radius:999px;background:#14161d;color:#f6f4ef;font:600 14px/1.4 var(--sans);box-shadow:var(--sh2)}
+#toast:empty{display:none}
+#toast::before{content:"";width:8px;height:8px;flex:none;border-radius:50%;background:#3ccf8e}
+#toast>*{overflow-wrap:anywhere}
+#toast.bad{background:#c92a3a;color:#fff}
+#toast.bad::before{background:#fff}
+.login-layer{z-index:100;display:flex;overflow-y:auto;padding:24px 16px;background:var(--bg);background-image:radial-gradient(ellipse at 85% 10%,var(--ring),transparent 55%)}
+.login-box{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:420px;margin:auto;padding:40px 32px;border:1px solid var(--line);border-radius:30px;background:var(--card);box-shadow:var(--sh2);text-align:center}
+.login-box>.kosher-phone{width:60px;height:60px;padding:14px;border-radius:19px;background:var(--acc);background:linear-gradient(135deg,var(--acc),var(--acc2));color:var(--acc-ink)}
+.login-brand{color:var(--gold);font-size:14px;font-weight:700}
+.login-box h1{font:700 32px/1.15 var(--serif)}
+.login-box p{margin:0;color:var(--ink2)}
+#gbtn{display:flex;justify-content:center;min-height:44px}
+.login-err{margin:0;color:var(--bad);font-weight:600;overflow-wrap:anywhere}
+.login-err:empty{display:none}
+@media (min-width:901px){
+.inline .side-x{display:inline-flex!important}
+.shell.narrow{grid-template-columns:76px minmax(0,1fr)}
+.narrow .side-brand{flex-direction:column;gap:8px;padding:14px 0 10px}
+.narrow .side-id,.narrow .picker-btn>span,.narrow .picker-btn>.ico,.narrow .nav-label,.narrow .cnt,.narrow .me-id,.narrow .none-msg{display:none}
+.narrow .picker{margin:0 10px 8px}
+.narrow .picker-btn{justify-content:center;min-height:44px;padding:8px 0}
+.narrow .pop{left:auto;width:290px}
+.narrow .side-scroll{padding:0 10px 12px}
+.narrow .nav-group{height:1px;margin:10px 8px;padding:0;overflow:hidden;background:var(--line);font-size:0}
+.narrow .tabs a{justify-content:center;padding:8px 0}
+.narrow .tabs [aria-current=page]::before{right:-10px}
+.narrow .tabs .dot{width:11px;height:11px}
+.narrow .side-foot{flex-direction:column;padding:10px 0}
+.narrow .side-x .ico{transform:scaleX(-1)}
+}
+@media (max-width:900px){
+.shell,.shell.narrow{grid-template-columns:minmax(0,1fr)}
+.side{position:fixed;bottom:0;right:0;width:min(300px,86vw);height:auto;visibility:hidden;transform:translateX(105%);transition:transform .25s,visibility 0s .25s}
+.shell.open .side{visibility:visible;transform:none;box-shadow:var(--sh2);transition:transform .25s}
+.menu-btn{display:inline-flex!important}
+.bar{gap:8px}
+.bar h1{font-size:19px}
+.quick{max-width:60vw}
+.fgrid{grid-template-columns:1fr}
+.tbl .acts{flex-wrap:wrap}
+}
+@media (min-width:601px){:root{--gutter:24px}}
+@media (min-width:1100px){:root{--gutter:32px}}
+@media (max-width:600px){
+.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{padding:14px}
+.tile b{font-size:1.7rem}
+.card{padding:calc(var(--pad)*.75)}
+.phead h2{font-size:1.45rem}
+.modal{padding:0}
+.modal .box{max-width:none!important;max-height:94vh;margin:auto 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0}
+.login-box{padding:32px 22px}
+.login-box h1{font-size:27px}
+.frame-bar .btn{flex:1 1 auto}
+}
+@keyframes pop{from{opacity:0;transform:scale(.98)}}
+@keyframes blink{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<div id="toast" class="hidden"></div>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script>
-"use strict";
+<a class="skip-link" href="#view">דילוג לתוכן</a>
+<div class="shell" id="shell" hidden>
+  <aside class="side" id="side" aria-label="ניווט ראשי">
+    <div class="side-brand">
+      <span class="side-logo"><svg class="kosher-phone" viewBox="0 0 32 32" role="img" aria-label="פלאפון כשר"><rect x="7" y="2" width="18" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="10" y="5" width="12" height="7" rx="1" fill="currentColor"/><g fill="currentColor"><circle cx="11" cy="16" r="1.25"/><circle cx="16" cy="16" r="1.25"/><circle cx="21" cy="16" r="1.25"/><circle cx="11" cy="20" r="1.25"/><circle cx="16" cy="20" r="1.25"/><circle cx="21" cy="20" r="1.25"/><circle cx="11" cy="24" r="1.25"/><circle cx="16" cy="24" r="1.25"/><circle cx="21" cy="24" r="1.25"/></g></svg></span>
+      <span class="side-id"><b>מרכז הקווים</b><small id="brand-sub"></small></span>
+      <button class="btn icon ghost side-x" id="sideX" type="button" data-act="sideWide" aria-label="הרחבת הסרגל" title="הרחבת הסרגל"></button>
+    </div>
+    <div class="picker" id="picker"></div>
+    <div class="side-scroll">
+      <nav class="tabs" id="nav" aria-label="ניהול"></nav>
+      <nav class="tabs" id="mylines" aria-label="הקווים שלי"></nav>
+    </div>
+    <div class="side-foot" id="me"></div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div class="bar">
+        <button class="btn icon menu-btn" type="button" data-act="side" id="burger" aria-label="תפריט" title="תפריט"></button>
+        <h1 id="title"></h1>
+        <nav class="quick" id="quick" aria-label="לשוניות הקווים"></nav>
+      </div>
+    </header>
+    <div class="banner info gnote" id="gnote" role="status" hidden></div>
+    <main class="content" id="view" tabindex="-1"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" data-act="sideClose" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="mm-title"></div></div>
+<div class="dlg" id="dlg" hidden></div>
+<div class="login-layer" id="login" hidden>
+  <div class="login-box" id="login-box"></div>
+</div>
+<script>"use strict";
+
+(()=>{
 // ===== כתובות =====
 const SB="https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/";
 const API=SB+"admin-netfree/portal",CONFIG=SB+"admin-netfree/config",LINES_API=SB+"admin-netfree-lines/";
 const LEGACY_LINES=[
-  {slug:"shimchas",name:"שימחס",line:"073-351-2880",url:"/07/source/",api:SB+"admin-netfree/",enabled:true,legacy:true},
-  {slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:SB+"admin-netfree-daat/",enabled:true,legacy:true}
+{slug:"shimchas",name:"שימחס",line:"073-351-2880",url:"/07/source/",api:SB+"admin-netfree/",enabled:true,legacy:true},
+{slug:"daat",name:"דעת תורה",line:"079-494-7582",url:"/07/daattorah/",api:SB+"admin-netfree-daat/",enabled:true,legacy:true}
 ];
 const SOURCE=LEGACY_LINES[0]; // מפעל הקווים רץ בקו המקור
-
-// ===== מצב =====
-const S={token:"",google:"",me:null,lines:[],view:"",slug:"",data:null,dataAt:0,fx:{token:"",check:null,created:null,plan:null,status:null},pickerOpen:false};
-try{S.token=sessionStorage.getItem("portalToken")||"";S.google=sessionStorage.getItem("portalGoogle")||""}catch{}
-const $=s=>document.querySelector(s),root=$("#root");
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-const I={
-  logo:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
-  home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',lines:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 14h3"/>',
-  plus:'<path d="M12 5v14M5 12h14"/>',users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
-  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
-  chev:'<path d="M7 10l5 5 5-5"/>',out:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
-  ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'
+const GIS="https://accounts.google.com/gsi/client";
+const COPY_HE={rules:"כללי העוזר",scheduled:"תזמונים פעילים",strict:"הגדרות בדיקת ההודעות",ads:"פרסומות",event:"אירוע (שלוחה 9)"};
+const VIEWS={overview:"סקירה",lines:"קווים",new:"קו חדש",accounts:"חשבונות",all:"כל הקווים"};
+// ===== אחסון (תמיד בתוך try) =====
+const store={
+_a(a){return a==="l"?window.localStorage:window.sessionStorage;},
+get(a,k){try{return this._a(a).getItem(k);}catch{return null;}},
+set(a,k,v){try{this._a(a).setItem(k,v);}catch{}},
+del(a,k){try{this._a(a).removeItem(k);}catch{}},
 };
-const ico=n=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]||""}</svg>`;
-function toast(m,bad){const t=$("#toast");t.textContent=m;t.className=bad?"bad":"";clearTimeout(toast.t);toast.t=setTimeout(()=>t.className="hidden",3600)}
-try{const th=localStorage.getItem("portalTheme");if(th)document.documentElement.dataset.theme=th}catch{}
-
-// ===== תקשורת =====
-async function request(url,body){const r=await fetch(url,{method:body?"POST":"GET",headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});const d=await r.json().catch(()=>({error:"תשובה לא תקינה מהשרת"}));if(!r.ok){const e=Error(d.error||"שגיאה "+r.status);e.status=r.status;throw e}return d}
-const call=(action="me",body)=>request(API+"?action="+encodeURIComponent(action)+"&token="+encodeURIComponent(S.token),body);
-const googleExp=()=>{try{return JSON.parse(atob(S.google.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000}catch{return 0}};
-const googleOk=()=>!!S.google&&googleExp()>Date.now()+30000;
-const baseOf=l=>l.api||LINES_API+encodeURIComponent(l.slug)+"/";
+// ===== מצב =====
+const newFx=()=>({token:"",check:null,created:null,plan:null,status:null});
+const S={token:"",google:"",me:null,lines:[],view:"",slug:"",data:null,dataAt:0,fx:newFx(),pickerOpen:false,sideWide:false,cp:null,seq:0};
 const lineSessions={};
-async function lineToken(l){const b=baseOf(l);if(lineSessions[b])return lineSessions[b];if(!googleOk())throw Error("החיבור לגוגל פג – יש לרענן אותו");return lineSessions[b]=(await request(b+"session",{google:S.google})).token}
-async function lineApi(l,name,body){const t=await lineToken(l);return request(baseOf(l)+name+(name.includes("?")?"&":"?")+"token="+encodeURIComponent(t),body)}
-const handoffUrl=l=>{const u=new URL(l.url||"/07/line/?l="+encodeURIComponent(l.slug),location.href);if(S.google)u.hash="g="+encodeURIComponent(S.google);return u.href};
-const isFactory=l=>!l.legacy&&!LEGACY_LINES.some(x=>x.slug===l.slug);
-
-// ===== כניסה בגוגל =====
-function renderGoogle(el,onCred){request(CONFIG).then(cfg=>{if(!cfg.google)throw Error("כניסה בגוגל עדיין לא הוגדרה בשרת.");
-  const tm=setInterval(()=>{if(!window.google?.accounts?.id)return;clearInterval(tm);
-    google.accounts.id.initialize({client_id:cfg.google,callback:r=>onCred(r.credential)});
-    google.accounts.id.renderButton(el,{theme:"outline",size:"large",locale:"he",text:"signin_with",shape:"pill",width:Math.min(300,Math.max(220,innerWidth-80))})},100);
-  setTimeout(()=>clearInterval(tm),15000)}).catch(e=>toast(e.message,true))}
-function showLogin(msg=""){
-  root.innerHTML=`<div class="login"><div class="login-box"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I.logo}</svg></div>
-  <h1>מרכז הקווים</h1><p>כניסה עם חשבון הגוגל שלך. רואים רק את הקווים שיש לך גישה אליהם.</p><div id="gbtn"></div><p class="err" id="lerr" style="margin:14px 0 0">${esc(msg)}</p></div></div>`;
-  renderGoogle($("#gbtn"),async cred=>{try{const r=await request(API+"?action=login",{google:cred});S.token=r.token;setGoogle(cred);try{sessionStorage.setItem("portalToken",S.token)}catch{}await load()}catch(e){$("#lerr").textContent=e.message}});
+S.token=store.get("s","portalToken")||"";
+S.google=store.get("s","portalGoogle")||"";
+// ===== DOM ותבניות בטוחות =====
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.prototype.slice.call(r.querySelectorAll(s));
+const esc=s=>s===null||s===undefined?"":String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+class Html{constructor(s){this.s=String(s);}toString(){return this.s;}}
+const val=v=>v instanceof Html?v.s:Array.isArray(v)?v.map(val).join(""):v===null||v===undefined||v===false?"":esc(v);
+// תבנית מתויגת: כל ערך עובר בריחה חוץ מ-Html
+function h(str,...vals){let o=str[0];for(let i=0;i<vals.length;i++)o+=val(vals[i])+str[i+1];return new Html(o);}
+// טקסט שנבנה בקוד בלבד (אייקונים) – לעולם לא נתונים מהשרת
+const raw=s=>new Html(s);
+const put=(el,v)=>{if(el)el.innerHTML=val(v);};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const enc=encodeURIComponent;
+// ===== אייקונים =====
+const I={
+home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+lines:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 14h3"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
+users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+chev:'<path d="M7 10l5 5 5-5"/>',
+out:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/>',
+menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+ext:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+x:'<path d="M6 6l12 12M18 6L6 18"/>',
+side:'<path d="M15 6l-6 6 6 6"/>'
+};
+const ico=n=>raw('<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+(I[n]||"")+"</svg>");
+// הלוגו נלקח מהשלד (כתוב בקובץ פעם אחת)
+const PHONE=()=>raw(($(".side-logo")||{}).innerHTML||"");
+// ===== הודעה קצרה =====
+function toast(m,bad){
+const t=$("#toast");if(!t)return;
+put(t,h`<div>${m}</div>`);t.classList.toggle("bad",!!bad);
+clearTimeout(toast.t);toast.t=setTimeout(()=>{t.innerHTML="";t.classList.remove("bad");},bad?6000:3600);
 }
-function setGoogle(c){S.google=c;for(const k in lineSessions)delete lineSessions[k];try{sessionStorage.setItem("portalGoogle",c)}catch{}}
-function refreshGoogle(){modal(`<h2>חידוש החיבור לגוגל</h2><p class="mut">החיבור לגוגל תקף לשעה. כדי להמשיך לעבוד עם הקווים, יש להתחבר שוב.</p><div id="gbtn2" style="display:flex;justify-content:center;margin-top:12px"></div>`);
-  renderGoogle($("#gbtn2"),cred=>{setGoogle(cred);closeModal();toast("החיבור חודש");route()})}
-async function logout(){try{await call("logout",{})}catch{}try{sessionStorage.removeItem("portalToken");sessionStorage.removeItem("portalGoogle")}catch{}location.hash="";location.reload()}
-
+// ===== אישורים בתוך הדף (במקום confirm/prompt/alert) =====
+const Dlg={
+_q:Promise.resolve(),
+_fo(r){
+return $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),iframe,[tabindex]:not([tabindex="-1"])',r)
+.filter(e=>e.getClientRects().length);
+},
+// מלכודת פוקוס
+_trap(ev,r){
+if(ev.key!=="Tab"||!r)return;
+const f=Dlg._fo(r);if(!f.length)return;
+const a=document.activeElement,first=f[0],last=f[f.length-1];
+if(ev.shiftKey&&(a===first||!r.contains(a))){ev.preventDefault();last.focus();}
+else if(!ev.shiftKey&&(a===last||!r.contains(a))){ev.preventDefault();first.focus();}
+},
+// דיאלוג אחד בכל פעם (תור)
+_open(o){
+const run=()=>new Promise(resolve=>{
+const el=$("#dlg");if(!el)return resolve(o.input?null:false);
+const prev=document.activeElement;
+put(el,h`<div class="dlg-box" role="alertdialog" aria-modal="true" aria-labelledby="dlg-msg">
+<div class="dlg-msg" id="dlg-msg">${o.msg}</div>
+${o.input?h`<input class="dlg-in${o.type==="password"?" ltr":""}" type="${o.type||"text"}" value="${o.def||""}" aria-label="${o.label||"תשובה"}" autocomplete="off">`:""}
+<div class="dlg-act"><button type="button" class="btn p${o.danger?" d":""}" data-dlg="ok">${o.ok||"אישור"}</button>${o.cancel===false?"":h`<button type="button" class="btn" data-dlg="no">ביטול</button>`}</div></div>`);
+el.hidden=false;
+const inp=$(".dlg-in",el);
+const done=ok=>{
+el.removeEventListener("keydown",onKey);el.removeEventListener("click",onClick);
+const v=inp?inp.value:"";
+el.hidden=true;el.innerHTML="";
+try{if(prev&&prev.focus&&document.contains(prev))prev.focus();}catch{}
+resolve(o.input?(ok?v:null):!!ok);
+};
+const onKey=ev=>{
+if(ev.key==="Escape"){ev.preventDefault();ev.stopPropagation();done(false);}
+else if(ev.key==="Enter"){
+if(ev.target&&ev.target.dataset&&ev.target.dataset.dlg==="no")return;
+ev.preventDefault();ev.stopPropagation();done(true);
+}else Dlg._trap(ev,el);
+};
+const onClick=ev=>{
+const b=ev.target.closest&&ev.target.closest("[data-dlg]");
+if(b)done(b.dataset.dlg==="ok");else if(ev.target===el)done(false);
+};
+el.addEventListener("keydown",onKey);el.addEventListener("click",onClick);
+setTimeout(()=>{try{if(inp){inp.focus();inp.select();}else $('[data-dlg="ok"]',el).focus();}catch{}},0);
+});
+const p=this._q.then(run,run);
+this._q=p.then(()=>{},()=>{});
+return p;
+},
+confirm:function(msg,{ok="אישור",danger=false}={}){return this._open({msg,ok,danger});},
+prompt:function(msg,def="",{type="text",danger=false,ok}={}){return this._open({msg,input:true,def,type,danger,ok});},
+alert:function(msg){return this._open({msg,cancel:false});},
+isOpen(){const el=$("#dlg");return!!el&&!el.hidden;},
+};
+// ===== חלון (אחד בכל פעם) =====
+const Modal={
+_prev:null,_open:false,
+open({title,body,wide=false}){
+const m=$("#modal"),box=$(".box",m);
+if(!this._open)this._prev=document.activeElement;
+put(box,h`<div class="mh"><h2 id="mm-title">${title}</h2><button type="button" class="xbtn" data-close aria-label="סגירה" title="סגירה">${ico("x")}</button></div><div class="mb">${body}</div>`);
+m.classList.toggle("wide",!!wide);m.hidden=false;this._open=true;
+document.body.classList.add("locked");
+setTimeout(()=>{const f=$("input:not([type=checkbox]):not([disabled])",box)||$(".xbtn",box);try{f&&f.focus();}catch{}},30);
+return box;
+},
+close(){
+if(!this._open)return;
+const m=$("#modal");m.hidden=true;put($(".box",m),"");this._open=false;
+document.body.classList.remove("locked");
+try{if(this._prev&&document.contains(this._prev))this._prev.focus();}catch{}
+},
+};
+// ===== תקשורת – בלי כותרות (בלי preflight), GET עם עד 2 ניסיונות חוזרים =====
+async function request(url,body){
+const post=body!==undefined;
+const opt=post?{method:"POST",body:JSON.stringify(body),cache:"no-store"}:{cache:"no-store"};
+let r;
+for(let i=0;;i++){
+try{r=await fetch(url,opt);break;}
+catch{
+if(post||i>=2){const e=new Error("אין חיבור לשרת. כדאי לבדוק את החיבור ולנסות שוב.");e.status=0;throw e;}
+await sleep(800*(i+1));
+}
+}
+let d;try{d=await r.json();}catch{d={error:"תשובה לא תקינה מהשרת"};}
+if(!d||typeof d!=="object")d={};
+if(!r.ok||d.error){const e=new Error(d.error||"שגיאה "+r.status);e.status=r.status;e.data=d;throw e;}
+return d;
+}
+const call=(action,body)=>request(API+"?action="+enc(action)+"&token="+enc(S.token),body);
+const googleExp=()=>{try{return JSON.parse(atob(S.google.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000;}catch{return 0;}};
+const googleOk=()=>!!S.google&&googleExp()>Date.now()+30000;
+const baseOf=l=>l.api||LINES_API+enc(l.slug)+"/";
+// אסימון לכל קו – הבטחה אחת לכל בסיס, כדי שפניות במקביל לא יפתחו כמה סשנים
+function lineToken(l){
+const b=baseOf(l);
+if(lineSessions[b])return lineSessions[b];
+if(!googleOk())return Promise.reject(new Error("החיבור לגוגל פג – יש לרענן אותו"));
+const p=lineSessions[b]=request(b+"session",{google:S.google}).then(r=>r.token,e=>{if(lineSessions[b]===p)delete lineSessions[b];throw e;});
+return p;
+}
+async function lineApi(l,name,body){
+const t=await lineToken(l);
+return request(baseOf(l)+name+(name.indexOf("?")>=0?"&":"?")+"token="+enc(t),body);
+}
+// כתובת דף הקו + #g=<credential> (הדף בפנים מחליף אותו לאסימון)
+const handoffUrl=l=>{
+const def="/07/line/?l="+enc(l.slug);
+let u;try{u=new URL(l.url||def,location.href);}catch{u=null;}
+if(!u||!/^https?:$/.test(u.protocol))u=new URL(def,location.href);
+if(S.google)u.hash="g="+S.google;
+return u.href;
+};
+const isFactory=l=>!l.legacy&&!LEGACY_LINES.some(x=>x.slug===l.slug);
+// מספר קו בפורמט 0XX-XXX-XXXX
+const ph=v=>{const d=String(v||"").replace(/\D/g,"");return d.length===10?d.slice(0,3)+"-"+d.slice(3,6)+"-"+d.slice(6):String(v||"");};
+const lineName=s=>(S.lines.find(l=>l.slug===s)||{name:s}).name;
+const nameOf=l=>l.name||l.slug;
+// ===== כניסה בגוגל =====
+let cfgP=null,gisP=null,gT=0;
+const getCfg=()=>cfgP||(cfgP=request(CONFIG).catch(e=>{cfgP=null;throw e;}));
+// טעינת GIS בעצלתיים, ורק כשצריך כפתור גוגל
+function loadGis(){
+if(window.google&&google.accounts&&google.accounts.id)return Promise.resolve(true);
+if(gisP)return gisP;
+return(gisP=new Promise(res=>{
+try{const s=document.createElement("script");s.src=GIS;s.async=true;document.head.appendChild(s);}catch{}
+const t0=Date.now();
+const tm=setInterval(()=>{
+if(window.google&&google.accounts&&google.accounts.id){clearInterval(tm);res(true);}
+else if(Date.now()-t0>15000){clearInterval(tm);gisP=null;res(false);}
+},100);
+}));
+}
+function renderGoogle(el,onCred){
+getCfg().then(cfg=>{
+if(!cfg.google)throw new Error("כניסה בגוגל עדיין לא הוגדרה בשרת.");
+return loadGis().then(ok=>{
+if(!ok||!el.isConnected)return;
+google.accounts.id.initialize({client_id:cfg.google,callback:r=>onCred(r.credential)});
+google.accounts.id.renderButton(el,{theme:"outline",size:"large",locale:"he",text:"signin_with",shape:"pill",width:Math.min(300,Math.max(220,innerWidth-80))});
+});
+}).catch(e=>toast(e.message,true));
+}
+function showLayer(on){
+$("#login").hidden=!on;$("#shell").hidden=on;
+if(on){Modal.close();toggleSide(false);}
+}
+function showLogin(msg=""){
+showLayer(true);
+put($("#login-box"),h`${PHONE()}<h1>מרכז הקווים</h1>
+<p>כניסה עם חשבון הגוגל שלך. רואים רק את הקווים שיש לך גישה אליהם.</p><div id="gbtn"></div><p class="login-err" id="lerr" role="alert">${msg}</p>`);
+renderGoogle($("#gbtn"),async cred=>{
+const er=$("#lerr");if(er)er.textContent="";
+try{
+const r=await request(API+"?action=login",{google:cred});
+S.token=r.token;store.set("s","portalToken",S.token);setGoogle(cred);
+await load();
+}catch(e){const x=$("#lerr");if(x)x.textContent=e.message;}
+});
+}
+// תקלה זמנית (למשל 502 בסנכרון הבעלים): בלי ניתוק, עם ניסיון חוזר
+function showFail(msg){
+showLayer(true);
+put($("#login-box"),h`${PHONE()}<div class="login-brand">מרכז הקווים</div><h1>משהו השתבש</h1>
+<p class="login-err" role="alert">${msg}</p>
+<div class="row" style="justify-content:center"><button class="btn p" type="button" data-act="retry">${ico("refresh")}ניסיון חוזר</button><button class="btn" type="button" data-act="logout">יציאה</button></div>`);
+}
+function setGoogle(c){
+S.google=c;
+for(const k in lineSessions)delete lineSessions[k];
+store.set("s","portalGoogle",c);
+gNote();
+}
+// תזכורת 5 דקות לפני שה-credential פג
+function gNote(){
+clearTimeout(gT);
+const n=$("#gnote");if(n)n.hidden=true;
+if(!S.google)return;
+const left=googleExp()-Date.now();
+if(left<=30000)return;
+const show=()=>{
+const el=$("#gnote");if(!el||!S.me)return;
+put(el,h`${ico("refresh")}<div>החיבור לגוגל יפוג בעוד כמה דקות. כדי להמשיך לראות נתונים מהקווים, כדאי לחדש אותו עכשיו.</div><button class="btn s p" type="button" data-act="reG">חידוש</button><button class="btn icon ghost" type="button" data-act="gnoteX" aria-label="סגירה" title="סגירה">${ico("x")}</button>`);
+el.hidden=false;
+};
+const wait=left-5*60000;
+if(wait<=0)show();else gT=setTimeout(show,Math.min(wait,2147000000));
+}
+function refreshGoogle(){
+const box=Modal.open({title:"חידוש החיבור לגוגל",body:h`<p class="mut">החיבור לגוגל תקף לשעה. כדי להמשיך לעבוד עם הקווים, יש להתחבר שוב.</p><div id="gbtn2" style="display:flex;justify-content:center;margin-top:12px;min-height:44px"></div>`});
+renderGoogle($("#gbtn2",box),cred=>{setGoogle(cred);Modal.close();toast("החיבור חודש");route();});
+}
+async function logout(){
+try{await call("logout",{});}catch{}
+store.del("s","portalToken");store.del("s","portalGoogle");
+location.hash="";location.reload();
+}
 // ===== טעינה =====
 async function load(){
-  try{S.me=await call()}catch(e){S.token="";try{sessionStorage.removeItem("portalToken")}catch{}return showLogin(/נדרשת כניסה|החיבור פג/.test(e.message)?"":e.message)}
-  const dyn=(S.me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);return L?{...L,...l,url:L.url,api:L.api,legacy:true}:l});
-  S.lines=S.me.isOwner?[...LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)),...dyn]:dyn;
-  await dropDenied();
-  shell();
-  if(!location.hash){let last="";try{last=sessionStorage.getItem("portalView:"+S.me.email)||""}catch{}
-    location.replace("#"+(last||(S.me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"all")))}
-  route();
+let me;
+try{me=await call("me");}
+catch(e){
+const st=e.status||0;
+// שגיאה זמנית – לא מנתקים
+if(st===0||st>=500){if(S.me){toast(e.message,true);return;}return showFail(e.message);}
+S.token="";S.me=null;store.del("s","portalToken");
+return showLogin(/נדרשת כניסה|החיבור פג/.test(e.message)?"":e.message);
 }
-
-// קו שלא מקבל את החשבון (401/403 בכניסה) לא מוצג בכלל. נבדק פעם אחת בכל חיבור לגוגל
+S.me=me;
+const dyn=(me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);return L?Object.assign({},L,l,{url:L.url,api:L.api,legacy:true}):l;});
+S.lines=me.isOwner?LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)).concat(dyn):dyn;
+await dropDenied();
+shell();
+if(!location.hash||location.hash==="#"){
+const last=store.get("s","portalView:"+me.email)||"";
+const def=last||(me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"overview");
+try{history.replaceState(null,"",location.pathname+location.search+"#"+def);}catch{location.replace("#"+def);}
+}
+gNote();
+route();
+}
+// קו שלא מקבל את החשבון (401/403) לא מוצג. נבדק פעם אחת לכל חיבור לגוגל
 async function dropDenied(){
-  if(S.me.isOwner||!googleOk()||!S.lines.length)return;
-  const key="portalDenied:"+S.google.slice(-16);let denied=null;
-  try{denied=JSON.parse(sessionStorage.getItem(key)||"null")}catch{}
-  if(!Array.isArray(denied)){denied=[];
-    await Promise.all(S.lines.map(async l=>{try{await lineToken(l)}catch(e){if(e.status===401||e.status===403)denied.push(l.slug)}}));
-    try{sessionStorage.setItem(key,JSON.stringify(denied))}catch{}}
-  S.lines=S.lines.filter(l=>!denied.includes(l.slug));
+if(S.me.isOwner||!googleOk()||!S.lines.length)return;
+const key="portalDenied:"+S.google.slice(-16);
+let denied=null;
+try{denied=JSON.parse(store.get("s",key)||"null");}catch{}
+if(!Array.isArray(denied)){
+denied=[];
+await Promise.all(S.lines.map(async l=>{try{await lineToken(l);}catch(e){if(e.status===401||e.status===403)denied.push(l.slug);}}));
+store.set("s",key,JSON.stringify(denied));
 }
-
+S.lines=S.lines.filter(l=>denied.indexOf(l.slug)<0);
+}
 // ===== מבנה הדף =====
+const dotCls=l=>"dot"+(l&&l.enabled===false?" off":"");
+// אחרי השהיה/החזרה – עדכון מקומי (בלי לצייר מחדש את התצוגה, כדי לא למחוק תצוגה מקדימה של שכפול)
+function setEnabled(slug,on){
+const l=S.lines.find(x=>x.slug===slug);if(l)l.enabled=on;
+S.data=null;
+$$("#mylines a[data-slug] i, .qtab[data-slug] i").forEach(i=>{const a=i.closest("[data-slug]");if(a&&a.dataset.slug===slug)i.className=dotCls(l);});
+if($("#lt"))linesDraw(true);else route();
+}
 function shell(){
-  const me=S.me,own=me.isOwner;
-  root.innerHTML=`<div class="shell" id="shell">
-  <aside class="side"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I.logo}</svg></div><div><b>מרכז הקווים</b><small>${own?"בעל השירות":"האזור האישי"}</small></div></div>
-   <div class="picker"><button class="picker-btn" id="pickBtn" aria-haspopup="listbox"><i class="dot" id="pickDot"></i><span><b id="pickName">בחירת קו</b><small id="pickSub">${S.lines.length} קווים</small></span>${ico("chev")}</button><div class="pop hidden" id="pop"></div></div>
-   <div class="side-scroll">
-    <nav class="nav"><div class="nav-h">ניהול</div>
-     <a href="#overview" data-v="overview">${ico("home")}סקירה</a>
-     <a href="#lines" data-v="lines">${ico("lines")}קווים<span class="cnt">${S.lines.length}</span></a>
-     ${own?`<a href="#new" data-v="new">${ico("plus")}קו חדש</a><a href="#accounts" data-v="accounts">${ico("users")}חשבונות<span class="cnt">${(me.clients||[]).length}</span></a>`:""}
-     <a href="#all" data-v="all">${ico("grid")}כל הקווים</a>
-    </nav>
-    <nav class="nav"><div class="nav-h">הקווים שלי</div>${S.lines.map(l=>`<a href="#line=${encodeURIComponent(l.slug)}" data-v="line" data-slug="${esc(l.slug)}"><i class="ndot${l.enabled===false?" off":""}"></i>${esc(l.name)}<span class="cnt ltr">${esc(l.line||"")}</span></a>`).join("")||'<p class="mut small" style="padding:0 10px">אין עדיין קווים</p>'}</nav>
-   </div>
-   <div class="me"><div class="avatar">${esc((me.email||"?")[0].toUpperCase())}</div><div><b class="ltr">${esc(me.email)}</b><small>${own?"גישה לכל הקווים":S.lines.length+" קווים"}</small></div>
-    <button class="icon-btn" id="themeBtn" title="מצב כהה/בהיר" aria-label="מצב כהה/בהיר">${ico("sun")}</button><button class="icon-btn" id="outBtn" title="יציאה" aria-label="יציאה">${ico("out")}</button></div>
-  </aside>
-  <div class="main"><header class="topbar"><button class="icon-btn burger" id="burger" aria-label="תפריט">${ico("menu")}</button><h1 id="title"></h1>
-   <div class="quick" id="quick">${S.lines.map(l=>`<button class="qtab" data-slug="${esc(l.slug)}"><i class="${l.enabled===false?"off":""}"></i>${esc(l.name)}</button>`).join("")}</div></header>
-   <div class="content" id="view"></div></div></div>`;
-  $("#outBtn").onclick=logout;
-  $("#themeBtn").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),n=cur==="dark"?"light":"dark";document.documentElement.dataset.theme=n;try{localStorage.setItem("portalTheme",n)}catch{}};
-  $("#burger").onclick=()=>toggleSide(true);
-  $("#quick").onclick=e=>{const b=e.target.closest(".qtab");if(b)location.hash="line="+b.dataset.slug};
-  $("#pickBtn").onclick=e=>{e.stopPropagation();togglePicker()};
-  document.addEventListener("click",e=>{if(!e.target.closest(".picker"))togglePicker(false)});
-  document.querySelector(".side").addEventListener("click",e=>{if(e.target.closest(".nav a"))toggleSide(false)});
+const me=S.me,own=!!me.isOwner,n=S.lines.length;
+showLayer(false);
+$("#brand-sub").textContent=own?"בעל השירות":"האזור האישי";
+put($("#burger"),ico("menu"));
+put($("#picker"),h`<button class="picker-btn" id="pickBtn" type="button" data-act="picker" aria-haspopup="listbox" aria-expanded="false" title="בחירת קו"><i class="dot none" id="pickDot"></i><span><b id="pickName">בחירת קו</b><small id="pickSub">${n} קווים</small></span>${ico("chev")}</button><div class="pop" id="pop" hidden></div>`);
+const nv=(v,ic,label,cnt)=>h`<a href="#${v}" data-v="${v}" title="${label}">${ico(ic)}<span class="nav-label">${label}</span>${cnt===undefined?"":h`<span class="cnt num">${cnt}</span>`}</a>`;
+put($("#nav"),h`<div class="nav-group">ניהול</div>${nv("overview","home","סקירה")}${nv("lines","lines","קווים",n)}${own?[nv("new","plus","קו חדש"),nv("accounts","users","חשבונות",(me.clients||[]).length),nv("all","grid","כל הקווים")]:""}`);
+put($("#mylines"),h`<div class="nav-group">הקווים שלי</div>${n?S.lines.map(l=>h`<a href="#line=${enc(l.slug)}" data-v="line" data-slug="${l.slug}" title="${nameOf(l)}"><i class="${dotCls(l)}"></i><span class="nav-label">${nameOf(l)}</span><span class="cnt ltr">${ph(l.line)}</span></a>`):h`<p class="mut small none-msg">אין עדיין קווים</p>`}`);
+put($("#me"),h`<span class="avatar" aria-hidden="true">${(me.email||"?").charAt(0).toUpperCase()}</span><span class="me-id"><b class="ltr">${me.email}</b><small>${own?"גישה לכל הקווים":n+" קווים"}</small></span>
+<span class="side-tools"><button type="button" class="keep" data-act="theme" id="themeBtn" title="מצב בהיר/כהה" aria-label="מצב בהיר/כהה">${ico(isDark()?"sun":"moon")}</button><button type="button" class="keep" data-act="logout" id="outBtn" title="יציאה" aria-label="יציאה">${ico("out")}</button></span>`);
+put($("#quick"),S.lines.map(l=>h`<a class="qtab" href="#line=${enc(l.slug)}" data-slug="${l.slug}"><i class="${dotCls(l)}"></i>${nameOf(l)}</a>`));
 }
-function toggleSide(open){const sh=$("#shell");sh.classList.toggle("open",open);let sc=$(".scrim");if(open&&!sc){sc=document.createElement("div");sc.className="scrim";sc.onclick=()=>toggleSide(false);sh.append(sc)}else if(!open&&sc)sc.remove()}
-function togglePicker(open=!S.pickerOpen){S.pickerOpen=open;const p=$("#pop");if(!p)return;p.classList.toggle("hidden",!open);if(!open)return;
-  p.innerHTML=`<input class="field" id="pickQ" placeholder="חיפוש קו…" autocomplete="off"><div class="pop-list" id="pickL"></div>`;
-  const draw=q=>{q=q.trim();const L=S.lines.filter(l=>!q||l.name.includes(q)||String(l.line||"").replace(/\D/g,"").includes(q.replace(/\D/g,"")||"\u0000"));
-    $("#pickL").innerHTML=L.map(l=>`<button class="pop-item${S.slug===l.slug?" on":""}" data-slug="${esc(l.slug)}"><i class="ndot${l.enabled===false?" off":""}"></i><span>${esc(l.name)}</span><small class="ltr">${esc(l.line||"")}</small></button>`).join("")+(L.length?"":'<p class="mut small" style="padding:6px 10px">לא נמצא</p>')+
-    `<div class="pop-sep"></div><button class="pop-item" data-all="1">${ico("grid")}<span>כל הקווים</span></button>`};
-  draw("");$("#pickQ").oninput=e=>draw(e.target.value);$("#pickQ").focus();
-  $("#pickL").onclick=e=>{const b=e.target.closest(".pop-item");if(!b)return;togglePicker(false);toggleSide(false);location.hash=b.dataset.all?"all":"line="+b.dataset.slug};
+const isDark=()=>{const t=document.documentElement.getAttribute("data-theme");if(t)return t==="dark";try{return matchMedia("(prefers-color-scheme: dark)").matches;}catch{return false;}};
+function toggleTheme(){
+const n=isDark()?"light":"dark";
+document.documentElement.setAttribute("data-theme",n);store.set("l","portalTheme",n);
+put($("#themeBtn"),ico(n==="dark"?"sun":"moon"));
 }
-
+function toggleSide(open){
+const sh=$("#shell");if(!sh)return;
+sh.classList.toggle("open",!!open);$("#scrim").hidden=!open;
+document.body.classList.toggle("locked",!!open||Modal._open);
+}
+function togglePicker(open){
+if(open===undefined)open=!S.pickerOpen;
+const p=$("#pop"),b=$("#pickBtn");
+if(!p)return;
+if(!open&&!S.pickerOpen)return;
+S.pickerOpen=open;p.hidden=!open;if(b)b.setAttribute("aria-expanded",open?"true":"false");
+if(!open){p.innerHTML="";return;}
+put(p,h`<input id="pickQ" type="search" placeholder="חיפוש קו…" aria-label="חיפוש קו" autocomplete="off"><div class="pop-list" id="pickL" role="listbox" aria-label="קווים"></div>`);
+drawPicker("");
+setTimeout(()=>{const q=$("#pickQ");if(q)q.focus();},0);
+}
+function drawPicker(q){
+q=String(q||"").trim();
+const dq=q.replace(/\D/g,"");
+const L=S.lines.filter(l=>!q||nameOf(l).indexOf(q)>=0||(dq&&String(l.line||"").replace(/\D/g,"").indexOf(dq)>=0));
+put($("#pickL"),h`${L.map(l=>h`<button type="button" class="pop-item${S.slug===l.slug?" on":""}" role="option" aria-selected="${S.slug===l.slug?"true":"false"}" data-act="pick" data-slug="${l.slug}"><i class="${dotCls(l)}"></i><span>${nameOf(l)}</span><small class="ltr">${ph(l.line)}</small></button>`)}${L.length?"":h`<p class="mut small">לא נמצא</p>`}${S.me.isOwner?h`<div class="pop-sep"></div><button type="button" class="pop-item" data-act="pick" data-all="1">${ico("grid")}<span>כל הקווים</span></button>`:""}`);
+}
 // ===== ניתוב =====
-addEventListener("hashchange",()=>S.me&&route());
+function setTitle(t){$("#title").textContent=t;document.title=t&&t!=="מרכז הקווים"?t+" · מרכז הקווים":"מרכז הקווים";}
 function route(){
-  const h=decodeURIComponent(location.hash.slice(1)),[v,arg]=h.split("=");
-  S.view=v||"overview";S.slug=v==="line"?arg:"";
-  try{sessionStorage.setItem("portalView:"+S.me.email,h)}catch{}
-  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===S.view&&(S.view!=="line"||a.dataset.slug===S.slug)));
-  document.querySelectorAll(".qtab").forEach(b=>b.classList.toggle("on",b.dataset.slug===S.slug));
-  const cur=S.lines.find(l=>l.slug===S.slug);
-  $("#pickName").textContent=cur?cur.name:S.view==="all"?"כל הקווים":"בחירת קו";$("#pickSub").textContent=cur?cur.line||"":S.lines.length+" קווים";$("#pickDot").className="dot"+(cur&&cur.enabled===false?" off":"");
-  const V=$("#view");V.className="content";
-  const owner=S.me.isOwner,need=["new","accounts"];
-  if(!owner&&(need.includes(S.view)||S.view==="all"))return noAccess(V);
-  const T={overview:"סקירה",lines:"קווים",new:"קו חדש",accounts:"חשבונות",all:"כל הקווים"};
-  $("#title").textContent=cur?cur.name:T[S.view]||"";
-  if(S.view==="line"){if(!cur)return V.innerHTML=empty("lines","הקו לא נמצא","אין לך גישה לקו הזה, או שהוא הוסר.");return lineView(V,cur)}
-  if(S.view==="new")return newLineView(V);
-  if(S.view==="accounts")return accountsView(V);
-  if(S.view==="lines")return linesView(V);
-  if(S.view==="all")return overviewView(V,true);
-  return overviewView(V);
+if(!S.me)return;
+let hs=location.hash.slice(1);try{hs=decodeURIComponent(hs);}catch{}
+const i=hs.indexOf("="),v=i<0?hs:hs.slice(0,i),arg=i<0?"":hs.slice(i+1);
+S.view=v==="line"||VIEWS[v]?v:"overview";S.slug=S.view==="line"?arg:"";
+S.seq++;
+store.set("s","portalView:"+S.me.email,hs);
+togglePicker(false);toggleSide(false);
+$$("#nav a, #mylines a").forEach(a=>{const on=a.dataset.v===S.view&&(S.view!=="line"||a.dataset.slug===S.slug);if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
+$$(".qtab").forEach(b=>{if(b.dataset.slug===S.slug)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current");});
+const cur=S.view==="line"?S.lines.find(l=>l.slug===S.slug):null;
+$("#pickName").textContent=cur?nameOf(cur):S.view==="all"&&S.me.isOwner?"כל הקווים":"בחירת קו";
+$("#pickSub").textContent=cur?cur.line||"":S.lines.length+" קווים";
+$("#pickDot").className=cur?dotCls(cur):"dot none";
+// בתצוגת קו הסרגל מצטמצם לפס צר
+const sh=$("#shell"),inline=S.view==="line"&&!!cur;
+sh.classList.toggle("inline",inline);sh.classList.toggle("narrow",inline&&!S.sideWide);
+const sx=$("#sideX"),lbl=inline&&!S.sideWide?"הרחבת הסרגל":"צמצום הסרגל";
+put(sx,ico("side"));sx.setAttribute("aria-label",lbl);sx.title=lbl;
+const V=$("#view");V.className="content";V.removeAttribute("aria-busy");
+if(!S.me.isOwner&&(S.view==="new"||S.view==="accounts"||S.view==="all"))return noAccess(V,VIEWS[S.view]);
+setTitle(cur?nameOf(cur):VIEWS[S.view]);
+if(S.view==="line")return cur?lineView(V,cur):put(V,empty("lines","הקו לא נמצא","אין לך גישה לקו הזה, או שהוא הוסר."));
+if(S.view==="new")return newLineView(V);
+if(S.view==="accounts")return accountsView(V);
+if(S.view==="lines")return linesView(V);
+return overviewView(V);
 }
-const empty=(ic,h,p,act="")=>`<div class="card empty"><div class="big">${ico(ic)}</div><h2>${esc(h)}</h2><p>${esc(p)}</p>${act}</div>`;
-function noAccess(V){$("#title").textContent="כל הקווים";V.innerHTML=empty("lock","אין לך גישה למרכז כל הקווים","המרכז פתוח רק לבעל השירות. אפשר לעבור לקווים שלך מהרשימה בצד או מהלשוניות למעלה.",S.lines[0]?`<a class="btn" href="#line=${encodeURIComponent(S.lines[0].slug)}" style="margin-top:14px">מעבר ל${esc(S.lines[0].name)}</a>`:"")}
-
+const empty=(ic,title,p,act)=>h`<div class="card empty"><div class="big">${ico(ic)}</div><h2>${title}</h2><p>${p}</p>${act||""}</div>`;
+function noAccess(V,title){
+setTitle(title);
+const f=S.lines[0];
+put(V,empty("lock","אין לך גישה למרכז כל הקווים","המרכז פתוח רק לבעל השירות. אפשר לעבור לקווים שלך מהרשימה בצד או מהלשוניות למעלה.",f?h`<a class="btn p" href="#line=${enc(f.slug)}">מעבר ל${nameOf(f)}</a>`:""));
+}
+const googleBanner=()=>h`<div class="banner info">${ico("refresh")}<div>כדי לראות נתונים מהקווים צריך לחדש את החיבור לגוגל (הוא תקף לשעה).</div><button class="btn s p" type="button" data-act="reG">חידוש</button></div>`;
 // ===== קו בתוך המרכז =====
-function lineView(V,l){V.className="content full";
-  V.innerHTML=`<div class="frame-bar"><b>${esc(l.name)}</b><span class="mut ltr small">${esc(l.line||"")}</span>${l.enabled===false?'<span class="pill">מושהה</span>':""}<span class="sp"></span>
-   ${googleOk()?"":`<button class="btn sm soft" id="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn sm ghost" href="${esc(handoffUrl(l))}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
-   <iframe class="frame" title="ניהול ${esc(l.name)}" src="${esc(handoffUrl(l))}" allow="clipboard-read; clipboard-write; microphone"></iframe>`;
-  $("#reG")&&($("#reG").onclick=refreshGoogle);
+function lineView(V,l){
+V.className="content full";
+const u=handoffUrl(l);
+put(V,h`<div class="frame-bar"><b>${nameOf(l)}</b><span class="mut ltr small">${ph(l.line)}</span>${l.enabled===false?h`<span class="pill">מושהה</span>`:""}<span class="sp"></span>
+${googleOk()?"":h`<button class="btn s" type="button" id="reG" data-act="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn s" href="${u}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
+<iframe class="frame" title="ניהול ${nameOf(l)}" src="${u}" allow="clipboard-read; clipboard-write; microphone"></iframe>`);
 }
-
 // ===== נתונים מכל הקווים =====
 const sum7=a=>Array.isArray(a)?a.slice(-7).reduce((n,x)=>n+(+x||0),0):null;
 const pendOf=ov=>(ov.pending||[]).reduce((a,p)=>a+(+p.n||0),0)+(+ov.joins||0);
-function healthOf(h,l){if(l.enabled===false)return["","מושהה"];if(!h)return["warn","לא ידוע"];const p=[];
-  if(h.cronAgo!=null&&h.cronAgo>300)p.push("המשימות לא רצו "+Math.round(h.cronAgo/60)+" דק׳");if((h.errors||[]).length)p.push(h.errors.length+" שגיאות");if((h.bg||[]).length>5)p.push("תור רקע "+h.bg.length);
-  return p.length?["warn",p.join(" · ")]:["ok","תקין"+(h.testMode?" · בדיקה":"")]}
+function healthOf(hh,l){
+if(l.enabled===false)return["","מושהה"];
+if(!hh)return["warn","לא ידוע"];
+const p=[];
+if(hh.cronAgo!==null&&hh.cronAgo!==undefined&&hh.cronAgo>300)p.push("המשימות לא רצו "+Math.round(hh.cronAgo/60)+" דק׳");
+if((hh.errors||[]).length)p.push(hh.errors.length+" שגיאות");
+if((hh.bg||[]).length>5)p.push("תור רקע "+hh.bg.length);
+return p.length?["warn",p.join(" · ")]:["ok","תקין"+(hh.testMode?" · בדיקה":"")];
+}
+const rowHealth=(r,tbl)=>r.err?["warn",tbl?r.err:"לא ענה"]:r.ov||r.off?healthOf(r.he,r.l):["","—"];
 async function fetchAll(force){
-  if(!force&&S.data&&Date.now()-S.dataAt<60000)return S.data;
-  if(!googleOk())throw Error("google");
-  const rows=await Promise.all(S.lines.map(async l=>{if(l.enabled===false)return{l,off:true};
-    try{const [ov,he,st]=await Promise.allSettled([lineApi(l,"overview"),lineApi(l,"health"),lineApi(l,"stats")]);
-      if(ov.status!=="fulfilled")throw ov.reason;return{l,ov:ov.value,he:he.status==="fulfilled"?he.value:null,st:st.status==="fulfilled"?st.value:null}}
-    catch(e){return{l,err:String(e.message||"לא ענה")}}}));
-  S.data=rows;S.dataAt=Date.now();return rows;
+if(!force&&S.data&&Date.now()-S.dataAt<60000)return S.data;
+if(!googleOk())throw new Error("google");
+const rows=await Promise.all(S.lines.map(async l=>{
+if(l.enabled===false)return{l,off:true};
+try{
+const[ov,he,st]=await Promise.allSettled([lineApi(l,"overview"),lineApi(l,"health"),lineApi(l,"stats")]);
+if(ov.status!=="fulfilled")throw ov.reason;
+return{l,ov:ov.value,he:he.status==="fulfilled"?he.value:null,st:st.status==="fulfilled"?st.value:null};
+}catch(e){return{l,err:String((e&&e.message)||"לא ענה")};}
+}));
+S.data=rows;S.dataAt=Date.now();
+return rows;
 }
-function kpis(rows){const ok=rows.filter(r=>r.ov),tot=f=>ok.reduce((n,r)=>n+(f(r)||0),0);
-  return `<div class="kpis"><div class="kpi"><b>${tot(r=>(r.ov.online||[]).length)}</b><span>מחוברים עכשיו</span></div><div class="kpi"><b>${tot(r=>pendOf(r.ov))}</b><span>ממתינות לאישור</span></div><div class="kpi"><b>${tot(r=>+r.ov.members?.active)}</b><span>חברים פעילים</span></div><div class="kpi"><b>${tot(r=>sum7(r.st?.calls))}</b><span>שיחות השבוע</span></div><div class="kpi"><b>${tot(r=>sum7(r.st?.msgs))}</b><span>הודעות השבוע</span></div><div class="kpi"><b>${ok.length}/${rows.length}</b><span>קווים שענו</span></div></div>`}
-const skel=()=>`<div class="kpis">${"<div class='kpi skel'><b></b><span>טוען…</span></div>".repeat(6)}</div>`;
-const googleBanner=()=>`<div class="banner info">${ico("refresh")}<div style="flex:1">כדי לראות נתונים מהקווים צריך לחדש את החיבור לגוגל (הוא תקף לשעה).</div><button class="btn sm" id="reG">חידוש</button></div>`;
-async function overviewView(V,allMode){
-  const own=S.me.isOwner;
-  V.innerHTML=`<div class="card-head"><div><h2 style="margin:0;font-size:21px">${own?"שלום, בעל השירות":"שלום"}</h2><p>${own?"תמונת מצב של כל הקווים במערכת.":"הקווים שיש לך גישה אליהם."}</p></div>
-   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="ovBody">${skel()}</div>`;
-  $("#rf").onclick=()=>overviewDraw(true);overviewDraw(false);
+function kpis(rows){
+const ok=rows.filter(r=>r.ov),tot=f=>ok.reduce((n,r)=>n+(f(r)||0),0);
+const k=(v,t)=>h`<div class="tile kpi"><b class="num">${v}</b><span>${t}</span></div>`;
+return h`<div class="tiles kpis">${k(tot(r=>(r.ov.online||[]).length),"מחוברים עכשיו")}${k(tot(r=>pendOf(r.ov)),"ממתינות לאישור")}${k(tot(r=>+(r.ov.members&&r.ov.members.active)),"חברים פעילים")}${k(tot(r=>sum7(r.st&&r.st.calls)),"שיחות השבוע")}${k(tot(r=>sum7(r.st&&r.st.msgs)),"הודעות השבוע")}${k(ok.length+"/"+rows.length,"קווים שענו")}</div>`;
 }
-async function overviewDraw(force){const B=$("#ovBody");if(!B)return;
-  if(!S.lines.length){B.innerHTML=empty("lines","אין עדיין קווים",S.me.isOwner?"אפשר לבנות קו ראשון במפעל הקווים.":"פנה לבעל השירות כדי לקבל גישה לקו.",S.me.isOwner?'<a class="btn" href="#new" style="margin-top:14px">בניית קו</a>':"");return}
-  if(force)B.innerHTML=skel();
-  let rows;try{rows=await fetchAll(force)}catch(e){B.innerHTML=googleBanner()+cards(S.lines.map(l=>({l})));$("#reG").onclick=refreshGoogle;return}
-  if(S.view!=="overview"&&S.view!=="all")return;
-  B.innerHTML=kpis(rows)+cards(rows)+compareCard(rows);
+const skel=()=>h`<div class="tiles kpis" aria-busy="true">${[1,2,3,4,5,6].map(()=>h`<div class="tile kpi skel"><b></b><span>טוען…</span></div>`)}</div>`;
+function cards(rows){
+return h`<div class="lines-cards">${rows.map(r=>{
+const l=r.l,[hc,ht]=rowHealth(r),ov=r.ov;
+return h`<a class="lc" href="#line=${enc(l.slug)}"><div class="lc-h"><b>${nameOf(l)}</b><span class="pill ${hc}">${ht}</span></div><div class="lc-n ltr">${ph(l.line)}</div>
+<div class="lc-m"><div><b>${ov?(ov.online||[]).length:"—"}</b><span>מחוברים</span></div><div><b>${ov?pendOf(ov):"—"}</b><span>ממתינות</span></div><div><b>${ov?+(ov.members&&ov.members.active)||0:"—"}</b><span>חברים</span></div></div></a>`;
+})}</div>`;
 }
-function cards(rows){return `<div class="lines-cards">${rows.map(r=>{const l=r.l,[hc,ht]=r.err?["warn","לא ענה"]:r.ov||r.off?healthOf(r.he,l):["","—"];
-  return `<div class="lc" onclick="location.hash='line=${encodeURIComponent(l.slug)}'"><div class="lc-h"><b>${esc(l.name)}</b><span class="pill ${hc}">${esc(ht)}</span></div><div class="mut small ltr" style="text-align:start">${esc(l.line||"")}</div>
-   <div class="lc-m"><div><b>${r.ov?(r.ov.online||[]).length:"—"}</b><span>מחוברים</span></div><div><b>${r.ov?pendOf(r.ov):"—"}</b><span>ממתינות</span></div><div><b>${r.ov?(+r.ov.members?.active||0):"—"}</b><span>חברים</span></div></div></div>`}).join("")}</div>`}
-
-// ===== השוואה בין הקווים: שיחות והודעות ב-7 הימים האחרונים =====
-function compareCard(rows){const ok=rows.filter(r=>r.st&&Array.isArray(r.st.calls));if(ok.length<2)return"";
-  const days=(ok[0].st.days||[]).slice(-7),max=Math.max(1,...ok.flatMap(r=>[...r.st.calls.slice(-7),...(r.st.msgs||[]).slice(-7)].map(x=>+x||0)));
-  const bar=(v,cls)=>`<i class="cb ${cls}" style="height:${Math.round(100*(+v||0)/max)}%" title="${+v||0}"></i>`;
-  return `<div class="card" style="margin-top:16px"><div class="card-head"><div><h2>השוואה בין הקווים</h2><p>שיחות (כהה) והודעות (בהיר) בכל יום בשבוע האחרון</p></div></div>
-   <div class="cmp">${ok.map(r=>`<div class="cmp-l"><b>${esc(r.l.name)}</b><span class="mut small">${sum7(r.st.calls)} שיחות · ${sum7(r.st.msgs)} הודעות</span><div class="cmp-g">${r.st.calls.slice(-7).map((c,i)=>`<div class="cmp-d" title="${esc(days[i]||"")}">${bar(c,"c1")}${bar((r.st.msgs||[]).slice(-7)[i],"c2")}</div>`).join("")}</div></div>`).join("")}</div></div>`}
-
-// ===== שכפול הגדרות בין קווים (בעל השירות) =====
-const COPY_HE={rules:"כללי העוזר",scheduled:"תזמונים פעילים",strict:"הגדרות בדיקת ההודעות",ads:"פרסומות",event:"אירוע (שלוחה 9)"};
-function copyCard(){const opt=S.lines.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)}</option>`).join("");
-  return `<div class="card" style="margin-top:16px" id="cpy"><div class="card-head"><div><h2>שכפול הגדרות בין קווים</h2><p>העתקה מקו לקו, עם תצוגה מקדימה. הערך הקודם בקו היעד נשמר לגיבוי.</p></div></div>
-   <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">מקו <select id="cpFrom">${opt}</select> לקו <select id="cpTo">${opt}</select></div>
-   <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">${Object.entries(COPY_HE).map(([k,v])=>`<label><input type="checkbox" name="cpk" value="${k}"> ${v}</label>`).join("")}</div>
-   <button class="btn" id="cpPrev">תצוגה מקדימה</button><div id="cpOut" style="margin-top:10px"></div></div>`}
-function copyBind(){const g=()=>({from:$("#cpFrom").value,to:$("#cpTo").value,keys:[...document.querySelectorAll("[name=cpk]:checked")].map(x=>x.value)});
-  if(!$("#cpPrev"))return;if(S.lines[1])$("#cpTo").value=S.lines[1].slug;
-  $("#cpPrev").onclick=async()=>{const O=$("#cpOut");try{const r=await call("copy",{...g(),preview:true});if(r.error)throw Error(r.error);
-    O.innerHTML=`<table class="t"><thead><tr><th>מה</th><th>במקור</th><th>ביעד היום</th><th></th></tr></thead><tbody>${r.items.map(x=>`<tr><td>${esc(x.label)}</td><td>${esc(x.from)}</td><td>${esc(x.to)}</td><td>${x.same?"זהה":"יוחלף"}</td></tr>`).join("")}</tbody></table><button class="btn danger" id="cpGo" style="margin-top:10px">העתקה</button>`;
-    $("#cpGo").onclick=async()=>{const b=g(),c=prompt(`ההגדרות בקו "${b.to}" יוחלפו. לאישור הקלידו את השם הקצר: ${b.to}`);if(c!==b.to)return;
-      try{const r2=await call("copy",{...b,preview:false,confirm:c});if(r2.error)throw Error(r2.error);toast("הועתקו: "+(r2.done.join(", ")||"אין שינוי"));O.innerHTML=""}catch(e){toast(e.message,true)}}}
-   catch(e){O.innerHTML=`<p class="mut">${esc(e.message)}</p>`}}}
-
-// ===== קווים (טבלה) =====
-async function linesView(V){
-  const own=S.me.isOwner;
-  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>קווים</h2><p>${own?"כל הקווים במערכת: נתונים, בריאות, כניסה, השהיה והחזרה לפעולה.":"הקווים שיש לך גישה אליהם."}</p></div>
-   <button class="btn ghost" id="rf">${ico("refresh")}רענון</button>${own?`<a class="btn" href="#new">${ico("plus")}קו חדש</a>`:""}</div><div id="lt"><p class="mut">טוען…</p></div></div>${own&&S.lines.length>1?copyCard():""}`;
-  copyBind();
-  $("#rf").onclick=()=>linesDraw(true);linesDraw(false);
+// ===== סקירה / כל הקווים =====
+function overviewView(V){
+const own=S.me.isOwner;
+put(V,h`<div class="phead"><div><h2>${own?"שלום, בעל השירות":"שלום"}</h2><p>${own?"תמונת מצב של כל הקווים במערכת.":"הקווים שיש לך גישה אליהם."}</p></div>
+<div class="acts"><button class="btn" type="button" data-act="ovRefresh">${ico("refresh")}רענון</button>${own?h`<a class="btn p" href="#new">${ico("plus")}קו חדש</a>`:""}</div></div><div id="ovBody">${skel()}</div>`);
+overviewDraw(false);
 }
-async function linesDraw(force){const B=$("#lt");if(!B)return;let rows,banner="";
-  try{rows=await fetchAll(force)}catch{rows=S.lines.map(l=>({l}));banner=googleBanner()}
-  if(S.view!=="lines")return;
-  const own=S.me.isOwner;
-  B.innerHTML=banner+`<div class="tw"><table class="t"><thead><tr><th>קו</th><th>מחוברים</th><th>ממתינות</th><th>חברים</th><th>שיחות השבוע</th><th>הודעות השבוע</th><th>מצב</th><th></th></tr></thead><tbody>${rows.map(r=>{const l=r.l,[hc,ht]=r.err?["warn",r.err]:r.ov||r.off?healthOf(r.he,l):["","—"];
-   return `<tr><td><b>${esc(l.name)}</b><small><span class="ltr">${esc(l.line||"")}</span>${l.manager?` · <span class="ltr">${esc(l.manager)}</span>`:""}</small></td><td class="num">${r.ov?(r.ov.online||[]).length:"—"}</td><td class="num">${r.ov?pendOf(r.ov):"—"}</td><td class="num">${r.ov?`${+r.ov.members?.active||0}/${+r.ov.members?.total||0}`:"—"}</td><td class="num">${r.st?sum7(r.st.calls):"—"}</td><td class="num">${r.st?sum7(r.st.msgs):"—"}</td><td><span class="pill ${hc}">${esc(ht)}</span></td>
-   <td><div class="acts"><a class="btn sm soft" href="#line=${encodeURIComponent(l.slug)}">כניסה</a>${own&&isFactory(l)?(l.enabled===false?`<button class="btn sm" data-resume="${esc(l.slug)}">החזרה לפעולה</button>`:`<button class="btn sm danger" data-suspend="${esc(l.slug)}">השהיה</button>`)+`<button class="btn sm ghost" data-ivr="${esc(l.slug)}">חיבור שלוחות</button>`:""}</div></td></tr>`}).join("")}</tbody></table></div>`;
-  $("#reG")&&($("#reG").onclick=refreshGoogle);
-  B.querySelectorAll("[data-suspend]").forEach(b=>b.onclick=async()=>{const slug=b.dataset.suspend,c=prompt(`להשהות את הקו "${slug}"?\nמתקשרים ישמעו "הקו מושהה זמנית", והמשימות לא ירוצו. הנתונים וההגדרות נשמרים ואפשר להחזיר.\nלאישור הקלידו את השם הקצר:`);if(!c)return;b.disabled=true;try{await call("suspend",{slug,confirm:c.trim()});toast("הקו הושהה");S.data=null;await load()}catch(e){toast(e.message,true);b.disabled=false}});
-  B.querySelectorAll("[data-resume]").forEach(b=>b.onclick=async()=>{if(!confirm("להחזיר את הקו לפעולה?"))return;b.disabled=true;try{await call("resume",{slug:b.dataset.resume});toast("הקו חזר לפעולה");S.data=null;await load()}catch(e){toast(e.message,true);b.disabled=false}});
-  B.querySelectorAll("[data-ivr]").forEach(b=>b.onclick=()=>ivrStart(b.dataset.ivr,b));
+async function overviewDraw(force){
+const B=$("#ovBody");if(!B)return;
+if(!S.lines.length){
+const own=S.me.isOwner;
+return put(B,empty("lines","אין עדיין קווים",own?"אפשר לבנות קו ראשון במפעל הקווים.":"פנה לבעל השירות כדי לקבל גישה לקו.",own?h`<a class="btn p" href="#new">בניית קו</a>`:""));
 }
-
+if(force)put(B,skel());
+const seq=S.seq;
+let rows;
+try{rows=await fetchAll(force);}
+catch{if(seq===S.seq&&$("#ovBody"))put($("#ovBody"),h`${googleBanner()}${cards(S.lines.map(l=>({l})))}`);return;}
+if(seq!==S.seq||(S.view!=="overview"&&S.view!=="all"))return;
+put($("#ovBody"),h`${kpis(rows)}${cards(rows)}${compareCard(rows)}`);
+}
+// השוואה בין הקווים: שיחות והודעות ב-7 הימים האחרונים
+const WD=["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"];
+function dayLabel(d){
+const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||""));if(!m)return"";
+const dt=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],12));
+return WD[dt.getUTCDay()]+" "+ +m[3]+"/"+ +m[2];
+}
+function compareCard(rows){
+const ok=rows.filter(r=>r.st&&Array.isArray(r.st.calls));
+const head=h`<div class="card-h"><div><h2>השוואה בין הקווים</h2><p>שיחות (כהה) והודעות (בהיר) בכל יום בשבוע האחרון</p></div></div>`;
+if(ok.length<2)return h`<div class="card">${head}<p class="mut" style="margin:0">ההשוואה מוצגת כשיש לפחות שני קווים עם נתונים.</p></div>`;
+const days=(ok[0].st.days||[]).slice(-7);
+const max=Math.max(1,...ok.map(r=>Math.max(0,...r.st.calls.slice(-7).concat((r.st.msgs||[]).slice(-7)).map(x=>+x||0))));
+const bar=(v,c)=>h`<i class="cb ${c}" style="height:${Math.round(100*(+v||0)/max)}%"></i>`;
+return h`<div class="card">${head}<div class="cmp">${ok.map(r=>{
+const c7=r.st.calls.slice(-7),m7=(r.st.msgs||[]).slice(-7);
+return h`<div class="cmp-l"><b>${nameOf(r.l)}</b><span class="mut small">${sum7(r.st.calls)} שיחות · ${sum7(r.st.msgs)||0} הודעות</span><div class="cmp-g">${c7.map((c,i)=>h`<div class="cmp-d" title="${dayLabel(days[i])}: ${+c||0} שיחות · ${+m7[i]||0} הודעות">${bar(c,"c1")}${bar(m7[i],"c2")}</div>`)}</div></div>`;
+})}<div class="cmp-ax" aria-hidden="true">${days.map(d=>h`<span>${dayLabel(d)}</span>`)}</div></div></div>`;
+}
+// ===== קווים (טבלה) + שכפול =====
+function linesView(V){
+const own=S.me.isOwner;
+S.cp=null;
+put(V,h`<div class="card"><div class="card-h"><div><h2>קווים</h2><p>${own?"כל הקווים במערכת: נתונים, בריאות, כניסה, השהיה והחזרה לפעולה.":"הקווים שיש לך גישה אליהם."}</p></div>
+<div class="acts"><button class="btn" type="button" data-act="ltRefresh">${ico("refresh")}רענון</button>${own?h`<a class="btn p" href="#new">${ico("plus")}קו חדש</a>`:""}</div></div><div id="lt"><p class="mut">טוען…</p></div></div>${own&&S.lines.length>1?copyCard():""}`);
+if($("#cpTo")&&S.lines[1])$("#cpTo").value=S.lines[1].slug;
+linesDraw(false);
+}
+async function linesDraw(force){
+if(!$("#lt"))return;
+const seq=S.seq;
+let rows,banner="";
+try{rows=await fetchAll(force);}catch{rows=S.lines.map(l=>({l}));banner=googleBanner();}
+const B=$("#lt");
+if(!B||seq!==S.seq||S.view!=="lines")return;
+const own=S.me.isOwner,dash="—";
+put(B,h`${banner}<div class="wrap tw"><table class="tbl"><thead><tr><th>קו</th><th>מחוברים</th><th>ממתינות</th><th>חברים</th><th>שיחות השבוע</th><th>הודעות השבוע</th><th>מצב</th><th><span class="mut">פעולות</span></th></tr></thead><tbody>${rows.map(r=>{
+const l=r.l,[hc,ht]=rowHealth(r,true),ov=r.ov,st=r.st;
+return h`<tr><td><b>${nameOf(l)}</b><small><span class="ltr">${ph(l.line)}</span>${l.manager?h` · <span class="ltr">${l.manager}</span>`:""}</small></td>
+<td class="num">${ov?(ov.online||[]).length:dash}</td><td class="num">${ov?pendOf(ov):dash}</td><td class="num">${ov?h`<span class="ltr">${(+(ov.members&&ov.members.active)||0)+"/"+(+(ov.members&&ov.members.total)||0)}</span>`:dash}</td>
+<td class="num">${st?sum7(st.calls):dash}</td><td class="num">${st?sum7(st.msgs):dash}</td><td><span class="pill ${hc}">${ht}</span></td>
+<td><div class="acts"><a class="btn s" href="#line=${enc(l.slug)}">כניסה</a>${own&&isFactory(l)?h`${l.enabled===false?h`<button class="btn s p" type="button" data-act="resume" data-slug="${l.slug}">החזרה לפעולה</button>`:h`<button class="btn s d" type="button" data-act="suspend" data-slug="${l.slug}">השהיה</button>`}<button class="btn s" type="button" data-act="ivr" data-slug="${l.slug}">חיבור שלוחות</button>`:""}</div></td></tr>`;
+})}</tbody></table></div>`);
+}
+function copyCard(){
+const opt=S.lines.map(l=>h`<option value="${l.slug}">${nameOf(l)}</option>`);
+return h`<div class="card" id="cpy"><div class="card-h"><div><h2>שכפול הגדרות בין קווים</h2><p>העתקה מקו לקו, עם תצוגה מקדימה. הערך הקודם בקו היעד נשמר לגיבוי.</p></div></div>
+<div class="row"><label class="row" for="cpFrom">מקו</label><select id="cpFrom" data-chg="cp">${opt}</select><label class="row" for="cpTo">לקו</label><select id="cpTo" data-chg="cp">${opt}</select></div>
+<div class="checks inline">${Object.keys(COPY_HE).map(k=>h`<label><input type="checkbox" name="cpk" value="${k}" data-chg="cp"> ${COPY_HE[k]}</label>`)}</div>
+<button class="btn p" type="button" id="cpPrev" data-act="cpPrev">תצוגה מקדימה</button><div id="cpOut" style="margin-top:12px"></div></div>`;
+}
+const cpForm=()=>({from:$("#cpFrom").value,to:$("#cpTo").value,keys:$$("[name=cpk]:checked").map(x=>x.value)});
 // ===== חשבונות =====
 async function syncLegacyManagers(email,slugs){
-  for(const line of LEGACY_LINES){
-    const data=await lineApi(line,"emails"),present=(data.managers||[]).some(m=>(typeof m==="string"?m:m.e)===email),wanted=slugs.includes(line.slug);
-    if(present!==wanted)await lineApi(line,"emails",{email,op:wanted?"add":"remove",role:"admin"});
-  }
+for(const line of LEGACY_LINES){
+const data=await lineApi(line,"emails");
+const present=(data.managers||[]).some(m=>(typeof m==="string"?m:m&&m.e)===email),wanted=slugs.indexOf(line.slug)>=0;
+if(present!==wanted)await lineApi(line,"emails",{email,op:wanted?"add":"remove",role:"admin"});
 }
-const lineName=s=>(S.lines.find(l=>l.slug===s)||{name:s}).name;
-async function saveAccess(email,slugs){if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל ולנסות שוב")}
-  await call("access",{email,approved:true});await syncLegacyManagers(email,slugs);await call("assign",{email,lines:slugs})}
+}
+function needGoogle(msg){if(!googleOk()){refreshGoogle();throw new Error(msg||"יש לחדש את החיבור לגוגל ולנסות שוב");}}
+async function saveAccess(email,slugs){
+needGoogle();
+await call("access",{email,approved:true});
+await syncLegacyManagers(email,slugs);
+await call("assign",{email,lines:slugs});
+}
 function accountsView(V){
-  const cl=S.me.clients||[];
-  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>חשבונות</h2><p>חשבונות גוגל שאישרת, והקווים שכל אחד רואה. מנהלים שמנהל קו מוסיף בעצמו נכנסים לבד ולא צריכים להופיע כאן.</p></div><button class="btn" id="newAcc">${ico("plus")}חשבון חדש</button></div>
-   ${cl.length?`<div class="tw"><table class="t"><thead><tr><th>חשבון</th><th>קווים</th><th>מצב</th><th></th></tr></thead><tbody>${cl.map(c=>{const free=S.lines.filter(l=>!(c.lines||[]).includes(l.slug));
-    return `<tr data-email="${esc(c.email)}"><td><b class="ltr">${esc(c.email)}</b></td><td><div class="chips">${(c.lines||[]).map(s=>`<span class="chip">${esc(lineName(s))}<button data-rm="${esc(s)}" title="הסרה מהקו" aria-label="הסרה מהקו">×</button></span>`).join("")||'<span class="mut small">אין קווים</span>'}
-     ${free.length?`<select class="chip-add" data-add aria-label="הוספת קו"><option value="">+ הוספת קו</option>${free.map(l=>`<option value="${esc(l.slug)}">${esc(l.name)}</option>`).join("")}</select>`:""}</div></td>
-     <td>${c.blocked?'<span class="pill bad">מושהה</span>':'<span class="pill ok">פעיל</span>'}</td><td><div class="acts"><button class="btn sm ghost" data-block="${c.blocked?"off":"on"}">${c.blocked?"החזרת גישה":"השהיית גישה"}</button><button class="btn sm danger" data-revoke>הסרה</button></div></td></tr>`}).join("")}</tbody></table></div>`
-    :empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}</div>`;
-  $("#newAcc").onclick=()=>accountModal();
-  const busy=async(el,fn)=>{el.disabled=true;try{await fn();toast("נשמר");await load()}catch(e){toast(e.message,true);el.disabled=false}};
-  V.querySelectorAll("tr[data-email]").forEach(tr=>{const email=tr.dataset.email,c=cl.find(x=>x.email===email),cur=c.lines||[];
-    tr.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{if(confirm(`להסיר את ${email} מהקו "${lineName(b.dataset.rm)}"?`))busy(b,()=>saveAccess(email,cur.filter(s=>s!==b.dataset.rm)))});
-    const add=tr.querySelector("[data-add]");if(add)add.onchange=()=>{if(add.value)busy(add,()=>saveAccess(email,[...cur,add.value]))};
-    tr.querySelector("[data-block]").onclick=e=>{const on=e.currentTarget.dataset.block==="on";busy(e.currentTarget,async()=>{if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל")}await syncLegacyManagers(email,on?[]:cur);await call("access",{email,blocked:on})})};
-    tr.querySelector("[data-revoke]").onclick=e=>{if(confirm(`להסיר את ${email} ואת כל הקווים שלו?`))busy(e.currentTarget,async()=>{if(!googleOk()){refreshGoogle();throw Error("יש לחדש את החיבור לגוגל")}await syncLegacyManagers(email,[]);await call("access",{email,approved:false})})};
-  });
+const cl=S.me.clients||[];
+put(V,h`<div class="card"><div class="card-h"><div><h2>חשבונות</h2><p>חשבונות גוגל שאישרת, והקווים שכל אחד רואה. מנהלים שמנהל קו מוסיף בעצמו נכנסים לבד ולא צריכים להופיע כאן.</p></div><button class="btn p" type="button" id="newAcc" data-act="newAcc">${ico("plus")}חשבון חדש</button></div>
+${cl.length?h`<div class="wrap tw"><table class="tbl"><thead><tr><th>חשבון</th><th>קווים</th><th>מצב</th><th><span class="mut">פעולות</span></th></tr></thead><tbody>${cl.map(c=>{
+const mine=c.lines||[],free=S.lines.filter(l=>mine.indexOf(l.slug)<0);
+return h`<tr data-email="${c.email}"><td><b class="ltr">${c.email}</b></td><td><div class="chips">${mine.length?mine.map(s=>h`<span class="chip">${lineName(s)}<button type="button" data-act="accRm" data-slug="${s}" title="הסרה מהקו" aria-label="הסרה מהקו ${lineName(s)}">×</button></span>`):h`<span class="mut small">אין קווים</span>`}
+${free.length?h`<select class="chip-add" data-chg="accAdd" aria-label="הוספת קו"><option value="">+ הוספת קו</option>${free.map(l=>h`<option value="${l.slug}">${nameOf(l)}</option>`)}</select>`:""}</div></td>
+<td>${c.blocked?h`<span class="pill bad">מושהה</span>`:h`<span class="pill ok">פעיל</span>`}</td>
+<td><div class="acts"><button class="btn s" type="button" data-act="accBlock" data-on="${c.blocked?"off":"on"}">${c.blocked?"החזרת גישה":"השהיית גישה"}</button><button class="btn s d" type="button" data-act="accRevoke">הסרה</button></div></td></tr>`;
+})}</tbody></table></div>`:empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}</div>`);
+}
+const accOf=el=>{const tr=el.closest("tr[data-email]");if(!tr)return null;const email=tr.dataset.email;return{email,c:(S.me.clients||[]).find(x=>x.email===email)||{lines:[]}};};
+// כישלון פעולה: הודעה ושחרור הכפתור
+const fail=(e,b)=>{toast(e.message,true);if(b&&document.contains(b))b.disabled=false;};
+// פעולה על כפתור: נעילה, ביצוע, "נשמר" וטעינה מחדש
+async function busy(el,fn,ok="נשמר"){
+el.disabled=true;
+try{await fn();toast(ok);await load();}
+catch(e){fail(e,el);}
 }
 function accountModal(){
-  modal(`<h2>חשבון חדש</h2><p class="mut small">החשבון יוכל להיכנס עם גוגל ויראה רק את הקווים שתסמן.</p><form class="form" id="accF" style="margin-top:12px">
-   <label class="lbl">מייל גוגל<input class="field ltr" name="email" type="email" required placeholder="name@gmail.com" autocomplete="off"></label>
-   <div class="lbl">קווים<div class="checks">${S.lines.map(l=>`<label><input type="checkbox" name="l" value="${esc(l.slug)}">${esc(l.name)} <span class="mut small ltr">${esc(l.line||"")}</span></label>`).join("")}</div></div>
-   <div class="acts" style="justify-content:flex-start"><button class="btn">שמירה</button><button type="button" class="btn ghost" data-close>ביטול</button></div></form>`);
-  $("#accF").onsubmit=async e=>{e.preventDefault();const f=e.target,email=f.email.value.trim().toLowerCase(),slugs=[...f.querySelectorAll("[name=l]:checked")].map(i=>i.value),b=f.querySelector("button");
-    b.disabled=true;try{await saveAccess(email,slugs);closeModal();toast("החשבון נוסף");await load()}catch(er){toast(er.message,true);b.disabled=false}};
+Modal.open({title:"חשבון חדש",body:h`<p class="mut small">החשבון יוכל להיכנס עם גוגל ויראה רק את הקווים שתסמן.</p><form class="form" id="accF" data-act="accSave" novalidate>
+<label class="lbl">מייל גוגל<input class="ltr" name="email" type="email" required placeholder="name@gmail.com" autocomplete="off"></label>
+<div class="lbl">קווים<div class="checks">${S.lines.map(l=>h`<label><input type="checkbox" name="l" value="${l.slug}">${nameOf(l)} <span class="mut small ltr">${ph(l.line)}</span></label>`)}</div></div>
+<div class="acts"><button class="btn p" type="submit">שמירה</button><button type="button" class="btn" data-close>ביטול</button></div></form>`});
 }
-function modal(html){closeModal();const m=document.createElement("div");m.className="modal";m.id="modal";m.innerHTML=`<div class="card">${html}</div>`;m.onclick=e=>{if(e.target===m||e.target.closest("[data-close]"))closeModal()};document.body.append(m);setTimeout(()=>m.querySelector("input")?.focus(),50)}
-function closeModal(){$("#modal")?.remove()}
-addEventListener("keydown",e=>{if(e.key==="Escape"){closeModal();togglePicker(false);toggleSide(false)}});
-
 // ===== קו חדש (מפעל הקווים בקו המקור) =====
 const fxApi=body=>lineApi(SOURCE,"factory",body);
 async function newLineView(V){
-  const fx=S.fx,st=fx.created?3:fx.check?2:1;
-  V.innerHTML=`<div class="card"><div class="card-head"><div><h2>קו חדש</h2><p>מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם עם כל ה-AI ודף ניהול משלו. הקו נבנה במצב בדיקה.</p></div></div>
-   <div class="steps">${["טוקן ימות","פרטי הקו","הקו נבנה"].map((t,i)=>`<span class="${i+1<st?"ok":i+1===st?"on":""}">${i+1}. ${t}</span>`).join("")}</div><div id="fxBody"><p class="mut">טוען…</p></div></div>`;
-  if(!googleOk()){$("#fxBody").innerHTML=googleBanner();$("#reG").onclick=refreshGoogle;return}
-  try{fx.status=fx.status||await fxApi()}catch(e){$("#fxBody").innerHTML=`<p class="err">${esc(e.message)}</p>`;return}
-  const B=$("#fxBody"),ready=fx.status.ready;
-  const setup=ready?"":`<div class="banner"><div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> צריך להגדיר בקו המקור (yemot-ai ← Settings ← Variables and Secrets) את הסוד <code>CF_FACTORY_TOKEN</code> ואת המשתנה <code>CF_ACCOUNT_ID</code>. בינתיים אפשר לבדוק טוקנים.</div></div>`;
-  if(st===1){B.innerHTML=setup+`<form class="form" id="fxCheck"><label class="lbl">טוקן של מערכת בימות המשיח<small>למשל 0791234567:1234 או טוקן API. הבדיקה רק קוראת מימות, והטוקן לא נשמר בדפדפן.</small><input class="field ltr" name="t" type="password" required autocomplete="off" value="${esc(fx.token)}"></label><div><button class="btn">בדיקת הטוקן</button></div></form>`;
-    $("#fxCheck").onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector("button");b.disabled=true;fx.token=e.target.t.value.trim();try{fx.check=await fxApi({op:"check",ymToken:fx.token});toast("הטוקן תקין");newLineView(V)}catch(er){toast(er.message,true);b.disabled=false}}}
-  else if(st===2){const c=fx.check;
-    B.innerHTML=setup+`<div class="kv" style="margin-bottom:16px">${Object.entries(c.session||{}).map(([k,v])=>`<b>${esc(k)}</b><span>${esc(v)}</span>`).join("")}<b>תיקיות</b><span>${esc((c.folders||[]).join(", ")||"אין")}</span></div>
-    <form class="form" id="fxCreate"><div class="fgrid"><label class="lbl">שם הקו<input class="field" name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
-     <label class="lbl">שם קצר באנגלית<small>לכתובת: yemot-line-…</small><input class="field ltr" name="slug" required pattern="[a-z0-9][a-z0-9-]{1,18}[a-z0-9]" placeholder="chaverim"></label>
-     <label class="lbl">מספר הקו<input class="field ltr" name="linePhone" value="${esc(c.linePhone||"")}" required pattern="0[0-9]{8,9}"></label>
-     <label class="lbl">טלפון מנהל הקו<small>לא חובה – מנהל בפקודות הקוליות</small><input class="field ltr" name="ownerPhone" pattern="0[0-9]{8,9}"></label></div>
-     <label class="lbl">מייל גוגל של מנהל הקו<small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small><input class="field ltr" name="ownerEmail" type="email" placeholder="name@gmail.com"></label>
-     <div class="acts" style="justify-content:flex-start"><button class="btn" ${ready?"":"disabled"}>בניית הקו</button><button type="button" class="btn ghost" id="fxBack">חזרה</button></div></form>`;
-    $("#fxBack").onclick=()=>{fx.check=null;newLineView(V)};
-    $("#fxCreate").onsubmit=async e=>{e.preventDefault();const v=Object.fromEntries(new FormData(e.target));
-      if(!confirm(`לבנות קו חדש "${v.name}" (${v.linePhone}) בשם yemot-line-${v.slug}?\nייווצר שרת חדש ב-Cloudflare עם מפתחות ה-AI של קו המקור.`))return;
-      const b=e.target.querySelector("button");b.disabled=true;toast("בונה את הקו… זה יכול לקחת חצי דקה");
-      try{fx.created=await fxApi({op:"create",ymToken:fx.token,...v});fx.status=null;S.data=null;await load()}catch(er){toast(er.message,true);b.disabled=false}}}
-  else{const r=fx.created,l=r.line;
-    B.innerHTML=`<div class="banner info"><div><b>הקו "${esc(l.name)}" נבנה.</b> ${esc(r.note||"")}</div></div>
-     <ol class="small" style="margin:0 0 14px;padding-inline-start:20px">${(r.steps||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
-     <p style="margin:0 0 6px;font-weight:600">סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</p><div class="secret"><code id="pw">${esc(r.adminPass)}</code><button class="btn sm ghost" id="cp">העתקה</button></div>
-     <div class="acts" style="justify-content:flex-start;margin-top:16px"><a class="btn soft" href="#line=${encodeURIComponent(l.slug)}">כניסה לקו</a><button class="btn" id="fxIvr">השלב הבא: חיבור השלוחות ←</button><button class="btn ghost" id="fxAgain">קו נוסף</button></div>`;
-    $("#cp").onclick=()=>{navigator.clipboard?.writeText(r.adminPass).then(()=>toast("הועתק"))};
-    $("#fxIvr").onclick=e=>ivrStart(l.slug,e.currentTarget,fx.token);
-    $("#fxAgain").onclick=()=>{if(confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")){S.fx={token:"",check:null,created:null,plan:null,status:null};newLineView(V)}};
-  }
+const fx=S.fx,st=fx.created?3:fx.check?2:1,seq=S.seq;
+put(V,h`<div class="card"><div class="card-h"><div><h2>קו חדש</h2><p>מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם עם כל ה-AI ודף ניהול משלו. הקו נבנה במצב בדיקה.</p></div></div>
+<div class="steps">${["טוקן ימות","פרטי הקו","הקו נבנה"].map((t,i)=>h`<span class="${i+1<st?"ok":i+1===st?"on":""}">${i+1}. ${t}</span>`)}</div><div id="fxBody"><p class="mut">טוען…</p></div></div>`);
+if(!googleOk()&&st<3)return put($("#fxBody"),googleBanner());
+if(st<3){
+try{fx.status=fx.status||await fxApi();}
+catch(e){if(seq===S.seq&&$("#fxBody"))put($("#fxBody"),h`<p class="err">${e.message}</p>`);return;}
+}
+const B=$("#fxBody");if(!B||seq!==S.seq)return;
+const ready=!!(fx.status&&fx.status.ready);
+const setup=ready||st===3?"":h`<div class="banner"><div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> צריך להגדיר בקו המקור (yemot-ai ← Settings ← Variables and Secrets) את הסוד <code>CF_FACTORY_TOKEN</code> ואת המשתנה <code>CF_ACCOUNT_ID</code>. בינתיים אפשר לבדוק טוקנים.</div></div>`;
+if(st===1){
+put(B,h`${setup}<form class="form" id="fxCheck" data-act="fxCheck"><label class="lbl">טוקן של מערכת בימות המשיח<small>למשל 0791234567:1234 או טוקן API. הבדיקה רק קוראת מימות, והטוקן לא נשמר בדפדפן.</small><input class="ltr" name="t" type="password" required autocomplete="off" value="${fx.token}"></label><div><button class="btn p" type="submit">בדיקת הטוקן</button></div></form>`);
+}else if(st===2){
+const c=fx.check,ses=c.session&&typeof c.session==="object"?c.session:{};
+put(B,h`${setup}<div class="kv">${Object.keys(ses).map(k=>h`<b>${k}</b><span>${typeof ses[k]==="object"&&ses[k]!==null?JSON.stringify(ses[k]):ses[k]}</span>`)}<b>תיקיות</b><span>${(c.folders||[]).join(", ")||"אין"}</span></div>
+<form class="form" id="fxCreate" data-act="fxCreate"><div class="fgrid"><label class="lbl">שם הקו<input name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
+<label class="lbl">שם קצר באנגלית<small>לכתובת: yemot-line-…</small><input class="ltr" name="slug" required pattern="[a-z0-9](?:[a-z0-9]|-){1,18}[a-z0-9]" placeholder="chaverim" autocomplete="off"></label>
+<label class="lbl">מספר הקו<input class="ltr" name="linePhone" type="tel" value="${c.linePhone||""}" required pattern="0[0-9]{8,9}"></label>
+<label class="lbl">טלפון מנהל הקו<small>לא חובה – מנהל בפקודות הקוליות</small><input class="ltr" name="ownerPhone" type="tel" pattern="0[0-9]{8,9}"></label></div>
+<label class="lbl">מייל גוגל של מנהל הקו<small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small><input class="ltr" name="ownerEmail" type="email" placeholder="name@gmail.com"></label>
+<div class="acts"><button class="btn p" type="submit"${ready?"":raw(" disabled")}>בניית הקו</button><button type="button" class="btn" data-act="fxBack">חזרה</button></div></form>`);
+}else{
+const r=fx.created,l=r.line||{};
+put(B,h`<div class="banner info"><div><b>הקו "${l.name||""}" נבנה.</b> ${r.note||""}</div></div>
+<ol class="small">${(r.steps||[]).map(s=>h`<li>${typeof s==="string"?s:JSON.stringify(s)}</li>`)}</ol>
+<p style="margin:0 0 6px;font-weight:600">סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</p><div class="secret"><code id="pw">${r.adminPass||""}</code><button class="btn s" type="button" id="cp" data-act="fxCopy">העתקה</button></div>
+<div class="acts" style="margin-top:16px"><a class="btn" href="#line=${enc(l.slug||"")}">כניסה לקו</a><button class="btn p" type="button" id="fxIvr" data-act="fxIvr">השלב הבא: חיבור השלוחות ←</button><button class="btn" type="button" id="fxAgain" data-act="fxAgain">קו נוסף</button></div>`);
+}
 }
 // חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
 async function ivrStart(slug,btn,known){
-  const token=known||prompt(`הטוקן של המערכת בימות של הקו "${slug}" (לא נשמר):`);if(!token)return;
-  btn.disabled=true;toast("קורא את מבנה השלוחות…");
-  try{const p=await fxApi({op:"ivr_plan",slug,ymToken:token.trim()});ivrModal({...p,token:token.trim()})}catch(e){toast(e.message,true)}finally{btn.disabled=false}
+let token=known||await Dlg.prompt(`הטוקן של המערכת בימות של הקו "${slug}" (לא נשמר):`,"",{type:"password"});
+token=String(token||"").trim();if(!token)return;
+if(btn)btn.disabled=true;
+toast("קורא את מבנה השלוחות…");
+try{const p=await fxApi({op:"ivr_plan",slug,ymToken:token});S.fx.plan=Object.assign({},p,{slug:p.slug||slug,token});ivrModal(S.fx.plan);}
+catch(e){toast(e.message,true);}
+finally{if(btn&&document.contains(btn))btn.disabled=false;}
 }
 function ivrModal(p){
-  modal(`<h2>חיבור השלוחות של "${esc(p.slug)}"</h2><p class="mut small">${p.count} קובצי ext.ini מקו המקור, אחרי החלפת הכתובת ומפתח ההרצה. מה שקיים היום נשמר בגיבוי לפני הכתיבה. קבצי שמע לא מועתקים.</p>
-   ${p.truncated?'<div class="banner"><div><b>זו רק חלק מהשלוחות.</b> אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>':""}
-   <form id="ivrF"><div class="tw" style="max-height:46vh;overflow:auto"><table class="t" style="min-width:560px"><thead><tr><th></th><th>שלוחה</th><th>מצב</th><th>אחרי</th></tr></thead><tbody>
-   ${p.plan.map(x=>`<tr><td><input type="checkbox" name="p" value="${esc(x.path)}" ${x.same?"disabled":x.unknown?"":"checked"}></td><td class="ltr">${esc(x.path)}</td><td>${x.same?'<span class="pill ok">זהה</span>':x.unknown?'<span class="pill warn">לא נקרא</span>':x.before?'<span class="pill warn">יוחלף</span>':'<span class="pill acc">חדש</span>'}${(x.warn||[]).map(w=>`<div class="small" style="color:var(--warn)">${esc(w)}</div>`).join("")}</td><td><pre class="ini">${esc(x.after)}</pre></td></tr>`).join("")}</tbody></table></div>
-   <div class="acts" style="justify-content:flex-start;margin-top:14px"><input class="field ltr" name="confirm" required placeholder="להקליד את השם הקצר לאישור" style="max-width:240px"><button class="btn">כתיבת השלוחות שנבחרו</button><button type="button" class="btn ghost" data-close>סגירה</button></div></form>`);
-  $("#modal .card").style.width="min(860px,100%)";
-  $("#ivrF").onsubmit=async e=>{e.preventDefault();const f=e.target,paths=[...f.querySelectorAll("[name=p]:checked")].map(i=>i.value);if(!paths.length)return toast("לא נבחרו שלוחות",true);
-    if(!confirm(`לכתוב ${paths.length} קובצי שלוחות למערכת של "${p.slug}"?`))return;const b=f.querySelector("button");b.disabled=true;
-    try{const r=await fxApi({op:"ivr_apply",slug:p.slug,ymToken:p.token,paths,confirm:f.confirm.value.trim()});closeModal();
-      toast(r.ok?`נכתבו ${r.done.length} שלוחות`:`נכתבו ${r.done.length}, נכשלו ${r.failed.length}${(r.skipped||[]).length?`, ${r.skipped.length} ממתינות לסבב נוסף`:""}`,!r.ok);
-      if((r.failed||[]).length)alert("לא נכתבו:\n"+r.failed.join("\n"))}catch(er){toast(er.message,true);b.disabled=false}};
+const plan=p.plan||[];
+Modal.open({wide:true,title:`חיבור השלוחות של "${p.slug}"`,body:h`<p class="mut small">${+p.count||plan.length} קובצי ext.ini מקו המקור, אחרי החלפת הכתובת ומפתח ההרצה. מה שקיים היום נשמר בגיבוי לפני הכתיבה. קבצי שמע לא מועתקים.</p>
+${p.truncated?h`<div class="banner"><div><b>זו רק חלק מהשלוחות.</b> אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>`:""}
+<form id="ivrF" data-act="ivrApply"><div class="wrap tw" style="max-height:46vh;overflow:auto"><table class="tbl" style="min-width:560px"><thead><tr><th><span class="mut">בחירה</span></th><th>שלוחה</th><th>מצב</th><th>אחרי</th></tr></thead><tbody>
+${plan.map(x=>h`<tr><td><input type="checkbox" name="p" value="${x.path}" aria-label="${x.path}"${x.same?raw(" disabled"):x.unknown?"":raw(" checked")}></td><td class="ltr">${x.path}</td><td>${x.same?h`<span class="pill ok">זהה</span>`:x.unknown?h`<span class="pill warn">לא נקרא</span>`:x.before?h`<span class="pill warn">יוחלף</span>`:h`<span class="pill acc">חדש</span>`}${(x.warn||[]).map(w=>h`<div class="small warnt">${w}</div>`)}</td><td><pre class="ini">${x.after||""}</pre></td></tr>`)}</tbody></table></div>
+<div class="acts" style="margin-top:14px"><input class="ltr" name="confirm" required placeholder="להקליד את השם הקצר לאישור" aria-label="להקליד את השם הקצר לאישור" autocomplete="off" style="max-width:260px"><button class="btn p d" type="submit">כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-close>סגירה</button></div></form>`});
 }
-
+// ===== פעולות (מאזין אחד לכל הלחיצות והטפסים) =====
+const ACT={
+retry:()=>load(),
+logout:()=>logout(),
+theme:()=>toggleTheme(),
+side:()=>toggleSide(!$("#shell").classList.contains("open")),
+sideClose:()=>toggleSide(false),
+sideWide:()=>{S.sideWide=!S.sideWide;route();},
+picker:()=>togglePicker(),
+pick:b=>{togglePicker(false);toggleSide(false);location.hash=b.dataset.all?"all":"line="+enc(b.dataset.slug);},
+reG:()=>refreshGoogle(),
+gnoteX:()=>{$("#gnote").hidden=true;},
+ovRefresh:()=>overviewDraw(true),
+ltRefresh:()=>linesDraw(true),
+async suspend(b){
+const slug=b.dataset.slug;
+const c=await Dlg.prompt(`להשהות את הקו "${slug}"?\nמתקשרים ישמעו "הקו מושהה זמנית", והמשימות לא ירוצו. הנתונים וההגדרות נשמרים ואפשר להחזיר.\nלאישור הקלידו את השם הקצר:`,"",{danger:true,ok:"השהיה"});
+if(!c||!c.trim())return;
+b.disabled=true;
+try{await call("suspend",{slug,confirm:c.trim()});toast("הקו הושהה");setEnabled(slug,false);}
+catch(e){fail(e,b);}
+},
+async resume(b){
+if(!await Dlg.confirm("להחזיר את הקו לפעולה?"))return;
+b.disabled=true;
+try{await call("resume",{slug:b.dataset.slug});toast("הקו חזר לפעולה");setEnabled(b.dataset.slug,true);}
+catch(e){fail(e,b);}
+},
+ivr:b=>ivrStart(b.dataset.slug,b),
+// תצוגה מקדימה – מה שמוצג נשמר בזיכרון, ורק הוא נכתב
+async cpPrev(b){
+const O=$("#cpOut"),q=cpForm();
+S.cp=null;b.disabled=true;
+try{
+const r=await call("copy",Object.assign({},q,{preview:true}));
+S.cp=q;
+put(O,h`<div class="wrap tw"><table class="tbl small" style="min-width:480px"><thead><tr><th>מה</th><th>במקור</th><th>ביעד היום</th><th><span class="mut">שינוי</span></th></tr></thead><tbody>${(r.items||[]).map(x=>h`<tr><td>${x.label}</td><td>${x.from}</td><td>${x.to}</td><td>${x.same?h`<span class="pill">זהה</span>`:h`<span class="pill warn">יוחלף</span>`}</td></tr>`)}</tbody></table></div>
+<p class="small mut" style="margin:10px 0 0">מקור: <b>${lineName(q.from)}</b> · יעד: <b>${lineName(q.to)}</b></p><button class="btn p d" type="button" id="cpGo" data-act="cpGo" style="margin-top:10px">העתקה</button>`);
+}catch(e){put(O,h`<p class="mut">${e.message}</p>`);}
+finally{if(document.contains(b))b.disabled=false;}
+},
+async cpGo(b){
+const q=S.cp;if(!q)return;
+const c=await Dlg.prompt(`ההגדרות בקו "${q.to}" יוחלפו. לאישור הקלידו את השם הקצר: ${q.to}`,"",{danger:true,ok:"העתקה"});
+if(c===null)return;
+if(c.trim()!==q.to)return toast("השם שהוקלד לא תואם – לא הועתק דבר",true);
+b.disabled=true;
+try{
+const r=await call("copy",Object.assign({},q,{preview:false,confirm:c.trim()}));
+toast("הועתקו: "+((r.done||[]).join(", ")||"אין שינוי"));
+S.cp=null;put($("#cpOut"),"");
+}catch(e){fail(e,b);}
+},
+newAcc:()=>accountModal(),
+async accRm(b){
+const a=accOf(b);if(!a)return;
+const s=b.dataset.slug;
+if(!await Dlg.confirm(`להסיר את ${a.email} מהקו "${lineName(s)}"?`,{danger:true,ok:"הסרה"}))return;
+busy(b,()=>saveAccess(a.email,(a.c.lines||[]).filter(x=>x!==s)));
+},
+accBlock(b){
+const a=accOf(b);if(!a)return;
+const on=b.dataset.on==="on";
+busy(b,async()=>{needGoogle("יש לחדש את החיבור לגוגל");await syncLegacyManagers(a.email,on?[]:a.c.lines||[]);await call("access",{email:a.email,blocked:on});});
+},
+async accRevoke(b){
+const a=accOf(b);if(!a)return;
+if(!await Dlg.confirm(`להסיר את ${a.email} ואת כל הקווים שלו?`,{danger:true,ok:"הסרה"}))return;
+busy(b,async()=>{needGoogle("יש לחדש את החיבור לגוגל");await syncLegacyManagers(a.email,[]);await call("access",{email:a.email,approved:false});});
+},
+async accSave(f){
+const email=String(f.email.value||"").trim().toLowerCase(),slugs=$$("[name=l]:checked",f).map(i=>i.value),b=$("[type=submit]",f);
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast("חשבון לא תקין",true);f.email.focus();return;}
+b.disabled=true;
+try{await saveAccess(email,slugs);Modal.close();toast("החשבון נוסף");await load();}
+catch(e){fail(e,b);}
+},
+async fxCheck(f){
+const b=$("[type=submit]",f),fx=S.fx;
+fx.token=String(f.t.value||"").trim();if(!fx.token)return;
+b.disabled=true;
+try{fx.check=await fxApi({op:"check",ymToken:fx.token});toast("הטוקן תקין");route();}
+catch(e){fail(e,b);}
+},
+fxBack:()=>{S.fx.check=null;route();},
+async fxCreate(f){
+if(f.reportValidity&&!f.reportValidity())return;
+const v=Object.fromEntries(new FormData(f)),b=$("[type=submit]",f);
+if(!await Dlg.confirm(`לבנות קו חדש "${v.name}" (${v.linePhone}) בשם yemot-line-${v.slug}?\nייווצר שרת חדש ב-Cloudflare עם מפתחות ה-AI של קו המקור.`,{ok:"בניית הקו"}))return;
+b.disabled=true;toast("בונה את הקו… זה יכול לקחת חצי דקה");
+try{S.fx.created=await fxApi(Object.assign({op:"create",ymToken:S.fx.token},v));S.fx.status=null;S.data=null;await load();}
+catch(e){fail(e,b);}
+},
+async fxCopy(){
+const v=(S.fx.created&&S.fx.created.adminPass)||"";
+try{
+if(!navigator.clipboard||!navigator.clipboard.writeText)throw new Error("x");
+await navigator.clipboard.writeText(v);toast("הועתק");
+}catch{await Dlg.prompt("העתיקו:",v);}
+},
+fxIvr:b=>{const l=(S.fx.created&&S.fx.created.line)||{};ivrStart(l.slug,b,S.fx.token);},
+async fxAgain(){if(await Dlg.confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")){S.fx=newFx();route();}},
+async ivrApply(f){
+const p=S.fx.plan;if(!p)return;
+const paths=$$("[name=p]:checked",f).map(i=>i.value),conf=String(f.confirm.value||"").trim();
+if(!paths.length)return toast("לא נבחרו שלוחות",true);
+if(!conf){f.confirm.focus();return toast("להקליד את השם הקצר לאישור",true);}
+if(!await Dlg.confirm(`לכתוב ${paths.length} קובצי שלוחות למערכת של "${p.slug}"?`,{danger:true,ok:"כתיבה"}))return;
+const b=$("[type=submit]",f);b.disabled=true;
+try{
+const r=await fxApi({op:"ivr_apply",slug:p.slug,ymToken:p.token,paths,confirm:conf});
+Modal.close();
+const done=(r.done||[]).length,failed=r.failed||[],sk=(r.skipped||[]).length;
+toast(r.ok?`נכתבו ${done} שלוחות`:`נכתבו ${done}, נכשלו ${failed.length}${sk?`, ${sk} ממתינות לסבב נוסף`:""}`,!r.ok);
+if(failed.length)await Dlg.alert("לא נכתבו:\n"+failed.map(x=>typeof x==="string"?x:JSON.stringify(x)).join("\n"));
+}catch(e){fail(e,b);}
+},
+};
+const CHG={
+cp:()=>{if(S.cp){S.cp=null;put($("#cpOut"),"");}}, // שינוי בבחירה מבטל את התצוגה המקדימה
+accAdd:s=>{const a=accOf(s);if(!a||!s.value)return;busy(s,()=>saveAccess(a.email,(a.c.lines||[]).concat([s.value])));},
+};
+const run=(fn,el,e)=>{try{const r=fn(el,e);if(r&&r.catch)r.catch(er=>toast(er.message,true));}catch(er){toast(er.message,true);}};
+document.addEventListener("click",e=>{
+const t=e.target;
+if(!t||!t.closest)return;
+if(S.pickerOpen&&!t.closest(".picker"))togglePicker(false);
+if(t.closest("#modal [data-close]")||t.id==="modal")return Modal.close();
+const a=t.closest("[data-act]");
+if(a&&a.tagName!=="FORM"&&a.tagName!=="SELECT"&&ACT[a.dataset.act]){
+if(a.tagName==="BUTTON"||a.tagName==="DIV")e.preventDefault();
+if(a.disabled)return;
+return run(ACT[a.dataset.act],a,e);
+}
+if(t.closest(".side a[href^='#']"))toggleSide(false);
+});
+document.addEventListener("submit",e=>{
+const f=e.target.closest&&e.target.closest("form[data-act]");
+if(!f||!ACT[f.dataset.act])return;
+e.preventDefault();run(ACT[f.dataset.act],f,e);
+});
+document.addEventListener("change",e=>{
+const s=e.target.closest&&e.target.closest("[data-chg]");
+if(s&&CHG[s.dataset.chg])run(CHG[s.dataset.chg],s,e);
+});
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="pickQ")drawPicker(e.target.value);});
+document.addEventListener("keydown",e=>{
+if(Dlg.isOpen())return;
+if(e.key==="Escape"){
+if(Modal._open){Modal.close();return;}
+if(S.pickerOpen){togglePicker(false);const b=$("#pickBtn");if(b)b.focus();return;}
+toggleSide(false);return;
+}
+if(Modal._open)return Dlg._trap(e,$("#modal .box"));
+});
+addEventListener("hashchange",()=>{if(S.me)route();});
 // ===== הפעלה =====
 if(S.token)load();else showLogin();
-</script>
-</body>
-</html>
+})();
+</script></body></html>
