@@ -20,6 +20,7 @@ class VideoDigestTests(unittest.TestCase):
         def worker(endpoint, path, body=None, headers=None):
             if path == '/news-video/state': return {'sent': [], 'recipient': 'owner@example.test'}
             if path == '/collector/state': return {}
+            if path == '/news-video/backfill': return {'ok': True, 'more': False, 'archived': 0}
             if path == '/news-video/start': return {'id': 'batch', 'parts': 1, 'sent': []}
             delivered.append(path)
             return {'ok': True, 'gmailId': 'sent'}
@@ -31,6 +32,21 @@ class VideoDigestTests(unittest.TestCase):
         self.assertEqual(len([x for x in attempts if 'mako.co.il' in x]), 4)
         self.assertIn(good, attempts)
         self.assertEqual(delivered, ['/news-video/part/batch/1'])
+
+    def test_articles_remain_separate_attachments(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            clips = [folder / 'clip-000.mp4', folder / 'clip-001.mp4']
+            commands = []
+            def segment(command, **kwargs):
+                commands.append(command)
+                Path(command[-1].replace('%03d', '000')).write_bytes(b'mp4')
+            with patch.object(v.subprocess, 'run', side_effect=segment), patch.object(v, 'probe', return_value=10):
+                parts = v.split_digest(clips, folder)
+            self.assertEqual(len(parts), 2)
+            self.assertEqual([c[c.index('-i') + 1] for c in commands], list(map(str, clips)))
+            self.assertNotEqual(parts[0].name, parts[1].name)
 
     def test_first_run_uses_israel_day_and_future_dates_are_rejected(self):
         now = dt.datetime(2026, 10, 30, 0, 0, tzinfo=dt.timezone.utc)

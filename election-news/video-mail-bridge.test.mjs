@@ -3,19 +3,19 @@ import assert from 'node:assert/strict';
 import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
-function setup(){
- const values=new Map(),calls=[];
+function setup(sendMail=true,extraGoogle=()=>null){
+ const values=new Map(),calls=[],files=new Map(),days=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
- const route=createVideoMailBridge({verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
-  calls.push({url,options});if(url.endsWith('/profile'))return {emailAddress:owner};
+ const route=createVideoMailBridge({sendMail,storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
+  calls.push({url,options});const extra=await extraGoogle(e,url,options);if(extra!==null)return extra;if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
   throw Error('unexpected_google_operation');
  }});
  const request=(path,body,headers={})=>new Request('https://mail.example'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer valid',...headers},body});
  const item={id:'https://www.mako.co.il/news/Article-123.htm',title:'כתבת בחירות',publishedAt:new Date().toISOString()};
- return {env,values,calls,route,request,item,setFail:x=>fail=x};
+ return {env,values,calls,days,route,request,item,setFail:x=>fail=x};
 }
 test('video manifest refuses private sources, credentials, duplicate IDs and old dates',()=>{
  const s=setup();for(const id of ['http://www.mako.co.il/x','https://mako.co.il.attacker.example/x','https://u:p@www.mako.co.il/x','https://127.0.0.1/x'])assert.throws(()=>validateVideoManifest({parts:1,items:[{...s.item,id}]}));
@@ -42,4 +42,59 @@ test('failed Gmail delivery keeps the pending digest and does not mark it sent',
  const s=setup();const b=await (await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();s.setFail(true);
  const v=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);const r=await s.route(s.request(`/news-video/part/${b.id}/1`,v,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);
  assert.equal(r.status,502);assert.ok(s.values.has('news-video:pending'));assert.ok(!s.values.has('news-video:state'));
+});
+
+const tinyVideo=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);
+async function upload(s,b,part){return s.route(s.request(`/news-video/part/${b.id}/${part}`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);}
+test('two MP4 files produce exactly one mail after both arrive, including after retry',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ assert.equal((await(await upload(s,b,1)).json()).staged,true);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/send')).length,0);
+ assert.equal((await(await upload(s,b,2)).json()).complete,true);
+ await upload(s,b,2);
+ const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
+ const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();
+ assert.equal((raw.match(/Content-Disposition: attachment/g)||[]).length,2);
+ assert.match(raw,/filename="news-[a-f0-9]+-1.mp4"/);assert.match(raw,/filename="news-[a-f0-9]+-2.mp4"/);
+});
+test('oversized batch sends one mail with all private Drive links and no attachments',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:3})),s.env)).json();
+ for(let part=1;part<=2;part++)s.values.set(`news-video:file:${b.id}:${part}`,JSON.stringify({id:'saved'+part,name:'news-'+part+'.mp4',url:'https://drive.google.com/file/d/saved'+part+'/view',size:8*1024*1024}));
+ const result=await(await upload(s,b,3)).json();assert.equal(result.complete,true);
+ const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
+ const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();assert.doesNotMatch(raw,/Content-Disposition: attachment/);
+ const body=Buffer.from(raw.split('Content-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace(/\s/g,''),'base64').toString();
+ assert.match(body,/saved1/);assert.match(body,/saved2/);assert.match(body,/-3.mp4/);
+});
+
+test('daily archive uses Jerusalem batch date consistently across retries',async()=>{
+ const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ b.createdAt=Date.parse('2026-10-31T22:30:00Z');s.values.set('news-video:pending',JSON.stringify(b));
+ await upload(s,b,1);await upload(s,b,2);
+ assert.deepEqual(s.days,['2026-11-01','2026-11-01']);
+});
+
+test('Drive-only mode archives every file without sending any email',async()=>{
+ const s=setup(false);const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ await upload(s,b,1);const result=await(await upload(s,b,2)).json();
+ assert.equal(result.archived,true);assert.equal(result.emails,0);
+ assert.equal(s.calls.filter(x=>x.url.includes('messages')).length,0);
+ assert.equal(JSON.parse(s.values.get('news-video:state')).sent[0].id,s.item.id);
+ assert.equal(s.values.has('news-video:pending'),false);
+});
+
+test('backfill recovers only this service MP4 attachments into the correct day without mail or duplicates',async()=>{
+ const encoded=Buffer.from(tinyVideo).toString('base64url');
+ const s=setup(false,async(e,url)=>{
+  if(url.includes('messages?q='))return {messages:[{id:'a1'}]};
+  if(url.endsWith('messages/a1?format=full'))return {labelIds:['SENT'],internalDate:String(Date.parse('2026-10-30T22:30:00Z')),payload:{headers:[{name:'Subject',value:'כתבות הפוליטיקה — עדכון שעתי — בדיקה'}],parts:[{partId:'1',mimeType:'video/mp4',filename:'news-0123456789ab-1.mp4',body:{size:12,attachmentId:'video'}},{partId:'2',mimeType:'video/mp4',filename:'unrelated.mp4',body:{size:12,attachmentId:'unrelated'}}]}};
+  if(url.endsWith('attachments/video'))return {data:encoded};
+  return null;
+ });
+ const first=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
+ assert.equal(first.archived,1);assert.deepEqual(s.days,['2026-10-31']);
+ const again=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
+ assert.equal(again.archived,0);assert.equal(s.days.length,1);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/send')).length,0);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('attachments/unrelated')).length,0);
 });

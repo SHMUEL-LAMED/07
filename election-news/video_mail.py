@@ -102,11 +102,10 @@ def make_video(url, destination):
 
 
 def split_digest(clips, folder):
-    listing = folder / 'concat.txt'
-    # All paths are generated numeric names under this temporary directory.
-    listing.write_text(''.join("file '" + str(path) + "'\n" for path in clips))
-    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing), '-map', '0:v:0', '-map', '0:a:0', '-c', 'copy',
-                    '-f', 'segment', '-segment_time', '300', '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', '-y', str(folder / 'part-%03d.mp4')], check=True, capture_output=True, timeout=180)
+    # Keep each article as a separate attachment; split only long articles.
+    for index, clip in enumerate(clips):
+        subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(clip), '-map', '0:v:0', '-map', '0:a:0', '-c', 'copy',
+                        '-f', 'segment', '-segment_time', '300', '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', '-y', str(folder / ('part-%03d-%%03d.mp4' % index))], check=True, capture_output=True, timeout=180)
     parts = sorted(folder.glob('part-*.mp4'))
     if not parts:
         raise ValueError('no_video_parts')
@@ -141,6 +140,16 @@ def main():
     print('mail_server_ready', flush=True)
     if args.check_only:
         return
+    # Recover earlier mailed videos before contacting publishers again.
+    cursor = ''
+    for _ in range(40):
+        archived = c.worker(mail, '/news-video/backfill', json.dumps({'pageToken': cursor}).encode(), {'Content-Type': 'application/json'})
+        if not archived.get('ok'):
+            raise ValueError('drive_backfill_not_confirmed')
+        print('drive_backfill', archived.get('archived', 0), 'files', flush=True)
+        if not archived.get('more'):
+            break
+        cursor = archived.get('pageToken', '')
     pending = state.get('pending')
     if pending:
         candidates = {x['id'].split('#')[0]: x['title'] for x in pending['items']}
@@ -209,13 +218,13 @@ def main():
                     result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], number), part.read_bytes(), {'Content-Type': 'video/mp4'})
                     if not result.get('ok'):
                         raise ValueError('email_not_confirmed')
-                    print('video_emailed', number, len(parts), result.get('gmailId'), flush=True)
+                    print('video_emailed' if result.get('gmailId') else 'video_staged', number, len(parts), result.get('gmailId', ''), flush=True)
                     break
                 except (urllib.error.URLError, TimeoutError):
                     if attempt == 2:
                         raise
                     time.sleep(5)
-        print('video_digest_complete', len(items), 'clips', len(parts), 'emails', failures, 'source_failures', flush=True)
+        print('video_digest_complete', len(items), 'clips', 0 if batch.get('delivery') == 'drive-only' else (1 if batch.get('delivery') == 'single-email' else len(parts)), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
 
 
 if __name__ == '__main__':
