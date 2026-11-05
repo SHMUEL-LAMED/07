@@ -29,6 +29,22 @@ def analyze_frames(endpoint, frames):
         raise ValueError('blur_analysis_failed: ' + str(reason)[:180]) from None
 
 
+def retry_processing(operation, attempts=3, total_seconds=1500):
+    deadline = time.monotonic() + total_seconds
+    for attempt in range(1, attempts + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('blur_processing_budget_exceeded')
+        try:
+            return operation(remaining)
+        except Exception:
+            delay = (2, 5)[min(attempt - 1, 1)]
+            if attempt == attempts or deadline - time.monotonic() <= delay:
+                raise
+            print('blur_processing_retry', attempt + 1, 'of', attempts, flush=True)
+            time.sleep(delay)
+
+
 def video_inputs(url, depth=0):
     c.public_url(url)
     if depth > 4:
@@ -115,10 +131,12 @@ def make_video(url, destination):
             filtered = destination.with_suffix('.filtered.mp4')
             def analyze(frames):
                 return analyze_frames(BLUR_ENDPOINT, frames)
-            sanitize_video(destination, filtered, analyze)
-            if abs(probe(filtered)-duration) > .3:
-                raise ValueError('blur_duration_mismatch')
-            filtered.replace(destination)
+            def process(remaining):
+                sanitize_video(destination, filtered, analyze, deadline_seconds=remaining)
+                if abs(probe(filtered)-duration) > .3:
+                    raise ValueError('blur_duration_mismatch')
+                filtered.replace(destination)
+            retry_processing(process)
         return duration
     finally:
         if downloaded:
@@ -172,7 +190,7 @@ def main():
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=blue:s=160x96:r=20:d=1','-f','lavfi','-i','sine=frequency=440:duration=1','-c:v','libx264','-c:a','aac','-shortest',str(source)],check=True)
             def analyze(frames):
                 return analyze_frames(mail, frames)
-            result=sanitize_video(source, output, analyze)
+            result=retry_processing(lambda remaining: sanitize_video(source, output, analyze, deadline_seconds=remaining))
             if abs(probe(output)-probe(source))>.3:
                 raise ValueError('blur_duration_mismatch')
             print('blur_provider_verified', result['frames'], 'frames; no upload or email', flush=True)

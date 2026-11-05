@@ -6,6 +6,27 @@ import video_mail as v
 
 
 class VideoDigestTests(unittest.TestCase):
+    def test_processing_retries_transient_failure_then_returns_processed_result(self):
+        calls = []
+        def process(remaining):
+            calls.append(remaining)
+            if len(calls) < 3:
+                raise ValueError('temporary_analysis_failure')
+            return 'processed'
+        with patch.object(v.time, 'sleep') as sleep:
+            self.assertEqual(v.retry_processing(process), 'processed')
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([x.args[0] for x in sleep.call_args_list], [2, 5])
+        self.assertTrue(all(0 < x <= 1500 for x in calls))
+
+    def test_processing_stops_after_three_failures_and_never_returns_raw_fallback(self):
+        from unittest.mock import Mock
+        process = Mock(side_effect=ValueError('processing_failed'))
+        with patch.object(v.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'processing_failed'):
+                v.retry_processing(process)
+        self.assertEqual(process.call_count, 3)
+
     def test_failed_source_does_not_starve_other_sources(self):
         candidates = {f'https://www.mako.co.il/news/Article-{i}.htm': 'כתבה' for i in range(12)}
         good = 'https://www.i24news.tv/he/news/politics/test'
