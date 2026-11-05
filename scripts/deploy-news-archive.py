@@ -35,7 +35,10 @@ if code.count(marker) != 1 or code.count('const originalMailWorker = {') != 1:
     raise SystemExit('Existing mail bridge structure changed; deployment stopped')
 folder = ROOT / 'live/mail'
 folder.mkdir(parents=True, exist_ok=True)
-(folder / 'base.mjs').write_text(code.split(marker, 1)[0].replace('const originalMailWorker = {', 'export default {', 1))
+base = code.split(marker, 1)[0]
+# Remove the known pre-auth maintenance prelude emitted by the initial rollout.
+base = base.split('// Authenticated, one-time replacement limited to the five owner-selected videos.', 1)[0]
+(folder / 'base.mjs').write_text(base.replace('const originalMailWorker = {', 'export default {', 1))
 subprocess.run(['python', str(ROOT / 'scripts/build-mail-video.py')], check=True)
 worker = folder / 'worker.generated.mjs'
 subprocess.run(['node', '--check', str(worker)], check=True)

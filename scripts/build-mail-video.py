@@ -8,8 +8,8 @@ auth=(root/'election-news/collector-auth.mjs').read_text().replace('export async
 bridge=(root/'election-news/video-mail-bridge.mjs').read_text().replace('export function ','function ')
 maintenance=(root/'election-news/drive-blur-maintenance.mjs').read_text().replace('export const ','const ').replace('export function ','function ')
 wrapper='''
-MAINTENANCE
 const newsVideoAuth=(()=>{AUTH;return verifyCollectorToken;})();
+MAINTENANCE
 const newsVideoBridgeFactory=(()=>{BRIDGE;return createVideoMailBridge;})();
 const newsDriveBlur=createDriveBlurMaintenance({
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
