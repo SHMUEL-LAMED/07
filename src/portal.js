@@ -30,6 +30,7 @@ async function legacyKv(env, script) {
 // לאילו קווים יש לחשבון גישה: מנהלי הדף של כל קו (גם מי שמנהל קו הוסיף בעצמו), ומנהל הקו שנקבע בבנייה
 async function accessOf(env, email, lines) {
   const out = [];
+  out.failed = []; // קווים שלא ניתן היה לבדוק (Cloudflare לא ענה) – לא נחשבים כ"אין גישה"
   const has = list => emailsOf(list).find(m => m.e === email);
   const m0 = has(await env.KV.get("dash_emails"));
   if (m0) out.push({ slug: "shimchas", role: m0.role });
@@ -41,7 +42,7 @@ async function accessOf(env, email, lines) {
       const id = c.kv || await legacyKv(env, c.script);
       const m = id && has(await kvGetRemote(env, id, "dash_emails"));
       if (m) out.push({ slug: c.slug, role: m.role });
-    } catch {} // קו שלא ענה – פשוט לא מופיע
+    } catch { out.failed.push(c.slug); } // קו שלא ענה – נשארים עם השיוך במרכז
   }));
   return out;
 }
@@ -128,13 +129,14 @@ export async function portal(req, env, verifyGoogle) {
   const available = [...lines, ...LEGACY];
   const access = isOwner ? [] : await accessOf(env, session.email, lines);
   const viaLine = new Set(access.map(a => a.slug));
+  const unchecked = new Set(access.failed || []);
   // רק קווים שהחשבון באמת יכול להיכנס אליהם: רשום ברשימת המנהלים של הקו עצמו.
   // שיוך במרכז או מנהל מהבנייה לא מספיקים – מנהל הקו יכול להסיר אותו מהקו, ואז הקו לא מוצג.
   // בלי חיבור ל-Cloudflare אי אפשר לבדוק קווים אחרים, ואז נשארים עם השיוך (חוץ משימחס, שנבדק תמיד)
   const strict = cfReady(env);
   const allowed = isOwner ? available : [
-    ...LEGACY.filter(l => viaLine.has(l.slug) || (!strict && l.slug !== "shimchas" && memberships.includes(l.slug))),
-    ...lines.filter(l => viaLine.has(l.slug) || (!strict && (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug))))];
+    ...LEGACY.filter(l => viaLine.has(l.slug) || ((!strict || unchecked.has(l.slug)) && l.slug !== "shimchas" && memberships.includes(l.slug))),
+    ...lines.filter(l => viaLine.has(l.slug) || ((!strict || unchecked.has(l.slug)) && (normalize(l.ownerEmail) === session.email || memberships.includes(l.slug))))];
   if (action === "me") {
     // The service owner must be recognized by every independent line Worker too,
     // so the same Google credential can open each line dashboard.
@@ -142,7 +144,9 @@ export async function portal(req, env, verifyGoogle) {
       try { await syncClientLines(env, lines, owner, lines.map(l => l.slug)); }
       catch (e) { return reply({ error: String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים") }, 502); }
     }
-    if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine) });
+    // קווים ששויכו במרכז אבל החשבון עוד לא רשום בהם – כדי שהדף יוכל להסביר למה הקו חסר
+    if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine),
+      waiting: memberships.filter(s => !allowed.some(l => l.slug === s)) });
     const accounts = await env.KV.list({ prefix: "portal_approved:" });
     const clients = [];
     for (const item of accounts.keys) {

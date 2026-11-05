@@ -96,6 +96,7 @@ code{padding:1px 5px;border-radius:6px;background:var(--bg2);direction:ltr;unico
 .chip{background:var(--accbg);color:var(--acc);padding-block:2px;padding-inline:10px 4px}
 .chip button{width:24px;height:24px;padding:0;border:0;border-radius:50%;background:none;font-size:15px;cursor:pointer}
 .chip button:hover{background:var(--card)}
+.chip.bad{background:var(--badbg,#fde8e8);color:var(--bad,#b42318);outline:1px dashed currentColor}
 select.chip-add{min-height:30px;padding:2px 10px;border:1px dashed var(--axis);border-radius:999px;background:none;font-size:.8rem}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);box-shadow:var(--sh);min-width:0}
 .card+.card,.lines-cards+.card,.tiles+.lines-cards{margin-top:var(--gap)}
@@ -663,6 +664,8 @@ const dyn=(me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);r
 S.lines=me.isOwner?LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)).concat(dyn):dyn;
 await dropDenied();
 shell();
+const wait=(me.waiting||[]).concat(S.denied||[]);
+if(!me.isOwner&&wait.length)toast("הגישה ל"+wait.map(s=>({shimchas:"שימחס",daat:"דעת תורה"})[s]||s).join(", ")+" עוד לא הושלמה בקו עצמו. בעל השירות צריך לסנכרן את החשבון.",true);
 if(!location.hash||location.hash==="#"){
 const last=store.get("l","portalView:"+me.email)||"";
 const def=last||(me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"overview");
@@ -676,13 +679,15 @@ async function dropDenied(){
 if(S.me.isOwner||!S.lines.length)return;
 const key="portalDenied:"+S.me.email;
 let denied=null;
-try{const o=JSON.parse(store.get("l",key)||"null");if(o&&Array.isArray(o.d)&&o.at>Date.now()-864e5)denied=o.d;}catch{}
+// עם חיבור גוגל בתוקף בודקים תמיד מחדש (קו שנוסף לחשבון מופיע מיד). בלעדיו – התשובה האחרונה מהיום
+if(!googleOk()){try{const o=JSON.parse(store.get("l",key)||"null");if(o&&Array.isArray(o.d)&&o.at>Date.now()-864e5)denied=o.d;}catch{}}
 if(!Array.isArray(denied)){
 if(!googleOk())return;
 denied=[];
 await Promise.all(S.lines.map(async l=>{try{await lineToken(l);}catch(e){if(e.status===401||e.status===403)denied.push(l.slug);}}));
 store.set("l",key,JSON.stringify({d:denied,at:Date.now()}));
 }
+S.denied=denied;
 S.lines=S.lines.filter(l=>denied.indexOf(l.slug)<0);
 }
 // ===== מבנה הדף =====
@@ -923,7 +928,28 @@ return h`<tr data-email="${c.email}"><td><b class="ltr">${c.email}</b></td><td><
 ${free.length?h`<select class="chip-add" data-chg="accAdd" aria-label="הוספת קו"><option value="">+ הוספת קו</option>${free.map(l=>h`<option value="${l.slug}">${nameOf(l)}</option>`)}</select>`:""}</div></td>
 <td>${c.blocked?h`<span class="pill bad">מושהה</span>`:h`<span class="pill ok">פעיל</span>`}</td>
 <td><div class="acts"><button class="btn s" type="button" data-act="accBlock" data-on="${c.blocked?"off":"on"}">${c.blocked?"החזרת גישה":"השהיית גישה"}</button><button class="btn s d" type="button" data-act="accRevoke">הסרה</button></div></td></tr>`;
-})}</tbody></table></div>`:empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}</div>`);
+})}</tbody></table></div>`:empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}<div id="accSync"></div></div>`);
+if(cl.length)checkAccounts(S.seq);
+}
+// השוואה מול רשימת המנהלים של הקווים עצמם: שיוך שמופיע כאן אבל לא נרשם בקו לא נותן גישה בפועל
+async function checkAccounts(seq){
+const cl=(S.me.clients||[]).filter(c=>!c.blocked),bad=[];
+for(const line of LEGACY_LINES){
+if(!lineReady(line))continue;
+let list;try{list=((await lineApi(line,"emails")).managers||[]).map(m=>typeof m==="string"?m:m&&m.e);}catch{continue;}
+for(const c of cl){
+const want=(c.lines||[]).indexOf(line.slug)>=0,has=list.indexOf(c.email)>=0;
+if(want!==has)bad.push({c,line,want});
+}
+}
+if(seq!==S.seq)return;
+for(const x of bad){
+if(!x.want)continue;
+const tr=$$("#view tr[data-email]").find(t=>t.dataset.email===x.c.email);
+const ch=tr&&$$(".chip",tr).find(c=>{const b=c.querySelector("[data-slug]");return b&&b.dataset.slug===x.line.slug;});
+if(ch){ch.classList.add("bad");ch.title="לא רשום בקו עצמו – אין גישה בפועל";}
+}
+put($("#accSync"),bad.length?h`<div class="banner warn" style="margin-top:12px">${ico("refresh")}<div><b>${bad.length} הרשאות לא מסונכרנות עם הקווים.</b> מה שמסומן באדום מופיע כאן, אבל החשבון לא רשום בקו עצמו ולכן לא נכנס אליו.</div><button class="btn s p" type="button" data-act="accFix">סנכרון עכשיו</button></div>`:"");
 }
 const accOf=el=>{const tr=el.closest("tr[data-email]");if(!tr)return null;const email=tr.dataset.email;return{email,c:(S.me.clients||[]).find(x=>x.email===email)||{lines:[]}};};
 // כישלון פעולה: הודעה ושחרור הכפתור
@@ -1045,6 +1071,7 @@ S.cp=null;put($("#cpOut"),"");
 }catch(e){fail(e,b);}
 },
 newAcc:()=>accountModal(),
+accFix(b){busy(b,async()=>{needGoogle("יש לחדש את החיבור לגוגל");for(const c of (S.me.clients||[]).filter(x=>!x.blocked))await syncLegacyManagers(c.email,c.lines||[]);},"ההרשאות סונכרנו");},
 async accRm(b){
 const a=accOf(b);if(!a)return;
 const s=b.dataset.slug;
