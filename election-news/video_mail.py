@@ -18,6 +18,17 @@ LIMIT = 8 * 1024 * 1024
 BLUR_ENDPOINT = None
 
 
+def analyze_frames(endpoint, frames):
+    try:
+        return c.worker(endpoint, '/news-video/blur-frames', json.dumps({'frames':frames}).encode(), {'Content-Type':'application/json'})
+    except urllib.error.HTTPError as error:
+        try:
+            reason = json.loads(error.read(1024)).get('error', 'analysis_service_error')
+        except (ValueError, TypeError):
+            reason = 'analysis_service_error'
+        raise ValueError('blur_analysis_failed: ' + str(reason)[:180]) from None
+
+
 def video_inputs(url, depth=0):
     c.public_url(url)
     if depth > 4:
@@ -103,7 +114,7 @@ def make_video(url, destination):
             from women_blur import sanitize_video
             filtered = destination.with_suffix('.filtered.mp4')
             def analyze(frames):
-                return c.worker(BLUR_ENDPOINT, '/news-video/blur-frames', json.dumps({'frames': frames}).encode(), {'Content-Type': 'application/json'})
+                return analyze_frames(BLUR_ENDPOINT, frames)
             sanitize_video(destination, filtered, analyze)
             if abs(probe(filtered)-duration) > .3:
                 raise ValueError('blur_duration_mismatch')
@@ -160,7 +171,7 @@ def main():
             source, output = Path(tmp)/'test.mp4', Path(tmp)/'test-filtered.mp4'
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=blue:s=160x96:r=20:d=1','-f','lavfi','-i','sine=frequency=440:duration=1','-c:v','libx264','-c:a','aac','-shortest',str(source)],check=True)
             def analyze(frames):
-                return c.worker(mail, '/news-video/blur-frames', json.dumps({'frames':frames}).encode(), {'Content-Type':'application/json'})
+                return analyze_frames(mail, frames)
             result=sanitize_video(source, output, analyze)
             if abs(probe(output)-probe(source))>.3:
                 raise ValueError('blur_duration_mismatch')
