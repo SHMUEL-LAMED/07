@@ -10,7 +10,7 @@
 <title>מרכז הקווים</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Frank+Ruhl+Libre:wght@500;700;900&display=swap">
 <script>"use strict";(function(){var d=document.documentElement;
-try{var t=localStorage.getItem("portalTheme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}
+try{var t=localStorage.getItem("theme")||localStorage.getItem("portalTheme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}
 try{var p=JSON.parse(localStorage.getItem("uiPrefs")||"{}")||{};if(typeof p.accent==="string")d.setAttribute("data-accent",p.accent)}catch(e){}
 })();</script>
 <style>/*@tokens:start*/
@@ -374,8 +374,11 @@ del(a,k){try{this._a(a).removeItem(k);}catch{}},
 const newFx=()=>({token:"",check:null,created:null,plan:null,status:null});
 const S={token:"",google:"",me:null,lines:[],view:"",slug:"",data:null,dataAt:0,fx:newFx(),pickerOpen:false,sideWide:false,cp:null,seq:0};
 const lineSessions={};
-S.token=store.get("s","portalToken")||"";
-S.google=store.get("s","portalGoogle")||"";
+// הכניסה נשמרת במכשיר (30 יום בשרת), ולא נמחקת כשסוגרים את הלשונית
+S.token=store.get("l","portalToken")||store.get("s","portalToken")||"";
+S.google=store.get("l","portalGoogle")||store.get("s","portalGoogle")||"";
+if(S.token)store.set("l","portalToken",S.token);
+store.del("s","portalToken");store.del("s","portalGoogle");
 // ===== DOM ותבניות בטוחות =====
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.prototype.slice.call(r.querySelectorAll(s));
@@ -512,24 +515,49 @@ const call=(action,body)=>request(API+"?action="+enc(action)+"&token="+enc(S.tok
 const googleExp=()=>{try{return JSON.parse(atob(S.google.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).exp*1000;}catch{return 0;}};
 const googleOk=()=>!!S.google&&googleExp()>Date.now()+30000;
 const baseOf=l=>l.api||LINES_API+enc(l.slug)+"/";
+// אסימוני הקווים (30 יום) נשמרים במכשיר לכל חשבון, כך שאחרי שעה (כשהחיבור לגוגל פג) הקווים ממשיכים לעבוד
+const LT="portalLineTok:";
+const myEmail=()=>(S.me&&S.me.email)||"";
+function ltGet(b){
+try{const o=JSON.parse(store.get("l",LT+b)||"null");
+if(o&&o.t&&(!myEmail()||o.em===myEmail())&&+String(o.t).split(".")[0]>Date.now()+60000)return String(o.t);}catch{}
+return "";
+}
+const ltSet=(b,t)=>store.set("l",LT+b,JSON.stringify({t,em:myEmail()}));
+const ltDel=b=>{store.del("l",LT+b);delete lineSessions[b];};
+function ltClear(){try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(k.indexOf(LT)===0||k.indexOf("portalDenied:")===0))localStorage.removeItem(k);}}catch{}}
+const lineReady=l=>!!ltGet(baseOf(l))||googleOk();
+const linesReady=a=>a.every(l=>l.enabled===false||lineReady(l));
+const tokensAll=()=>S.lines.every(l=>l.enabled===false||!!ltGet(baseOf(l)));
 // אסימון לכל קו – הבטחה אחת לכל בסיס, כדי שפניות במקביל לא יפתחו כמה סשנים
 function lineToken(l){
 const b=baseOf(l);
+const c=ltGet(b);if(c)return Promise.resolve(c);
 if(lineSessions[b])return lineSessions[b];
 if(!googleOk())return Promise.reject(new Error("החיבור לגוגל פג – יש לרענן אותו"));
-const p=lineSessions[b]=request(b+"session",{google:S.google}).then(r=>r.token,e=>{if(lineSessions[b]===p)delete lineSessions[b];throw e;});
+const p=lineSessions[b]=request(b+"session",{google:S.google}).then(r=>{ltSet(b,r.token);delete lineSessions[b];return r.token;},e=>{if(lineSessions[b]===p)delete lineSessions[b];throw e;});
 return p;
 }
 async function lineApi(l,name,body){
+const b=baseOf(l);
+for(let i=0;;i++){
 const t=await lineToken(l);
-return request(baseOf(l)+name+(name.indexOf("?")>=0?"&":"?")+"token="+enc(t),body);
+try{return await request(b+name+(name.indexOf("?")>=0?"&":"?")+"token="+enc(t),body);}
+catch(e){
+// אסימון שמור שהשרת דחה (סיסמה הוחלפה, הרשאה הוסרה) – נמחק, וניסיון אחד נוסף דרך גוגל
+if(e.status!==401||i)throw e;
+ltDel(b);
+if(!googleOk())throw e;
+}
+}
 }
 // כתובת דף הקו + #g=<credential> (הדף בפנים מחליף אותו לאסימון)
 const handoffUrl=l=>{
 const def="/07/line/?l="+enc(l.slug);
 let u;try{u=new URL(l.url||def,location.href);}catch{u=null;}
 if(!u||!/^https?:$/.test(u.protocol))u=new URL(def,location.href);
-if(S.google)u.hash="g="+S.google;
+const t=ltGet(baseOf(l));
+if(t)u.hash="t="+t;else if(S.google)u.hash="g="+S.google;
 return u.href;
 };
 const isFactory=l=>!l.legacy&&!LEGACY_LINES.some(x=>x.slug===l.slug);
@@ -575,7 +603,7 @@ renderGoogle($("#gbtn"),async cred=>{
 const er=$("#lerr");if(er)er.textContent="";
 try{
 const r=await request(API+"?action=login",{google:cred});
-S.token=r.token;store.set("s","portalToken",S.token);setGoogle(cred);
+S.token=r.token;store.set("l","portalToken",S.token);setGoogle(cred);
 await load();
 }catch(e){const x=$("#lerr");if(x)x.textContent=e.message;}
 });
@@ -590,14 +618,14 @@ put($("#login-box"),h`${PHONE()}<div class="login-brand">מרכז הקווים</
 function setGoogle(c){
 S.google=c;
 for(const k in lineSessions)delete lineSessions[k];
-store.set("s","portalGoogle",c);
+store.set("l","portalGoogle",c);
 gNote();
 }
 // תזכורת 5 דקות לפני שה-credential פג
 function gNote(){
 clearTimeout(gT);
 const n=$("#gnote");if(n)n.hidden=true;
-if(!S.google)return;
+if(!S.google||tokensAll())return;
 const left=googleExp()-Date.now();
 if(left<=30000)return;
 const show=()=>{
@@ -614,7 +642,7 @@ renderGoogle($("#gbtn2",box),cred=>{setGoogle(cred);Modal.close();toast("החי�
 }
 async function logout(){
 try{await call("logout",{});}catch{}
-store.del("s","portalToken");store.del("s","portalGoogle");
+store.del("l","portalToken");store.del("l","portalGoogle");ltClear();
 location.hash="";location.reload();
 }
 // ===== טעינה =====
@@ -625,7 +653,7 @@ catch(e){
 const st=e.status||0;
 // שגיאה זמנית – לא מנתקים
 if(st===0||st>=500){if(S.me){toast(e.message,true);return;}return showFail(e.message);}
-S.token="";S.me=null;store.del("s","portalToken");
+S.token="";S.me=null;store.del("l","portalToken");
 return showLogin(/נדרשת כניסה|החיבור פג/.test(e.message)?"":e.message);
 }
 S.me=me;
@@ -643,14 +671,15 @@ route();
 }
 // קו שלא מקבל את החשבון (401/403) לא מוצג. נבדק פעם אחת לכל חיבור לגוגל
 async function dropDenied(){
-if(S.me.isOwner||!googleOk()||!S.lines.length)return;
-const key="portalDenied:"+S.google.slice(-16);
+if(S.me.isOwner||!S.lines.length)return;
+const key="portalDenied:"+S.me.email;
 let denied=null;
-try{denied=JSON.parse(store.get("s",key)||"null");}catch{}
+try{const o=JSON.parse(store.get("l",key)||"null");if(o&&Array.isArray(o.d)&&o.at>Date.now()-864e5)denied=o.d;}catch{}
 if(!Array.isArray(denied)){
+if(!googleOk())return;
 denied=[];
 await Promise.all(S.lines.map(async l=>{try{await lineToken(l);}catch(e){if(e.status===401||e.status===403)denied.push(l.slug);}}));
-store.set("s",key,JSON.stringify(denied));
+store.set("l",key,JSON.stringify({d:denied,at:Date.now()}));
 }
 S.lines=S.lines.filter(l=>denied.indexOf(l.slug)<0);
 }
@@ -679,9 +708,14 @@ put($("#quick"),S.lines.map(l=>h`<a class="qtab" href="#line=${enc(l.slug)}" dat
 const isDark=()=>{const t=document.documentElement.getAttribute("data-theme");if(t)return t==="dark";try{return matchMedia("(prefers-color-scheme: dark)").matches;}catch{return false;}};
 function toggleTheme(){
 const n=isDark()?"light":"dark";
-document.documentElement.setAttribute("data-theme",n);store.set("l","portalTheme",n);
+document.documentElement.setAttribute("data-theme",n);store.set("l","theme",n);store.del("l","portalTheme");
 put($("#themeBtn"),ico(n==="dark"?"sun":"moon"));
 }
+// סנכרון בין לשוניות ודפים: מצב כהה/בהיר, יציאה וכניסה
+addEventListener("storage",e=>{
+if(e.key==="theme"){const d=document.documentElement;if(e.newValue==="light"||e.newValue==="dark")d.setAttribute("data-theme",e.newValue);else d.removeAttribute("data-theme");put($("#themeBtn"),ico(isDark()?"sun":"moon"));}
+else if(e.key==="portalToken"&&(e.newValue||"")!==S.token)location.reload();
+});
 function toggleSide(open){
 const sh=$("#shell");if(!sh)return;
 sh.classList.toggle("open",!!open);$("#scrim").hidden=!open;
@@ -746,7 +780,7 @@ function lineView(V,l){
 V.className="content full";
 const u=handoffUrl(l);
 put(V,h`<div class="frame-bar"><b>${nameOf(l)}</b><span class="mut ltr small">${ph(l.line)}</span>${l.enabled===false?h`<span class="pill">מושהה</span>`:""}<span class="sp"></span>
-${googleOk()?"":h`<button class="btn s" type="button" id="reG" data-act="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn s" href="${u}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
+${lineReady(l)?"":h`<button class="btn s" type="button" id="reG" data-act="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn s" href="${u}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
 <iframe class="frame" title="ניהול ${nameOf(l)}" src="${u}" allow="clipboard-read; clipboard-write; microphone"></iframe>`);
 }
 // ===== נתונים מכל הקווים =====
@@ -764,7 +798,7 @@ return p.length?["warn",p.join(" · ")]:["ok","תקין"+(hh.testMode?" · בד�
 const rowHealth=(r,tbl)=>r.err?["warn",tbl?r.err:"לא ענה"]:r.ov||r.off?healthOf(r.he,r.l):["","—"];
 async function fetchAll(force){
 if(!force&&S.data&&Date.now()-S.dataAt<60000)return S.data;
-if(!googleOk())throw new Error("google");
+if(!S.lines.some(l=>l.enabled!==false&&lineReady(l))&&S.lines.some(l=>l.enabled!==false))throw new Error("google");
 const rows=await Promise.all(S.lines.map(async l=>{
 if(l.enabled===false)return{l,off:true};
 try{
@@ -870,7 +904,7 @@ const present=(data.managers||[]).some(m=>(typeof m==="string"?m:m&&m.e)===email
 if(present!==wanted)await lineApi(line,"emails",{email,op:wanted?"add":"remove",role:"admin"});
 }
 }
-function needGoogle(msg){if(!googleOk()){refreshGoogle();throw new Error(msg||"יש לחדש את החיבור לגוגל ולנסות שוב");}}
+function needGoogle(msg){if(!linesReady(LEGACY_LINES)){refreshGoogle();throw new Error(msg||"יש לחדש את החיבור לגוגל ולנסות שוב");}}
 async function saveAccess(email,slugs){
 needGoogle();
 await call("access",{email,approved:true});
@@ -909,7 +943,7 @@ async function newLineView(V){
 const fx=S.fx,st=fx.created?3:fx.check?2:1,seq=S.seq;
 put(V,h`<div class="card"><div class="card-h"><div><h2>קו חדש</h2><p>מכניסים טוקן של מערכת בימות המשיח, ונבנה קו חכם עם כל ה-AI ודף ניהול משלו. הקו נבנה במצב בדיקה.</p></div></div>
 <div class="steps">${["טוקן ימות","פרטי הקו","הקו נבנה"].map((t,i)=>h`<span class="${i+1<st?"ok":i+1===st?"on":""}">${i+1}. ${t}</span>`)}</div><div id="fxBody"><p class="mut">טוען…</p></div></div>`);
-if(!googleOk()&&st<3)return put($("#fxBody"),googleBanner());
+if(!lineReady(SOURCE)&&st<3)return put($("#fxBody"),googleBanner());
 if(st<3){
 try{fx.status=fx.status||await fxApi();}
 catch(e){if(seq===S.seq&&$("#fxBody"))put($("#fxBody"),h`<p class="err">${e.message}</p>`);return;}
