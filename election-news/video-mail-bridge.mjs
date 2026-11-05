@@ -25,7 +25,19 @@ export function validateVideoManifest(value, now=Date.now()) {
  return {items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
 }
 
-export function createVideoMailBridge({verify, google, storeVideo, loadVideo, sendMail=false}) {
+export function parseWomenFrameResult(value,count){
+ const parsed=typeof value==='string'?JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,'')):value;
+ if(!Array.isArray(parsed?.frames)||parsed.frames.length!==count)throw Error('incomplete_blur_analysis');
+ const seen=new Set();
+ for(const frame of parsed.frames){
+  if(!Number.isInteger(frame.index)||frame.index<0||frame.index>=count||seen.has(frame.index)||!Array.isArray(frame.boxes)||frame.boxes.length>50)throw Error('invalid_blur_analysis');
+  seen.add(frame.index);
+  for(const box of frame.boxes)if(!Array.isArray(box)||box.length!==4||box.some(x=>!Number.isFinite(x))||!(0<=box[0]&&box[0]<box[2]&&box[2]<=1000&&0<=box[1]&&box[1]<box[3]&&box[3]<=1000))throw Error('invalid_blur_box');
+ }
+ return {policy:'women-body-v1',frames:parsed.frames};
+}
+
+export function createVideoMailBridge({verify, google, storeVideo, loadVideo, sendMail=false, analyzeFrames, requireWomenBlur=false}) {
  async function mailbox(env){
   const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
   if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
@@ -90,7 +102,15 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
   try{if(!token)throw Error();await verify(token,env,u.origin);}catch{return json({error:'unauthorized'},401);}
   try{
    const recipient=await mailbox(env);
+   if(path==='/news-video/blur-frames'&&request.method==='POST'){
+    const text=await request.text();if(text.length>2400000)return json({error:'frames_too_large'},413);
+    const frames=JSON.parse(text).frames;
+    if(!Array.isArray(frames)||!frames.length||frames.length>8||frames.some(x=>typeof x!=='string'||x.length>300000||!/^\/9j\/[A-Za-z0-9+/=]+$/.test(x)))return json({error:'invalid_jpeg_frames'},400);
+    if(!analyzeFrames)throw Error('blur_provider_not_configured');
+    return json(parseWomenFrameResult(await analyzeFrames(env,frames),frames.length));
+   }
    if(path==='/news-video/backfill'&&request.method==='POST'){
+    if(requireWomenBlur)return json({ok:true,archived:0,more:false,disabled:'unfiltered_backfill_disabled'});
     const input=await request.text();if(input.length>8192)return json({error:'request_too_large'},413);
     const cursor=JSON.parse(input||'{}').pageToken||'';
     if(typeof cursor!=='string'||cursor.length>4096)return json({error:'invalid_cursor'},400);
@@ -129,17 +149,19 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
     let state=await get(env,'state');
     if(!state){state={sent:[],initializedAt:Date.now()};await put(env,'state',state);}
     let pending=await get(env,'pending');
+    if(requireWomenBlur&&pending&&pending.policy!=='women-body-v1'){await put(env,'pending-before-filter:'+pending.id,pending);await env.KV.delete('news-video:pending');pending=null;}
     if(pending){
      const receipts=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`receipt:${pending.id}:${i+1}`)));
      if(receipts.every(x=>x?.gmailId)){await recordPart(env,pending,1,receipts[0].gmailId);state=await get(env,'state',state);pending=null;}
     }
-    return json({...state,pending,recipient});
+    return json({...state,pending,recipient,requireWomenBlur});
    }
    if(path==='/news-video/start'&&request.method==='POST'){
     const body=await request.text();if(enc.encode(body).length>262144)return json({error:'manifest_too_large'},413);
     const manifest=validateVideoManifest(JSON.parse(body));
     manifest.delivery=sendMail?'single-email':'drive-only';
-    const id=await digest(JSON.stringify(manifest.items.map(x=>x.id).sort()));
+    if(requireWomenBlur)manifest.policy='women-body-v1';
+    const id=await digest((manifest.policy?manifest.policy+':':'')+JSON.stringify(manifest.items.map(x=>x.id).sort()));
     const existing=await get(env,'pending');if(existing&&existing.id!==id)return json({error:'batch_pending'},409);
     const state=await get(env,'state',{sent:[]});const sent=new Set(state.sent.map(x=>x.id));
     if(manifest.items.some(x=>sent.has(x.id)))return json({error:'already_sent_items'},409);
@@ -155,6 +177,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
     if(part<1||part>pending.parts)return json({error:'invalid_part'},400);
     if(receipt)return json(await recordPart(env,pending,part,receipt.gmailId));
     if((pending.delivery==='single-email'||!sendMail) && await get(env,`file:${pending.id}:${part}`))return json(await finishSingle(env,pending,recipient));
+    if(requireWomenBlur&&request.headers.get('X-News-Filter')!=='women-body-v1')return json({error:'filtered_video_required'},409);
     if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
     const length=Number(request.headers.get('Content-Length'));if(!length||length>LIMIT)return json({error:'video_size'},413);
     const reader=request.body.getReader();let size=0;const chunks=[];
