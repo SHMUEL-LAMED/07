@@ -15,16 +15,21 @@ const newsDriveBlur=createDriveBlurMaintenance({
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
  read:async(env,id)=>{
   const headers={Authorization:'Bearer '+await accessToken(env)};
-  const meta=await fetch('https://www.googleapis.com/drive/v3/files/'+id+'?fields=id,mimeType,size,parents',{headers});
+  const meta=await fetch('https://www.googleapis.com/drive/v3/files/'+id+'?fields=id,mimeType,size,parents,version',{headers});
   if(!meta.ok)throw Error('drive_metadata_'+meta.status);
-  const etag=meta.headers.get('etag'),info=await meta.json();
-  if(!etag||info.mimeType!=='video/mp4'||Number(info.size)>50*1024*1024||!info.parents?.includes('1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW'))throw Error('unexpected_video_metadata');
-  const response=await fetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers:{...headers,'If-Match':etag}});
+  const info=await meta.json(),etag=String(info.version||'');
+  if(!etag)throw Error('drive_version_missing');
+  if(info.mimeType!=='video/mp4')throw Error('unexpected_video_type');
+  if(Number(info.size)>50*1024*1024)throw Error('source_too_large');
+  if(!info.parents?.includes('1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW'))throw Error('source_folder_changed');
+  const response=await fetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers});
   if(!response.ok)throw Error('drive_download_'+response.status);
   return {bytes:new Uint8Array(await response.arrayBuffer()),etag};
  },
  replace:async(env,id,bytes,etag)=>{
-  const response=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media&fields=id,version,size',{method:'PATCH',headers:{Authorization:'Bearer '+await accessToken(env),'Content-Type':'video/mp4','If-Match':etag},body:bytes});
+  const metadata=await gapi(env,'https://www.googleapis.com/drive/v3/files/'+id+'?fields=version,parents');
+  if(String(metadata.version)!==etag||!metadata.parents?.includes('1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW'))throw Error('original_version_changed');
+  const response=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media&fields=id,version,size',{method:'PATCH',headers:{Authorization:'Bearer '+await accessToken(env),'Content-Type':'video/mp4'},body:bytes});
   if(!response.ok)throw Error('drive_replace_'+response.status);
   return response.json();
  },
