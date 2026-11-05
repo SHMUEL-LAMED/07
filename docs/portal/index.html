@@ -93,9 +93,10 @@ code{padding:1px 5px;border-radius:6px;background:var(--bg2);direction:ltr;unico
 .pill.warn{background:var(--warnbg);color:var(--warnt)}
 .pill.acc{background:var(--acc);color:var(--acc-ink)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.chip{background:var(--accbg);color:var(--acc);padding:2px 4px 2px 10px}
+.chip{background:var(--accbg);color:var(--acc);padding-block:2px;padding-inline:10px 4px}
 .chip button{width:24px;height:24px;padding:0;border:0;border-radius:50%;background:none;font-size:15px;cursor:pointer}
 .chip button:hover{background:var(--card)}
+.chip.bad{background:var(--badbg,#fde8e8);color:var(--bad,#b42318);outline:1px dashed currentColor}
 select.chip-add{min-height:30px;padding:2px 10px;border:1px dashed var(--axis);border-radius:999px;background:none;font-size:.8rem}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);box-shadow:var(--sh);min-width:0}
 .card+.card,.lines-cards+.card,.tiles+.lines-cards{margin-top:var(--gap)}
@@ -236,10 +237,11 @@ pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;padding:6px 8px;
 .cb{flex:1;min-height:2px;border-radius:3px 3px 0 0;background:var(--acc)}
 .cb.c2{opacity:.35}
 .cmp-ax span{flex:1;min-width:0;color:var(--mut);font-size:11px;text-align:center;overflow:hidden;white-space:nowrap}
+.top-x{display:flex;align-items:center;gap:6px;flex:none}.top-x:empty{display:none}
 .frame-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px var(--gutter);border-bottom:1px solid var(--line);background:var(--card)}
 .frame-bar b{font:700 1.05rem/1.3 var(--serif)}
 .frame-bar .sp{flex:1}
-.frame{flex:1;width:100%;min-height:calc(100vh - 120px);border:0;background:var(--bg)}
+.frame{flex:1;width:100%;min-height:calc(100vh - 66px);border:0;background:var(--bg)}
 .modal{z-index:60;display:flex;justify-content:center;padding:5vh 16px;overflow-y:auto;background:rgba(12,13,17,.45)}
 .modal .box,.dlg-box{width:100%;max-width:520px;max-height:90vh;overflow:auto;margin:auto 0;padding:var(--pad);border:1px solid var(--line);border-radius:var(--r);background:var(--card);box-shadow:var(--sh2);animation:pop .18s}
 .modal.wide .box{max-width:860px}
@@ -336,6 +338,7 @@ pre.ini{margin:0;max-width:340px;max-height:140px;overflow:auto;padding:6px 8px;
         <button class="btn icon menu-btn" type="button" data-act="side" id="burger" aria-label="תפריט" title="תפריט"></button>
         <h1 id="title"></h1>
         <nav class="quick" id="quick" aria-label="לשוניות הקווים"></nav>
+        <div class="top-x" id="topx"></div>
       </div>
     </header>
     <div class="banner info gnote" id="gnote" role="status" hidden></div>
@@ -661,8 +664,10 @@ const dyn=(me.lines||[]).map(l=>{const L=LEGACY_LINES.find(x=>x.slug===l.slug);r
 S.lines=me.isOwner?LEGACY_LINES.filter(o=>!dyn.some(l=>l.slug===o.slug)).concat(dyn):dyn;
 await dropDenied();
 shell();
+const wait=(me.waiting||[]).concat(S.denied||[]);
+if(!me.isOwner&&wait.length)toast("הגישה ל"+wait.map(s=>({shimchas:"שימחס",daat:"דעת תורה"})[s]||s).join(", ")+" עוד לא הושלמה בקו עצמו. בעל השירות צריך לסנכרן את החשבון.",true);
 if(!location.hash||location.hash==="#"){
-const last=store.get("s","portalView:"+me.email)||"";
+const last=store.get("l","portalView:"+me.email)||"";
 const def=last||(me.isOwner?"overview":S.lines[0]?"line="+S.lines[0].slug:"overview");
 try{history.replaceState(null,"",location.pathname+location.search+"#"+def);}catch{location.replace("#"+def);}
 }
@@ -674,13 +679,15 @@ async function dropDenied(){
 if(S.me.isOwner||!S.lines.length)return;
 const key="portalDenied:"+S.me.email;
 let denied=null;
-try{const o=JSON.parse(store.get("l",key)||"null");if(o&&Array.isArray(o.d)&&o.at>Date.now()-864e5)denied=o.d;}catch{}
+// עם חיבור גוגל בתוקף בודקים תמיד מחדש (קו שנוסף לחשבון מופיע מיד). בלעדיו – התשובה האחרונה מהיום
+if(!googleOk()){try{const o=JSON.parse(store.get("l",key)||"null");if(o&&Array.isArray(o.d)&&o.at>Date.now()-864e5)denied=o.d;}catch{}}
 if(!Array.isArray(denied)){
 if(!googleOk())return;
 denied=[];
 await Promise.all(S.lines.map(async l=>{try{await lineToken(l);}catch(e){if(e.status===401||e.status===403)denied.push(l.slug);}}));
 store.set("l",key,JSON.stringify({d:denied,at:Date.now()}));
 }
+S.denied=denied;
 S.lines=S.lines.filter(l=>denied.indexOf(l.slug)<0);
 }
 // ===== מבנה הדף =====
@@ -746,7 +753,8 @@ let hs=location.hash.slice(1);try{hs=decodeURIComponent(hs);}catch{}
 const i=hs.indexOf("="),v=i<0?hs:hs.slice(0,i),arg=i<0?"":hs.slice(i+1);
 S.view=v==="line"||VIEWS[v]?v:"overview";S.slug=S.view==="line"?arg:"";
 S.seq++;
-store.set("s","portalView:"+S.me.email,hs);
+put($("#topx"),"");
+store.set("l","portalView:"+S.me.email,hs);
 togglePicker(false);toggleSide(false);
 $$("#nav a, #mylines a").forEach(a=>{const on=a.dataset.v===S.view&&(S.view!=="line"||a.dataset.slug===S.slug);if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
 $$(".qtab").forEach(b=>{if(b.dataset.slug===S.slug)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current");});
@@ -779,9 +787,9 @@ const googleBanner=()=>h`<div class="banner info">${ico("refresh")}<div>כדי �
 function lineView(V,l){
 V.className="content full";
 const u=handoffUrl(l);
-put(V,h`<div class="frame-bar"><b>${nameOf(l)}</b><span class="mut ltr small">${ph(l.line)}</span>${l.enabled===false?h`<span class="pill">מושהה</span>`:""}<span class="sp"></span>
-${lineReady(l)?"":h`<button class="btn s" type="button" id="reG" data-act="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn s" href="${u}" target="_blank" rel="noopener">${ico("ext")}בחלון נפרד</a></div>
-<iframe class="frame" title="ניהול ${nameOf(l)}" src="${u}" allow="clipboard-read; clipboard-write; microphone"></iframe>`);
+// בלי פס כותרת נוסף: שם הקו כבר בכותרת העליונה ובדף הקו עצמו. הפעולות עוברות לכותרת העליונה
+put($("#topx"),h`${l.enabled===false?h`<span class="pill">מושהה</span>`:""}${lineReady(l)?"":h`<button class="btn s" type="button" id="reG" data-act="reG">${ico("refresh")}חידוש החיבור</button>`}<a class="btn icon" href="${u}" target="_blank" rel="noopener" title="פתיחה בחלון נפרד" aria-label="פתיחה בחלון נפרד">${ico("ext")}</a>`);
+put(V,h`<iframe class="frame" title="ניהול ${nameOf(l)}" src="${u}" allow="clipboard-read; clipboard-write; microphone"></iframe>`);
 }
 // ===== נתונים מכל הקווים =====
 const sum7=a=>Array.isArray(a)?a.slice(-7).reduce((n,x)=>n+(+x||0),0):null;
@@ -920,7 +928,28 @@ return h`<tr data-email="${c.email}"><td><b class="ltr">${c.email}</b></td><td><
 ${free.length?h`<select class="chip-add" data-chg="accAdd" aria-label="הוספת קו"><option value="">+ הוספת קו</option>${free.map(l=>h`<option value="${l.slug}">${nameOf(l)}</option>`)}</select>`:""}</div></td>
 <td>${c.blocked?h`<span class="pill bad">מושהה</span>`:h`<span class="pill ok">פעיל</span>`}</td>
 <td><div class="acts"><button class="btn s" type="button" data-act="accBlock" data-on="${c.blocked?"off":"on"}">${c.blocked?"החזרת גישה":"השהיית גישה"}</button><button class="btn s d" type="button" data-act="accRevoke">הסרה</button></div></td></tr>`;
-})}</tbody></table></div>`:empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}</div>`);
+})}</tbody></table></div>`:empty("users","אין עדיין חשבונות","הוסף חשבון גוגל ובחר אילו קווים הוא יראה.")}<div id="accSync"></div></div>`);
+if(cl.length)checkAccounts(S.seq);
+}
+// השוואה מול רשימת המנהלים של הקווים עצמם: שיוך שמופיע כאן אבל לא נרשם בקו לא נותן גישה בפועל
+async function checkAccounts(seq){
+const cl=(S.me.clients||[]).filter(c=>!c.blocked),bad=[];
+for(const line of LEGACY_LINES){
+if(!lineReady(line))continue;
+let list;try{list=((await lineApi(line,"emails")).managers||[]).map(m=>typeof m==="string"?m:m&&m.e);}catch{continue;}
+for(const c of cl){
+const want=(c.lines||[]).indexOf(line.slug)>=0,has=list.indexOf(c.email)>=0;
+if(want!==has)bad.push({c,line,want});
+}
+}
+if(seq!==S.seq)return;
+for(const x of bad){
+if(!x.want)continue;
+const tr=$$("#view tr[data-email]").find(t=>t.dataset.email===x.c.email);
+const ch=tr&&$$(".chip",tr).find(c=>{const b=c.querySelector("[data-slug]");return b&&b.dataset.slug===x.line.slug;});
+if(ch){ch.classList.add("bad");ch.title="לא רשום בקו עצמו – אין גישה בפועל";}
+}
+put($("#accSync"),bad.length?h`<div class="banner warn" style="margin-top:12px">${ico("refresh")}<div><b>${bad.length} הרשאות לא מסונכרנות עם הקווים.</b> מה שמסומן באדום מופיע כאן, אבל החשבון לא רשום בקו עצמו ולכן לא נכנס אליו.</div><button class="btn s p" type="button" data-act="accFix">סנכרון עכשיו</button></div>`:"");
 }
 const accOf=el=>{const tr=el.closest("tr[data-email]");if(!tr)return null;const email=tr.dataset.email;return{email,c:(S.me.clients||[]).find(x=>x.email===email)||{lines:[]}};};
 // כישלון פעולה: הודעה ושחרור הכפתור
@@ -1042,6 +1071,7 @@ S.cp=null;put($("#cpOut"),"");
 }catch(e){fail(e,b);}
 },
 newAcc:()=>accountModal(),
+accFix(b){busy(b,async()=>{needGoogle("יש לחדש את החיבור לגוגל");for(const c of (S.me.clients||[]).filter(x=>!x.blocked))await syncLegacyManagers(c.email,c.lines||[]);},"ההרשאות סונכרנו");},
 async accRm(b){
 const a=accOf(b);if(!a)return;
 const s=b.dataset.slug;
