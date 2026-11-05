@@ -15,14 +15,14 @@ from women_blur import sanitize_video
 FILES = {'1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn','15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT','1Y15dd7yvUerMTQprpvSMmUl64lBksg3O','1Owz-STPGGUEAqbmtUR522TlpympTx2PT','1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq'}
 
 def call(endpoint, path, body=None, headers=None):
-    req = urllib.request.Request(endpoint+path, data=body, headers={'Authorization':'Bearer '+c.authorization(endpoint), **(headers or {})})
+    req = urllib.request.Request(endpoint+path, data=body, headers={'User-Agent':c.UA,'Authorization':'Bearer '+c.authorization(endpoint), **(headers or {})})
     try:
         return urllib.request.urlopen(req, timeout=180)
     except urllib.error.HTTPError as error:
         try:
-            reason = json.loads(error.read(1024)).get('error', 'service_error')
+            reason = json.loads(error.read(1024)).get('error', 'service_http_'+str(error.code))
         except ValueError:
-            reason = 'service_error'
+            reason = 'service_http_'+str(error.code)
         raise RuntimeError(str(reason)[:180]) from None
 
 def main():
