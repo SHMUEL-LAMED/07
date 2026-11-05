@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 import collector as c
 
 LIMIT = 8 * 1024 * 1024
+BLUR_ENDPOINT = None
 
 
 def video_inputs(url, depth=0):
@@ -95,7 +96,19 @@ def make_video(url, destination):
                         '-vf', 'scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,setsar=1',
                         '-r', '20', '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '128k', '-maxrate', '144k', '-bufsize', '288k', '-g', '40',
                         '-c:a', 'aac', '-b:a', '32k', '-ac', '2', '-ar', '44100', '-movflags', '+faststart', '-y', str(destination)], check=True, capture_output=True, timeout=600)
-        return probe(destination)
+        duration = probe(destination)
+        if os.environ.get('BLUR_WOMEN') == '1':
+            if not BLUR_ENDPOINT:
+                raise ValueError('blur_service_missing')
+            from women_blur import sanitize_video
+            filtered = destination.with_suffix('.filtered.mp4')
+            def analyze(frames):
+                return c.worker(BLUR_ENDPOINT, '/news-video/blur-frames', json.dumps({'frames': frames}).encode(), {'Content-Type': 'application/json'})
+            sanitize_video(destination, filtered, analyze)
+            if abs(probe(filtered)-duration) > .3:
+                raise ValueError('blur_duration_mismatch')
+            filtered.replace(destination)
+        return duration
     finally:
         if downloaded:
             downloaded.unlink(missing_ok=True)
@@ -133,11 +146,26 @@ def main():
     parser.add_argument('--endpoint', required=True)
     parser.add_argument('--mail-endpoint', required=True)
     parser.add_argument('--check-only', action='store_true')
+    parser.add_argument('--check-blur', action='store_true')
     args = parser.parse_args()
     endpoint, mail = args.endpoint.rstrip('/'), args.mail_endpoint.rstrip('/')
+    global BLUR_ENDPOINT
+    BLUR_ENDPOINT = mail
     c.ENDPOINT = endpoint
     state = c.worker(mail, '/news-video/state')
     print('mail_server_ready', flush=True)
+    if args.check_blur:
+        from women_blur import sanitize_video
+        with tempfile.TemporaryDirectory() as tmp:
+            source, output = Path(tmp)/'test.mp4', Path(tmp)/'test-filtered.mp4'
+            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=blue:s=160x96:r=20:d=1','-f','lavfi','-i','sine=frequency=440:duration=1','-c:v','libx264','-c:a','aac','-shortest',str(source)],check=True)
+            def analyze(frames):
+                return c.worker(mail, '/news-video/blur-frames', json.dumps({'frames':frames}).encode(), {'Content-Type':'application/json'})
+            result=sanitize_video(source, output, analyze)
+            if abs(probe(output)-probe(source))>.3:
+                raise ValueError('blur_duration_mismatch')
+            print('blur_provider_verified', result['frames'], 'frames; no upload or email', flush=True)
+        return
     if args.check_only:
         return
     # Recover earlier mailed videos before contacting publishers again.
@@ -150,6 +178,8 @@ def main():
         if not archived.get('more'):
             break
         cursor = archived.get('pageToken', '')
+    if state.get('requireWomenBlur') and os.environ.get('BLUR_WOMEN') != '1':
+        raise ValueError('server_requires_women_blur')
     pending = state.get('pending')
     if pending:
         candidates = {x['id'].split('#')[0]: x['title'] for x in pending['items']}
@@ -215,7 +245,7 @@ def main():
             # Transport retries use a stable MIME Message-ID and server receipts.
             for attempt in range(3):
                 try:
-                    result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], number), part.read_bytes(), {'Content-Type': 'video/mp4'})
+                    result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], number), part.read_bytes(), {'Content-Type': 'video/mp4', **({'X-News-Filter': 'women-body-v1'} if os.environ.get('BLUR_WOMEN') == '1' else {})})
                     if not result.get('ok'):
                         raise ValueError('email_not_confirmed')
                     print('video_emailed' if result.get('gmailId') else 'video_staged', number, len(parts), result.get('gmailId', ''), flush=True)

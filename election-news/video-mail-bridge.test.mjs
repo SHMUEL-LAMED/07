@@ -1,13 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVideoMailBridge,validateVideoManifest} from './video-mail-bridge.mjs';
+import {createVideoMailBridge,validateVideoManifest,parseWomenFrameResult} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
-function setup(sendMail=true,extraGoogle=()=>null){
+function setup(sendMail=true,extraGoogle=()=>null,options={}){
  const values=new Map(),calls=[],files=new Map(),days=[];
  const env={BUSINESS_EMAIL:owner,KV:{get:async k=>values.get(k)||null,put:async(k,v)=>values.set(k,v),delete:async k=>values.delete(k)}};
  let fail=false;
- const route=createVideoMailBridge({sendMail,storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
+ const route=createVideoMailBridge({...options,sendMail,storeVideo:async(e,{name,bytes,day})=>{days.push(day);files.set(name,bytes);return {id:name,webViewLink:'https://drive.google.com/file/d/'+name+'/view'};},loadVideo:async(e,id)=>files.get(id),verify:async token=>{if(token!=='valid')throw Error('bad_signature');},google:async(e,url,options)=>{
   calls.push({url,options});const extra=await extraGoogle(e,url,options);if(extra!==null)return extra;if(url.endsWith('/profile'))return {emailAddress:owner};
   if(url.includes('messages?q='))return {messages:[]};
   if(url.endsWith('/send')){if(fail){const e=Error('rejected');e.status=403;throw e;}return {id:'gmail-confirmed'};}
@@ -97,4 +97,17 @@ test('backfill recovers only this service MP4 attachments into the correct day w
  assert.equal(again.archived,0);assert.equal(s.days.length,1);
  assert.equal(s.calls.filter(x=>x.url.endsWith('/send')).length,0);
  assert.equal(s.calls.filter(x=>x.url.endsWith('attachments/unrelated')).length,0);
+});
+
+test('body blur analysis requires every frame and rejects invalid coordinates',()=>{
+ assert.deepEqual(parseWomenFrameResult({frames:[{index:0,boxes:[[0,10,1000,400]]}]},1).policy,'women-body-v1');
+ for(const frames of [[],[{index:1,boxes:[]}],[{index:0,boxes:[[0,0,1200,400]]}]])assert.throws(()=>parseWomenFrameResult({frames},1));
+});
+test('required filtering blocks raw uploads and historical unfiltered backfill',async()=>{
+ const s=setup(false,()=>null,{requireWomenBlur:true});
+ const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();
+ assert.equal(b.policy,'women-body-v1');
+ assert.equal((await upload(s,b,1)).status,409);assert.equal(s.days.length,0);
+ const archived=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
+ assert.equal(archived.archived,0);assert.equal(archived.disabled,'unfiltered_backfill_disabled');
 });
