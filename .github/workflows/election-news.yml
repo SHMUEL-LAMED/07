@@ -2,6 +2,10 @@ name: סקרים וכתבות — שלוחה 1
 on:
   workflow_dispatch:
     inputs:
+      blur_existing:
+        description: 'טשטוש והחלפת חמשת קטעי ארץ נהדרת בדרייב'
+        type: boolean
+        default: false
       video_email:
         description: 'שליחת כתבות חדשות בווידאו למייל מהשרת'
         type: boolean
@@ -29,7 +33,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ (github.event.schedule == '37 * * * *' || inputs.video_email) && 'election-news-video-mail' || 'election-news-collector' }}
+  group: ${{ inputs.blur_existing && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || inputs.video_email) && 'election-news-video-mail' || 'election-news-collector' }}
   cancel-in-progress: false
 jobs:
   test:
@@ -44,7 +48,7 @@ jobs:
       - run: node --test election-news/*.test.mjs
   collect:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && !inputs.video_email
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && !inputs.video_email && !inputs.blur_existing
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -90,7 +94,7 @@ jobs:
           --max-files 16 --deadline-seconds 540
   video-mail:
     needs: test
-    if: github.ref == 'refs/heads/main' && (github.event.schedule == '37 * * * *' || inputs.video_email)
+    if: github.ref == 'refs/heads/main' && !inputs.blur_existing && (github.event.schedule == '37 * * * *' || inputs.video_email)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -127,3 +131,49 @@ jobs:
             --endpoint https://election-news-ivr.smwlyqswkwt232.workers.dev \
             --mail-endpoint https://yemot-mail.smwlyqswkwt232.workers.dev \
             "${args[@]}"
+
+  deploy-drive-blur:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.blur_existing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: הכנת עיבוד הקטעים הקיימים
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python scripts/deploy-news-archive.py
+  blur-existing:
+    needs: deploy-drive-blur
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - 1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn
+          - 15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT
+          - 1Y15dd7yvUerMTQprpvSMmUl64lBksg3O
+          - 1Owz-STPGGUEAqbmtUR522TlpympTx2PT
+          - 1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'opencv-python-headless==4.10.0.84'
+      - name: כלי וידאו
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            timeout 180 sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y --no-install-recommends ffmpeg
+          fi
+      - name: טשטוש והחלפה בדרייב
+        env:
+          DRIVE_VIDEO_ID: ${{ matrix.file }}
+        run: python election-news/blur_drive.py --endpoint https://yemot-mail.smwlyqswkwt232.workers.dev --file-id "$DRIVE_VIDEO_ID"
