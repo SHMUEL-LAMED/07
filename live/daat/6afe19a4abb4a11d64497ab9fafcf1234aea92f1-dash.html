@@ -938,11 +938,18 @@ downloadBlob(await r.blob(), fn);
 }
 // ---------- חיבור (מצב מרוחק) ----------
 const Session = {
-token: REMOTE ? store.get("session", TOKEN_KEY, "") || "" : "",
+// נשמר במכשיר (האסימון תקף 30 יום), כדי שלא יצטרכו להתחבר מחדש בכל פתיחה
+token: REMOTE ? store.get("session", TOKEN_KEY, "") || store.get("local", TOKEN_KEY, "") || "" : "",
 _g: null,
 set(tok) {
+const wasRo = String(this.token || "").split(".")[1] === "ro";
 this.token = tok || "";
-if (REMOTE) { if (this.token) store.set("session", TOKEN_KEY, this.token); else store.del("session", TOKEN_KEY); }
+if (!REMOTE) return;
+if (!this.token && wasRo) { store.del("session", TOKEN_KEY); return; }
+// קישור צפייה בלבד נשמר רק בלשונית, כדי שלא יחליף במכשיר את הכניסה הקבועה של המנהל
+if (this.token && this.token.split(".")[1] === "ro") { store.set("session", TOKEN_KEY, this.token); return; }
+store.del("session", TOKEN_KEY);
+if (this.token) store.set("local", TOKEN_KEY, this.token); else store.del("local", TOKEN_KEY);
 },
 async create(password, google) {
 let r, j;
@@ -4965,4 +4972,10 @@ else Session.showLogin();
 safe(() => Version.start());
 })();
 }
+// סנכרון בין לשוניות: יציאה/כניסה בלשונית אחרת, ומצב כהה/בהיר מכל דף באתר
+addEventListener("storage", e => {
+if (REMOTE && e.key === TOKEN_KEY && e.storageArea === localStorage && Session.token.split(".")[1] !== "ro" && (e.newValue || "") !== Session.token) { if (e.newValue) location.reload(); else Session.drop(""); }
+else if (e.key === "theme") { const d = document.documentElement; if (e.newValue === "light" || e.newValue === "dark") d.setAttribute("data-theme", e.newValue); else d.removeAttribute("data-theme"); try { Theme.icon(); } catch {} }
+else if (e.key === "uiPrefs") { try { const p = JSON.parse(e.newValue || "{}"); Prefs._p = Object.assign({}, PREF_DEF, p && typeof p === "object" ? p : {}); Prefs.apply(); } catch {} }
+});
 boot();</script></body></html>
