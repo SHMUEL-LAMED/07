@@ -112,7 +112,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'yt-dlp[default]==2026.10.21'
       - name: פריסת תיקון ארכיון דרייב
-        if: inputs.repair_archive
+        if: inputs.repair_archive || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]'))
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: python scripts/deploy-news-archive.py
@@ -144,7 +144,7 @@ jobs:
         if: github.event.schedule != '7 * * * *' && !inputs.eretz_latest && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))
         env:
           BLUR_CHECK_ONLY: ${{ inputs.blur_check_only }}
-          BLUR_WOMEN: '1'
+          BLUR_WOMEN: '0'
           CHECK_ONLY: ${{ inputs.video_mail_check_only }}
         run: |
           args=()
