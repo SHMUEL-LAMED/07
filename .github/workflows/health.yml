@@ -15,6 +15,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -25,11 +27,12 @@ jobs:
       - name: בנייה של הקוד בריפו
         run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/build
       - name: השוואה לגרסה החיה
+        # נכשל (ושולח התראה) אם בחיה יש קוד שלא נמצא באף גרסה בריפו. אם החיה רק מאחורי הריפו (שינויים שעוד לא נפרסו) – הודעה בלבד.
         run: |
           [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::warning::חסרים הסודות CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID – מדלגים על ההשוואה"; exit 0; }
-          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yemot-ai/content/v2" -D /tmp/h.txt -o /tmp/live.bin
+          curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yemot-ai/content/v2" -D /tmp/h.txt -o /tmp/live.bin || { echo "::error::הורדת הגרסה החיה נכשלה"; head -c 500 /tmp/live.bin 2>/dev/null; exit 1; }
           python3 - <<'PY'
-          import email, re, difflib
+          import email, re
           h = open('/tmp/h.txt', encoding='latin-1').read(); raw = open('/tmp/live.bin', 'rb').read()
           ct = re.search(r'(?im)^content-type:\s*(.+)$', h); ct = ct.group(1).strip() if ct else ''
           live = raw
@@ -38,16 +41,29 @@ jobs:
               for part in msg.walk():
                   name = part.get_param('name', header='content-disposition') or part.get_filename() or ''
                   if name.endswith('.js'): live = part.get_payload(decode=True); break
-          repo = open('/tmp/build/worker.js', 'rb').read()
-          # מנרמלים הערות ורווחים שהבנייה של wrangler עשויה לשנות בין גרסאות
-          norm = lambda b: [l.strip() for l in b.decode('utf-8', 'replace').split('\n') if l.strip() and not l.strip().startswith('//') and '__name(' not in l]
-          a, b = norm(live), norm(repo)
-          if a == b:
-              print('החיה זהה לריפו'); raise SystemExit(0)
-          d = [l for l in difflib.unified_diff(a, b, 'live', 'repo', lineterm='', n=0) if not l.startswith(('---', '+++', '@@'))]
-          only_live = [l[1:] for l in d if l.startswith('-')]
-          print(f'הבדלים: {len(only_live)} שורות רק בחיה, {sum(1 for l in d if l.startswith("+"))} שורות רק בריפו')
-          for l in only_live[:40]: print('  חיה:', l[:200])
-          if only_live:
-              print('::warning::בגרסה החיה יש קוד שלא נמצא בריפו. לעדכן את הריפו לפני פריסה, אחרת הפריסה תדרוס אותו')
+          open('/tmp/live.js', 'wb').write(live)
           PY
+          # מנרמלים הערות ורווחים שהבנייה של wrangler עשויה לשנות בין גרסאות
+          cat > /tmp/same.py <<'PY'
+          import sys, difflib
+          norm = lambda p: [l.strip() for l in open(p, 'rb').read().decode('utf-8', 'replace').split('\n') if l.strip() and not l.strip().startswith('//') and '__name(' not in l]
+          a, b = norm(sys.argv[1]), norm(sys.argv[2])
+          if a == b: raise SystemExit(0)
+          if len(sys.argv) > 3:
+              d = [l for l in difflib.unified_diff(a, b, 'live', 'repo', lineterm='', n=0) if not l.startswith(('---', '+++', '@@'))]
+              only_live = [l[1:] for l in d if l.startswith('-')]
+              print(f'הבדלים: {len(only_live)} שורות רק בחיה, {sum(1 for l in d if l.startswith("+"))} שורות רק בריפו')
+              for l in only_live[:40]: print('  חיה:', l[:200])
+          raise SystemExit(1)
+          PY
+          if python3 /tmp/same.py /tmp/live.js /tmp/build/worker.js; then echo "החיה זהה לריפו"; exit 0; fi
+          python3 /tmp/same.py /tmp/live.js /tmp/build/worker.js show || true
+          for C in $(git log --format=%H -n 30 -- src wrangler.toml); do
+            rm -rf /tmp/wt /tmp/b; git worktree prune
+            git worktree add --detach -q /tmp/wt "$C" || continue
+            if (cd /tmp/wt && npx --yes wrangler@4 deploy --dry-run --outdir /tmp/b >/dev/null 2>&1) && python3 /tmp/same.py /tmp/live.js /tmp/b/worker.js; then
+              echo "::notice::החיה זהה לגרסה $C בריפו – בריפו יש שינויים שעוד לא נפרסו"; exit 0
+            fi
+            git worktree remove --force /tmp/wt
+          done
+          echo "::error::בגרסה החיה יש קוד שלא נמצא באף גרסה בריפו (30 האחרונות). לעדכן את הריפו לפני פריסה, אחרת הפריסה תדרוס אותו"; exit 1
