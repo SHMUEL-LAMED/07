@@ -768,7 +768,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       if (!phones.length) return json({ error: "לא נבחרו מספרים" }, 400);
       const r = await tzPhones(env, D, phones);
       await D.log(env, `מנהל ${who(admin)} שלח מ${VIA} צינתוק ל-${phones.length} נבחרים${r && r.deferred ? " (נדחה למוצאי שבת/חג)" : ""}`);
-      return ok({ deferred: !!(r && r.deferred), sent: !!r && r.responseStatus === "OK", count: phones.length });
+      return ok({ deferred: !!(r && r.deferred), sent: !!r && r.responseStatus === "OK", test: !!(r && r.test), count: phones.length });
     }
     case "members_csv": {
       const [people, mem, admins, rsvp, lg] = await Promise.all([D.peopleList(env), membersList(env, D), D.listPhones(env, "admins").catch(() => []), D.rsvpLoad(env).catch(() => ({})), callLog(env, D, 1).catch(() => ({ last: {}, per: {} }))]);

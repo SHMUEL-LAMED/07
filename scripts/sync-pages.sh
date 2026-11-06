@@ -1,6 +1,6 @@
 #!/bin/sh
 # דף הניהול הוא קובץ אחד: src/dash.html. הוא עובד גם ב-Worker (/admin) וגם ב-GitHub Pages.
-# דף הכניסה הראשי הוא מרכז הקווים; ניהול הקו המקורי נשמר ב-/source/.
+# זה אתר אחד: מרכז הקווים וניהול כל קו באותו דף (docs/portal), עם עותקים לכתובות הישנות.
 set -e
 cd "$(dirname "$0")/.."
 cat > index.html <<'EOF'
@@ -9,6 +9,7 @@ EOF
 cat > docs/index.html <<'EOF'
 <!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>מרכז הקווים</title><script>location.replace("./portal/?v="+Date.now())</script><noscript><a href="./portal/">מעבר למרכז הקווים</a></noscript></html>
 EOF
+mkdir -p docs/portal && cp src/dash.html docs/portal/index.html   # האתר המאוחד: מרכז הקווים + ניהול כל קו
 mkdir -p docs/source && cp src/dash.html docs/source/index.html
 mkdir -p docs/line && cp src/dash.html docs/line/index.html   # קווים שנבנו במפעל: /07/line/?l=<שם קצר>
 sed -e 's#functions/v1/admin-netfree/#functions/v1/admin-netfree-daat/#' \
@@ -19,4 +20,4 @@ sed -e 's#functions/v1/admin-netfree/#functions/v1/admin-netfree-daat/#' \
     src/dash.html > docs/daattorah/index.html
 cp docs/daattorah/index.html live/daat/6afe19a4abb4a11d64497ab9fafcf1234aea92f1-dash.html # הדף שה-Worker של דעת תורה מגיש ב-/admin
 grep -q 'admin-netfree-daat/' docs/daattorah/index.html || { echo "שגיאה: הגשר של דעת תורה לא הוחלף"; exit 1; }
-echo "דף הכניסה מנותב למרכז הקווים; docs/source, docs/line, docs/daattorah ו-live/daat עודכנו מ-src/dash.html"
+echo "דף הכניסה מנותב לאתר המאוחד; docs/portal, docs/source, docs/line, docs/daattorah ו-live/daat עודכנו מ-src/dash.html"
