@@ -12,6 +12,11 @@ const digest = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256
 const get = async (env,key,fallback=null) => JSON.parse(await env.KV.get('news-video:'+key) || JSON.stringify(fallback));
 const put = (env,key,value) => env.KV.put('news-video:'+key,JSON.stringify(value));
 
+export function archiveFilename(title, batch, part) {
+ const safe=String(title).normalize('NFC').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,160)||'כתבה';
+ return `${safe} — ${batch.slice(0,8)}-${part}.mp4`;
+}
+
 export function validateVideoManifest(value, now=Date.now()) {
  if(!value || !Array.isArray(value.items) || !value.items.length || value.items.length>100 || !Number.isInteger(value.parts) || value.parts<1 || value.parts>100)throw Error('invalid_manifest');
  const ids=new Set();
@@ -22,7 +27,8 @@ export function validateVideoManifest(value, now=Date.now()) {
   const published=Date.parse(item.publishedAt);if(!Number.isFinite(published)||published>now+600000||published<now-7*86400000)throw Error('invalid_date');
   if(ids.has(item.id))throw Error('duplicate_item');ids.add(item.id);
  }
- return {items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
+ if(value.partTitles!==undefined&&(!Array.isArray(value.partTitles)||value.partTitles.length!==value.parts||value.partTitles.some(x=>typeof x!=='string'||!x.trim()||x.length>700)))throw Error('invalid_part_titles');
+ return {...(value.partTitles?{partTitles:value.partTitles}:{}),items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
 }
 
 export function parseWomenFrameResult(value,count){
@@ -247,7 +253,8 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
     const video=new Uint8Array(size);let offset=0;for(const chunk of chunks){video.set(chunk,offset);offset+=chunk.length;}
     if(size<12||new TextDecoder().decode(video.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
     if(pending.delivery==='single-email'||!sendMail){
-     const name=`news-${pending.id.slice(0,12)}-${part}.mp4`;
+     const title=pending.partTitles?.[part-1]||(pending.items.length===1?pending.items[0].title:'כתבות חדשות — חלק '+part);
+     const name=archiveFilename(title,pending.id,part);
      const day=new Date(pending.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
      const saved=await storeVideo(env,{name,bytes:video,day});
      if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
