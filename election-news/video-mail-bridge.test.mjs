@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVideoMailBridge,validateVideoManifest,parseWomenFrameResult} from './video-mail-bridge.mjs';
+import {createVideoMailBridge,validateVideoManifest,parseWomenFrameResult,archiveFilename} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
 function setup(sendMail=true,extraGoogle=()=>null,options={}){
@@ -68,7 +68,7 @@ test('two MP4 files produce exactly one mail after both arrive, including after 
  const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
  const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();
  assert.equal((raw.match(/Content-Disposition: attachment/g)||[]).length,2);
- assert.match(raw,/filename="news-[a-f0-9]+-1.mp4"/);assert.match(raw,/filename="news-[a-f0-9]+-2.mp4"/);
+ assert.match(raw,/filename="כתבת בחירות — [a-f0-9]+-1.mp4"/);assert.match(raw,/filename="כתבת בחירות — [a-f0-9]+-2.mp4"/);
 });
 test('oversized batch sends one mail with all private Drive links and no attachments',async()=>{
  const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:3})),s.env)).json();
@@ -142,7 +142,12 @@ test('raw file is archived first; only a validated processed replacement removes
  assert.equal(JSON.parse(s.values.get('news-video:post-blur')).length,1);
  fail=false;
  const result=await(await s.route(s.request(path,tinyVideo,headers),s.env)).json();
- assert.equal(result.blurred,true);assert.equal(result.id,`news-${batch.id.slice(0,12)}-1.mp4`);
+ assert.equal(result.blurred,true);assert.equal(result.id,archiveFilename(s.item.title,batch.id,1));
  assert.deepEqual(JSON.parse(s.values.get('news-video:post-blur')),[]);
  assert.equal(s.calls.some(x=>x.url.endsWith('/send')),false);
+});
+
+test('archive names preserve Hebrew article titles and remove unsafe filename characters',()=>{
+ assert.equal(archiveFilename('כותרת מקורית: כתבה/חדשה', 'abcdef123456', 2),'כותרת מקורית כתבה חדשה — abcdef12-2.mp4');
+ const s=setup();assert.throws(()=>validateVideoManifest({items:[s.item],parts:2,partTitles:['one']}));
 });
