@@ -48,6 +48,25 @@ def upload(endpoint, url, variant, parts, state):
         print('episode_drive_confirmed', variant, number, len(parts), result['id'], flush=True)
 
 
+def download_episode(url, output):
+    # Resume partial files on transient network failures; report only safe codes.
+    for attempt in range(1, 4):
+        try:
+            subprocess.run([os.sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-warnings',
+                            '--continue', '--socket-timeout', '30', '--retries', '3',
+                            '--fragment-retries', '3',
+                            '-f', 'best[height<=480][ext=mp4]/best[ext=mp4]',
+                            '--merge-output-format', 'mp4', '-o', str(output), url],
+                           capture_output=True, check=True, timeout=600)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            code = c.error_code(error)
+            print('episode_download_attempt_failed', attempt, code, flush=True)
+            if code in {'media_http_403', 'media_http_404', 'publisher_login_required'} or attempt == 3:
+                raise
+            time.sleep(5 * attempt)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--endpoint', required=True)
@@ -66,11 +85,7 @@ def main():
         folder = Path(tmp)
         original = folder/'episode.mp4'
         # Standard public publisher extraction only. No cookies, DRM or access bypass.
-        subprocess.run([os.sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-warnings',
-                        '--socket-timeout', '20', '--retries', '2',
-                        '-f', 'best[height<=480][ext=mp4]/best[ext=mp4]',
-                        '--merge-output-format', 'mp4', '-o', str(original), url],
-                       capture_output=True, check=True, timeout=600)
+        download_episode(url, original)
         duration = probe(original)
         # Bounded parts let the existing private Drive bridge handle long episodes.
         subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(original),
