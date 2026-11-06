@@ -124,3 +124,25 @@ test('required filtering blocks raw uploads and historical unfiltered backfill',
  const archived=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
  assert.equal(archived.archived,0);assert.equal(archived.disabled,'unfiltered_backfill_disabled');
 });
+
+test('raw file is archived first; only a validated processed replacement removes its queued task',async()=>{
+ let fail=true,replacements=0;
+ const s=setup(false,()=>null,{replaceVideo:async(env,id,bytes,hash)=>{replacements++;if(fail)throw Error('drive_replace_failed');return {id};}});
+ const batch=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();
+ const raw=await(await s.route(s.request(`/news-video/part/${batch.id}/1`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env)).json();
+ assert.equal(raw.archived,true);
+ const queue=await(await s.route(s.request('/news-video/post-blur'),s.env)).json();
+ assert.equal(queue.items.length,1);
+ const task=queue.items[0],path=`/news-video/post-blur/${task.batch}/${task.part}`;
+ assert.equal((await s.route(s.request(path),s.env)).status,200);
+ const headers={'Content-Type':'video/mp4','Content-Length':'12','X-News-Filter':'women-body-v1','X-Original-SHA256':task.rawHash};
+ assert.equal((await s.route(s.request(path,tinyVideo,{...headers,'X-Original-SHA256':'wrong'}),s.env)).status,409);
+ assert.equal(replacements,0);
+ assert.equal((await s.route(s.request(path,tinyVideo,headers),s.env)).status,502);
+ assert.equal(JSON.parse(s.values.get('news-video:post-blur')).length,1);
+ fail=false;
+ const result=await(await s.route(s.request(path,tinyVideo,headers),s.env)).json();
+ assert.equal(result.blurred,true);assert.equal(result.id,`news-${batch.id.slice(0,12)}-1.mp4`);
+ assert.deepEqual(JSON.parse(s.values.get('news-video:post-blur')),[]);
+ assert.equal(s.calls.some(x=>x.url.endsWith('/send')),false);
+});
