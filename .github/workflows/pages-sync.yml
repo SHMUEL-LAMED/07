@@ -17,3 +17,6 @@ jobs:
         run: |
           sh scripts/sync-pages.sh
           git diff --exit-code --stat -- index.html docs/index.html docs/portal/index.html docs/source/index.html docs/line/index.html docs/daattorah/index.html live/daat/ || { echo "::error::העותקים של דף הניהול לא מעודכנים. הריצו scripts/sync-pages.sh ודחפו."; exit 1; }
+          # גם עותק שנמחק מהריפו או שלא נוסף אליו (git diff לא רואה קבצים שלא במעקב)
+          left=$(git status --porcelain -- index.html docs/index.html docs/portal docs/source docs/line docs/daattorah live/daat)
+          [ -z "$left" ] || { echo "$left"; echo "::error::עותק של דף הניהול חסר בריפו. הריצו scripts/sync-pages.sh, הוסיפו (git add) ודחפו."; exit 1; }

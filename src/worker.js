@@ -167,7 +167,9 @@ async function groqSTT(env, wav) {
   return ((await r.json()).text || "").trim();
 }
 function parseJSON(t) { try { return JSON.parse(t); } catch { const m = /\{[\s\S]*\}/.exec(t || ""); if (m) return JSON.parse(m[0]); throw new Error("bad json"); } }
-let aiTrace = [], force = "";
+// force (cf/gemma/aai) מגיע רק מנתיבי הבדיקה ask/hear ונשמר על env של הבקשה (forceEnv), לא במשתנה גלובלי שדולף לשיחות חיות באותו isolate
+let aiTrace = [];
+const forceEnv = (env, f) => { const e = Object.create(env); e._force = f || ""; return e; };
 const CHAT_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemma-4-26b-a4b-it"];
 const safeParse = c => {
   if (c && typeof c === "object") return c;
@@ -182,7 +184,7 @@ const toChat = (sys, contents) => [{ role: "system", content: sys },
 // system = הקשר מלא (למודלי Gemini עם מכסת טוקנים גדולה). compact = הקשר מקוצר לכל השאר
 async function aiText(env, { system, compact, contents, models = CHAT_MODELS, groq = true, cf = true, deadline = 22000, timeout = 15000 }) {
   const start = Date.now(), errs = [];
-  const late = () => Date.now() - start > deadline;
+  const late = () => Date.now() - start > deadline, force = env._force || "";
   if (force === "cf") models = []; else if (force === "gemma") models = ["gemma-4-26b-a4b-it"];
   for (const model of models) for (const key of geminiKeys(env)) {
     const id = key.slice(-4) + "|" + model;
@@ -1067,7 +1069,8 @@ async function cron(env) {
       } catch (e) { await alert(env, "promo", "שחרור הפרומו נכשל: " + e.message).catch(() => {}); }
     }
     if (used < 30) await aaiArchive(env, 8);
-  } finally { await env.KV.delete("cronlock"); }
+  // בסיום לא מוחקים את המנעול אלא מסמנים "done:<זמן>": המנעול משתחרר (המספר לא נקרא כזמן), ובדיקת הבריאות יודעת מתי הריצה האחרונה הסתיימה – בלי כתיבה נוספת ל-KV
+  } finally { await env.KV.put("cronlock", "done:" + Date.now()); }
   if (env.KV && used < 42 && (await env.KV.get("promo")) === "pending") {
     try { const n = await releasePromo(env, "all"); await env.KV.put("promo", "sent");
       await log(env, `הפרומו על העוזר החכם שוחרר ל-${n} חברים`);
@@ -1673,7 +1676,7 @@ async function answerWithCheck(env, input, history) {
   let googleDown = false, out = null;
   if (input.audio) {
     try {
-      if (force === "aai") throw new Error("forced");
+      if (env._force === "aai") throw new Error("forced");
       const r = await audioAnswer(env, input.audio, history, line, ex(""));
       let v = verifyQuotes(r.answer, line.corpus), rr = r;
       if (!v.text.trim()) { rr = await audioAnswer(env, input.audio, history, line, ex("בתשובה הזו אל תצטט ישירות אף הודעה.")); v = verifyQuotes(rr.answer, line.corpus); }
@@ -2091,8 +2094,9 @@ function peopleRegenSteps(people, changed = []) {
     { k: "tts", path: "/EnterIDRecord", name: `phone-${p.p}-Name`, text: spoken(p) });
   return steps;
 }
+// השם נכתב לתוך ext.ini – בלי ירידות שורה, כדי ששם לא יוסיף הגדרות לשלוחה
 const personalIni = p => `type=record
-title=הודעה אישית ל${p.n}
+title=הודעה אישית ל${String(p.n || "").replace(/[\r\n]+/g, " ")}
 folder_move=/personalMessages/Phone/${p.p}
 ;לשמיעת הקלטה 1, לאישור ושליחת צנתוק 2, להקלטה מחדש 3, להמשך הקלטה 4, לאישור הקלטה ללא צנתוק 5, ליציאה 6
 menu_record_options_2=record_ok_end_run_tzintuk_private
@@ -2290,6 +2294,11 @@ async function impmapSet(env, id, name) {
   const im = await kvGet(env, "impmap", {}); if (name) im[id + ".wav"] = name; else if (im[id + ".wav"]) delete im[id + ".wav"]; else return;
   await env.KV.put("impmap", JSON.stringify(im));
 }
+// צינתוק לכל החברים ודגל "הודעה חשובה" אחרי העברה לחשובות. flags=false: הדגלים נכתבים לתור ונשלחים בריצה הקבועה (בלי לחרוג מתקציב הפניות של הבקשה)
+async function importantNotify(env, flags = true) {
+  await tzintuk(env, "members"); await addFlags(env, await membersFor(env, "members"), "NImportant");
+  if (flags) await processFlags(env).catch(() => {});
+}
 async function doAdmin(env, a, admin, via = "העוזר") {
   const nm = names(env), who = p => nm[p] || p, id = String(a.id || "").replace(/\D/g, "");
   const tag = `(מנהל ${who(admin)} דרך ${via})`;
@@ -2314,9 +2323,10 @@ async function doAdmin(env, a, admin, via = "העוזר") {
         if (f.imp) return "ההודעה הזו כבר נמצאת בהודעות החשובות";
         const n = await move(env, `${ALL}/${id}.wav`, IMPORTANT, "copy");
         await impmapSet(env, id, n).catch(() => {});
-        used = 0; await tzintuk(env, "members"); await addFlags(env, await membersFor(env, "members"), "NImportant"); await processFlags(env).catch(() => {});
-        await pushUndo(env, `העברת הודעה ${id} לחשובות`, [{ mv: [`${IMPORTANT}/${n}`, `/DeletedByAdmin/imp-${n}`] }]); await log(env, `הודעה ${id} הועברה לחשובות ונשלח צינתוק ${tag}`);
-        return "ההודעה הועברה להודעות החשובות ונשלח צינתוק לכל החברים";
+        // quiet (אצווה מדף הניהול): בלי צינתוק לכל הודעה – האצווה שולחת צינתוק אחד בסוף (importantNotify)
+        if (!a.quiet) { used = 0; await importantNotify(env); }
+        await pushUndo(env, `העברת הודעה ${id} לחשובות`, [{ mv: [`${IMPORTANT}/${n}`, `/DeletedByAdmin/imp-${n}`] }]); await log(env, `הודעה ${id} הועברה לחשובות${a.quiet ? "" : " ונשלח צינתוק"} ${tag}`);
+        return a.quiet ? "ההודעה הועברה להודעות החשובות" : "ההודעה הועברה להודעות החשובות ונשלח צינתוק לכל החברים";
       }
       if (!f.imp) return "ההודעה הזו לא נמצאת בהודעות החשובות";
       const n = await move(env, `${IMPORTANT}/${f.imp}`, "/DeletedByAdmin");
@@ -2736,7 +2746,7 @@ const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; cha
 // מה שדף הניהול (src/dash.js) צריך מהקוד הזה
 const DASH = { alert, pollActive, AUTO_BACKUP_KEYS, ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
   // לניהול המתקדם בדף הניהול (ספטמבר 2026): העלאות, קול, תזמונים, גיבוי, אירוע
-  ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, event9Menu, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText, loadLine, retrieveContext, adminText };
+  ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, importantNotify, event9Menu, ini9Steps, withKvLock, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText, loadLine, retrieveContext, adminText };
 // קו שנוצר במפעל הקווים: מספר הקו ובעל הקו מגיעים מהמשתנים. בלי משתנים – ערכי שימחס כמו תמיד
 function applyLineEnv(env) {
   const d = v => String(v || "").replace(/\D/g, "");
@@ -2805,11 +2815,11 @@ export default {
     if (parts[0] === "rsvp") return reply(await rsvp(env, u, ctx));
     if (parts[0] === "rsvpcount") return reply(await rsvpCount(env, ctx));
     if (parts[0] === "rsvplist") return Response.json(await rsvpLoad(env));
-    if (parts[0] === "ask") { aiTrace = []; force = u.searchParams.get("force") || ""; const t0 = Date.now(); let r; try { r = await answerWithCheck(env, { text: u.searchParams.get("q") || "", phone: u.searchParams.get("phone") || "", persona: u.searchParams.get("persona") || "tzibtzer", callId: "test" }, []); if (u.searchParams.get("apply") === "1" && r.do && r.do.length) r.applied = await applyActions(env, r.do, { phone: u.searchParams.get("phone") || "", callId: "test", isAdmin: r.isAdmin }); } catch (e) { r = { error: String(e.message || e) }; } force = ""; return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
+    if (parts[0] === "ask") { aiTrace = []; const fenv = forceEnv(env, u.searchParams.get("force")); const t0 = Date.now(); let r; try { r = await answerWithCheck(fenv, { text: u.searchParams.get("q") || "", phone: u.searchParams.get("phone") || "", persona: u.searchParams.get("persona") || "tzibtzer", callId: "test" }, []); if (u.searchParams.get("apply") === "1" && r.do && r.do.length) r.applied = await applyActions(env, r.do, { phone: u.searchParams.get("phone") || "", callId: "test", isAdmin: r.isAdmin }); } catch (e) { r = { error: String(e.message || e) }; } return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
     if (parts[0] === "promo") { used = 0; const n = await releasePromo(env, parts[1]); ctx.waitUntil(processFlags(env).catch(e => log(env, "שגיאה בדגלים: " + e.message).catch(() => {}))); return Response.json({ flagged: n }); }
-    if (parts[0] === "hear") { aiTrace = []; force = u.searchParams.get("force") || ""; const t0 = Date.now(); let r;
-      try { const audio = await ym(env, "DownloadFile", { path: "ivr2:" + u.searchParams.get("f") }); r = await answerWithCheck(env, { audio }, []); } catch (e) { r = { error: String(e.message || e) }; }
-      force = ""; return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
+    if (parts[0] === "hear") { aiTrace = []; const fenv = forceEnv(env, u.searchParams.get("force")); const t0 = Date.now(); let r;
+      try { const audio = await ym(env, "DownloadFile", { path: "ivr2:" + u.searchParams.get("f") }); r = await answerWithCheck(fenv, { audio }, []); } catch (e) { r = { error: String(e.message || e) }; }
+      return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
     if (parts[0] === "prof") { aiTrace = []; used = 0; let n, err; try { n = await buildProfiles(env, 1); } catch (e) { err = String(e.message || e); } const p = await kvGet(env, "profiles", {}); return Response.json({ n, err, trace: aiTrace, count: Object.keys(p).length, sample: Object.values(p).slice(-1) }); }
     if (parts[0] === "cls") { aiTrace = []; used = 0; let r; try { r = await classify(env, await ym(env, "DownloadFile", { path: "ivr2:" + u.searchParams.get("f") })); } catch (e) { r = { error: String(e.message || e) }; } return Response.json({ ...r, trace: aiTrace }); }
     if (parts[0] === "cronnow") { aiTrace = []; const t0 = Date.now(); let err = null; try { await cron(env); } catch (e) { err = String(e.stack || e); } return Response.json({ err, used, ms: Date.now() - t0, trace: aiTrace, promo: await env.KV.get("promo"), lock: await env.KV.get("cronlock") }); }

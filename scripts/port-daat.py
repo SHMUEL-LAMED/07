@@ -54,6 +54,14 @@ pi = b.find('  if (sub === "api" && parts[1] === "portal") {')
 if pi >= 0:
     pj = b.index('\n  }\n', pi) + 4
     b = b[:pi] + '  if (sub === "api" && parts[1] === "portal") return withCors(json({ error: "מרכז הקווים זמין רק בקו המקור" }, 404), req);\n' + b[pj:]
+# 4א) newToken: adminApp קורא ל-newToken(env, false, TTL_DAYS, true) בכניסה בסיסמה (אסימון בעלים exp.ow.sig),
+# אז גם newToken עצמה מגיעה מ-src/dash.js (בגרסה הישנה של דעת תורה אין לה פרמטר owner)
+ni = src.index('async function newToken(env')
+new_tok = src[ni:src.index('\n', ni)]
+bi = b.index('async function newToken(env')
+bj = b.index('\n__name(newToken, "newToken");', bi)
+b = b[:bi] + new_tok + b[bj:]
+assert 'owner = false' in b[bi:bi + 200], 'newToken בדעת תורה בלי הפרמטר owner'
 for name in ('googleToken', 'validToken', 'roleOf'):
     assert ('function ' + name) in b or ('const ' + name + ' =') in b, 'חסרה הפונקציה ' + name + ' בדעת תורה'
 assert 'portal(req' not in b and 'factory(' not in b, 'נשארה קריאה למרכז הקווים או למפעל'

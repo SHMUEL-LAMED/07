@@ -1,4 +1,5 @@
 # פריסת שרת ל-Cloudflare דרך GitHub Actions. שינויי מרכז הקווים נפרסים אוטומטית עם עדכון src/portal.js; פריסה ידנית לשאר השינויים דורשת אישור deploy.
+# בשני המקרים: רק מ-main, ורק אם הגרסה החיה זהה לבנייה של גרסה כלשהי בריפו (אחרת הפריסה נעצרת).
 # סודות בריפו (Settings ← Secrets and variables ← Actions ← New repository secret):
 #   CLOUDFLARE_API_TOKEN  – טוקן עם הרשאת Workers Scripts:Edit (התבנית "Edit Cloudflare Workers")
 #   CLOUDFLARE_ACCOUNT_ID – מזהה החשבון (מופיע בכתובת של לוח הבקרה של Cloudflare, אחרי dash.cloudflare.com/)
@@ -19,13 +20,16 @@ permissions:
 concurrency: deploy-yemot-ai
 jobs:
   deploy:
-    if: ${{ github.event_name == 'push' || github.event.inputs.confirm == 'deploy' }}
+    # רק מ-main: קוד מענף שלא מוזג לא מגיע לקו החי
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event.inputs.confirm == 'deploy') }}
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,15 +42,55 @@ jobs:
         run: |
           [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "חסר הסוד CLOUDFLARE_API_TOKEN בריפו"; exit 1; }
           npx --yes wrangler@4 whoami
-      - name: גיבוי הגרסה החיה לפני הדריסה
+      - name: גיבוי הגרסה החיה והשוואה לריפו
+        # לפני כל פריסה (גם האוטומטית) משווים לגרסה החיה, כמו בדעת תורה: בטוח לפרוס רק אם החיה זהה לבנייה
+        # של אחת הגרסאות בריפו. אחרת יש בחיה שינוי שלא נמצא כאן – עוצרים, וקודם מעדכנים את הריפו מהחיה (הגיבוי נשמר כ-artifact).
         run: |
-          if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yemot-ai/content/v2" \
-              -o /tmp/live-worker-before.bin && echo "נשמר גיבוי של הגרסה החיה ($(wc -c < /tmp/live-worker-before.bin) בתים)"
-          else
-            echo "אין CLOUDFLARE_ACCOUNT_ID – מדלגים על הגיבוי. Cloudflare שומר גרסאות קודמות (wrangler rollback)"
-          fi
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::error::חסר הסוד CLOUDFLARE_ACCOUNT_ID – אי אפשר לגבות ולהשוות לגרסה החיה"; exit 1; }
+          curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yemot-ai/content/v2" \
+            -D /tmp/h.txt -o /tmp/live-worker-before.bin || { echo "::error::הורדת הגרסה החיה נכשלה"; head -c 500 /tmp/live-worker-before.bin 2>/dev/null; exit 1; }
+          python3 - <<'PY'
+          import email, re
+          h = open('/tmp/h.txt', encoding='latin-1').read(); raw = open('/tmp/live-worker-before.bin', 'rb').read()
+          ct = re.search(r'(?im)^content-type:\s*(.+)$', h); ct = ct.group(1).strip() if ct else ''
+          live = None
+          if 'multipart' in ct:
+              msg = email.message_from_bytes(b'Content-Type: ' + ct.encode() + b'\r\n\r\n' + raw)
+              for part in msg.walk():
+                  name = part.get_param('name', header='content-disposition') or part.get_filename() or ''
+                  if name.endswith('.js'): live = part.get_payload(decode=True); break
+          elif 'javascript' in ct:
+              live = raw
+          if not live or len(live) < 10000:
+              print(f'::error::הגיבוי של הגרסה החיה לא תקין (content-type: {ct}, {len(live or b"")} בתים)'); raise SystemExit(1)
+          open('/tmp/live.js', 'wb').write(live)
+          print(f'נשמר גיבוי של הגרסה החיה ({len(raw)} בתים, worker.js: {len(live)} בתים)')
+          PY
+          # אותו נרמול כמו ב"בדיקת בריאות": הערות ורווחים שהבנייה של wrangler עשויה לשנות
+          cat > /tmp/same.py <<'PY'
+          import sys, difflib
+          norm = lambda p: [l.strip() for l in open(p, 'rb').read().decode('utf-8', 'replace').split('\n') if l.strip() and not l.strip().startswith('//') and '__name(' not in l]
+          a, b = norm(sys.argv[1]), norm(sys.argv[2])
+          if a == b: raise SystemExit(0)
+          if len(sys.argv) > 3:
+              d = [l for l in difflib.unified_diff(a, b, 'live', 'repo', lineterm='', n=0) if not l.startswith(('---', '+++', '@@'))]
+              only_live = [l[1:] for l in d if l.startswith('-')]
+              print(f'הבדלים מול הריפו: {len(only_live)} שורות רק בחיה, {sum(1 for l in d if l.startswith("+"))} שורות רק בריפו')
+              for l in only_live[:40]: print('  חיה:', l[:200])
+          raise SystemExit(1)
+          PY
+          if python3 /tmp/same.py /tmp/live.js /tmp/build/worker.js; then echo "החיה זהה לריפו"; exit 0; fi
+          for C in $(git log --format=%H -n 30 -- src wrangler.toml); do
+            rm -rf /tmp/wt /tmp/b; git worktree prune
+            git worktree add --detach -q /tmp/wt "$C" || continue
+            if (cd /tmp/wt && npx --yes wrangler@4 deploy --dry-run --outdir /tmp/b >/dev/null 2>&1) && python3 /tmp/same.py /tmp/live.js /tmp/b/worker.js; then
+              echo "החיה זהה לבנייה של הגרסה $C בריפו – בטוח לפרוס"; git worktree remove --force /tmp/wt; exit 0
+            fi
+            git worktree remove --force /tmp/wt
+          done
+          python3 /tmp/same.py /tmp/live.js /tmp/build/worker.js show || true
+          echo "::error::הגרסה החיה של yemot-ai שונה מכל גרסה בריפו (30 האחרונות). קודם לעדכן את הריפו מהחיה, אחרת הפריסה תדרוס את השינוי."; exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

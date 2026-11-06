@@ -24,10 +24,7 @@ async function sign(env, msg) {
   return b64u(await crypto.subtle.sign("HMAC", key, enc.encode(msg)));
 }
 __name(sign, "sign");
-async function newToken(env, ro = false, days = TTL_DAYS) {
-  const exp = String(Date.now() + days * 864e5);
-  return ro ? exp + ".ro." + await sign(env, "ro|" + exp) : exp + "." + await sign(env, exp);
-}
+async function newToken(env, ro = false, days = TTL_DAYS, owner = false) { const exp = String(Date.now() + days * 864e5); return ro ? exp + ".ro." + await sign(env, "ro|" + exp) : owner ? exp + ".ow." + await sign(env, "ow|" + exp) : exp + "." + await sign(env, exp); }
 __name(newToken, "newToken");
 async function validToken(env, tok) {
   const parts = String(tok || "").split("."), exp = parts[0], sig = parts[parts.length - 1];
@@ -126,10 +123,14 @@ const KEY_ONLY_SESSION = ["keys", "emails", "share", "restore_backup", "factory"
 // פעולות ימות שמותרות דרך הנתיב yemot: עיון בקבצים, הורדה, קריאה וכתיבה של קובצי טקסט (הגדרות שלוחה), שיחות ורשימות
 const YM_ALLOWED = ["GetIVR2Dir", "DownloadFile", "GetTextFile", "UploadTextFile", "GetIncomingCalls", "TzintukimListManagement"];
 const loadKeys = async env => { try { return (await env.KV.get("dash_keys", "json")) || []; } catch { return []; } };
+// השימוש האחרון במפתח נשמר במפתח נפרד ב-KV (dash_key_used:<id>), ורק נתיב keys כותב את רשימת המפתחות:
+// כתיבה של כל הרשימה מעותק ישן הייתה עלולה להחזיר מפתח שבוטל או למחוק מפתח חדש. בזיכרון – כדי לא לכתוב בכל בקשה
+const keyUsed = new Map();
 async function keyAuth(env, ctx, tok) {
   const h = await sha(tok), keys = await loadKeys(env), k = keys.find(x => same(x.hash, h));
   if (!k || (k.exp && k.exp < Date.now())) return null;
-  if (!k.used || Date.now() - k.used > 5 * 60e3) { k.used = Date.now(); ctx.waitUntil(env.KV.put("dash_keys", JSON.stringify(keys)).catch(() => {})); }
+  const t = Date.now();
+  if (t - Math.max(k.used || 0, keyUsed.get(k.id) || 0) > 5 * 60e3) { keyUsed.set(k.id, t); ctx.waitUntil(env.KV.put("dash_key_used:" + k.id, String(t)).catch(() => {})); }
   return { key: true, id: k.id, name: k.name, scopes: k.scopes, ro: !k.scopes.includes("write"), exp: k.exp || 0 };
 }
 const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
@@ -137,11 +138,27 @@ const ownerEmail = env => String(env.OWNER_EMAIL || "").trim().toLowerCase();
 const ROLES = ["admin", "viewer"];
 const managers = async env => { try { return ((await env.KV.get("dash_emails", "json")) || []).map(x => typeof x === "string" ? { e: x, role: "admin" } : x); } catch { return []; } };
 const roleOf = async (env, email) => email === ownerEmail(env) ? "owner" : ((await managers(env)).find(m => m.e === email) || {}).role || "";
+// ב-KV אין הוספה אטומית, ולכן כל מופע של ה-Worker סופר את הניסיונות גם בזיכרון. הבדיקה והספירה נעשות יחד, בלי await ביניהן,
+// כך שבקשות מקבילות שמגיעות לאותו מופע לא עוברות כולן את המגבלה לפני שהמונה ב-KV מתעדכן. מחזיר את מספר הניסיונות שקדמו (או -1 = חסום)
+const memFails = new Map();
+function failSlot(key, kvN, max = MAX_FAILS) {
+  const t = Date.now(), m = memFails.get(key), live = m && t - m.at < FAIL_WINDOW * 1000, n = Math.max(+kvN || 0, live ? m.n : 0);
+  if (n >= max) return -1;
+  if (memFails.size > 5000) memFails.clear();
+  memFails.set(key, { n: n + 1, at: live ? m.at : t });
+  return n;
+}
+const failRelease = key => { const m = memFails.get(key); if (m) m.n = Math.max(0, m.n - 1); };
+// דרך הגשר הכתובת של הדפדפן מגיעה מהגשר, ואי אפשר לסמוך עליה לגמרי: מגבלה נוספת לכל הכניסות בסיסמה דרך הגשר יחד
+const BRIDGE_ALL = "bridge-all", BRIDGE_MAX = 30;
 // בדיקת כניסה עם גוגל, כולל מגבלת ניסיונות. מחזיר {email, role} או זורק שגיאה בעברית
+// מונה נפרד מהסיסמה (g:<ip>): כניסה מוצלחת בגוגל לא מאפסת את מונה הסיסמה, וכישלונות סיסמה לא חוסמים את גוגל.
+// נספר רק אסימון לא תקין. חשבון גוגל אמיתי בלי הרשאה (למשל בדיקת גישה מהמרכז) לא נספר, ונרשם ביומן פעם בשעה לכל מייל
+const gDenyLogged = new Map();
 async function googleLogin(env, ip, cred, D) {
   if (!env.GOOGLE_CLIENT_ID) throw new Error("כניסה עם גוגל עוד לא הוגדרה");
-  const f = await fails(env, ip);
-  if (f.n >= MAX_FAILS) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
+  const gip = "g:" + ip, f = await fails(env, gip), slot = failSlot(gip, f.n);
+  if (slot < 0) throw new Error("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה");
   let email = "", role = "";
   try {
     email = String(await googleEmail(env, cred)).trim().toLowerCase();
@@ -149,11 +166,18 @@ async function googleLogin(env, ip, cred, D) {
     role = await roleOf(env, email);
     if (!role) throw new Error(`החשבון ${email} לא מורשה להיכנס לדף הניהול`);
   } catch (e) {
-    await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
-    await D.log(env, `ניסיון כניסה עם גוגל נדחה${email ? " (" + email + ")" : ""} (${ip})`).catch(() => {});
+    let logIt = true;
+    if (!email) await env.KV.put(failKey(gip), JSON.stringify({ n: slot + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+    else {
+      failRelease(gip);
+      const t = Date.now(); logIt = !(t - (gDenyLogged.get(email) || 0) < 3600e3);
+      if (logIt) { if (gDenyLogged.size > 1000) gDenyLogged.clear(); gDenyLogged.set(email, t); }
+    }
+    if (logIt) await D.log(env, `ניסיון כניסה עם גוגל נדחה${email ? " (" + email + ")" : ""} (${ip})`).catch(() => {});
     throw e;
   }
-  if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
+  memFails.delete(gip);
+  if (f.n) await env.KV.delete(failKey(gip)).catch(() => {});
   await D.log(env, `כניסה לדף הניהול עם גוגל: ${email}${role === "viewer" ? " (צפייה בלבד)" : ""}`).catch(() => {});
   return { email, role };
 }
@@ -187,35 +211,41 @@ async function adminApp(req, env, ctx, u, parts, D) {
     const origin = req.headers.get("Origin") || "";
     if (origin && origin !== GH_ORIGIN) return json({ error: "מקור לא מורשה" }, 403);
     if (req.method !== "POST") return withCors(json({ error: "שיטה לא מורשית" }, 405), req);
-    const f = await fails(env, ip);
-    if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
     const body = await req.json().catch(() => ({}));
     if (body.google) {
       let g;
       try { g = await googleLogin(env, ip, String(body.google), D); }
-      catch (e) { return withCors(json({ error: String(e.message || e) }, 401), req); }
+      catch (e) { return withCors(json({ error: String(e.message || e) }, /ניסיונות/.test(String(e.message)) ? 429 : 401), req); }
       return withCors(json({ token: await googleToken(env, g.email) }), req);
     }
+    const f = await fails(env, ip);
+    if (f.n >= MAX_FAILS) return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req);
     const pass = String(body.password || "");
+    const gf = viaBridge ? await fails(env, BRIDGE_ALL) : null, gslot = gf ? failSlot(BRIDGE_ALL, gf.n, BRIDGE_MAX) : 0;
+    const slot = gslot < 0 ? -1 : failSlot(ip, f.n);
+    if (slot < 0) { if (gslot >= 0 && gf) failRelease(BRIDGE_ALL); return withCors(json({ error: "יותר מדי ניסיונות. נסו שוב בעוד רבע שעה" }, 429), req); }
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
-      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      await env.KV.put(failKey(ip), JSON.stringify({ n: slot + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      if (gf) await env.KV.put(failKey(BRIDGE_ALL), JSON.stringify({ n: gslot + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
       await D.log(env, `ניסיון כניסה שגוי לדף הניהול מ-GitHub Pages (${ip})`).catch(() => {});
       return withCors(json({ error: "סיסמה שגויה" }, 401), req);
     }
+    memFails.delete(ip); if (gf) failRelease(BRIDGE_ALL);
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
     return withCors(json({ token: await newToken(env, false, TTL_DAYS, true) }), req);
   }
   if (sub === "login") {
     if (req.method !== "POST") return redirect("/admin");
-    const f = await fails(env, ip);
-    if (f.n >= MAX_FAILS) return html(loginPage("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה", env.GOOGLE_CLIENT_ID), 429);
+    const f = await fails(env, ip), slot = failSlot(ip, f.n);
+    if (slot < 0) return html(loginPage("יותר מדי ניסיונות. נסו שוב בעוד רבע שעה", env.GOOGLE_CLIENT_ID), 429);
     const form = await req.formData().catch(() => null);
     const pass = String((form && form.get("p")) || "");
     if (!pass || !same(await sha(pass), await sha(env.ADMIN_PASS))) {
-      await env.KV.put(failKey(ip), JSON.stringify({ n: f.n + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
+      await env.KV.put(failKey(ip), JSON.stringify({ n: slot + 1 }), { expirationTtl: FAIL_WINDOW }).catch(() => {});
       await D.log(env, `ניסיון כניסה שגוי לדף הניהול (${ip})`).catch(() => {});
       return html(loginPage("סיסמה שגויה", env.GOOGLE_CLIENT_ID), 401);
     }
+    memFails.delete(ip);
     if (f.n) await env.KV.delete(failKey(ip)).catch(() => {});
     return redirect("/admin", { "Set-Cookie": setCookie(await newToken(env, false, TTL_DAYS, true)) });
   }
@@ -769,8 +799,10 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       return json({ answer, actions, dropped: raw.length - actions.length });
     }
     case "keys": { // ניהול מפתחות – רק מכניסה רגילה (סיסמה/גוגל), לא ממפתח
+      if (auth.ro && !auth.key) return json({ error: "אין הרשאה" }, 403);
       let keys = await loadKeys(env);
-      const view = k => ({ id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes, created: k.created, used: k.used || 0, exp: k.exp || 0 });
+      const usedAt = Object.fromEntries(await Promise.all(keys.map(async k => [k.id, +(await env.KV.get("dash_key_used:" + k.id).catch(() => null)) || 0])));
+      const view = k => ({ id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes, created: k.created, used: Math.max(k.used || 0, usedAt[k.id] || 0), exp: k.exp || 0 });
       if (req.method === "POST" && body.op === "create") {
         const scopes = [...new Set((body.scopes || []).filter(x => KEY_SCOPES.includes(x)))];
         const name = String(body.name || "").trim().slice(0, 40);
@@ -785,6 +817,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       if (req.method === "POST" && body.op === "revoke") {
         const k = keys.find(x => x.id === body.id); keys = keys.filter(x => x.id !== body.id);
         await env.KV.put("dash_keys", JSON.stringify(keys));
+        await env.KV.delete("dash_key_used:" + String(body.id || "")).catch(() => {});
         if (k) await D.log(env, `בוטל מפתח API "${k.name}"`).catch(() => {});
       }
       return json({ keys: keys.map(view) });
@@ -795,23 +828,27 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       if (!YM_ALLOWED.includes(method)) return json({ error: "פעולה לא ברשימה המותרת", allowed: YM_ALLOWED }, 403);
       const params = {};
       for (const k of ["path", "what", "contents", "filesFrom", "filesLimit", "action", "TzintukimList", "date"]) if (body.params && body.params[k] != null) params[k] = String(body.params[k]);
-      if ((params.path || params.what) && !/^ivr2:[\w\/.\-א-ת ]*$/.test(params.path || params.what)) return json({ error: "נתיב לא תקין (חייב להתחיל ב-ivr2:)" }, 400);
+      for (const k of ["path", "what"]) if (params[k] != null && (!/^ivr2:[\w\/.\-א-ת ]*$/.test(params[k]) || params[k].includes(".."))) return json({ error: "נתיב לא תקין (חייב להתחיל ב-ivr2:)" }, 400);
       if (method === "TzintukimListManagement" && params.action !== "getlistEnteres") return json({ error: "רק קריאת רשימות" }, 403);
       const r = await D.ym(env, method, params);
       if (r instanceof Uint8Array) { let bin = ""; for (let i = 0; i < r.length; i += 0x8000) bin += String.fromCharCode.apply(null, r.subarray(i, i + 0x8000)); return json({ size: r.length, base64: btoa(bin) }); }
       return json(r);
     }
-    case "help": return json({
-      about: "API של דף הניהול של קו דעת תורה 079-494-7582. אימות: Authorization: Bearer <מפתח>, או ?token=<מפתח> דרך הגשר של נטפרי.",
+    case "help": { // קו מהמפעל (yemot-line-<שם>) מקבל את הכתובות שלו, ולא של קו המקור
+      const fl = /^yemot-line-([a-z0-9-]+)\./.exec(u.hostname);
+      return json({
+      about: (fl ? "API של דף הניהול של קו " + (env.LINE_NAME || fl[1]) + " (" + D.LINE_PHONE + ")" : "API של דף הניהול של קו דעת תורה 079-494-7582") + ". אימות: Authorization: Bearer <מפתח>, או ?token=<מפתח> דרך הגשר של נטפרי.",
       you: auth.key ? { key: auth.name, scopes: auth.scopes, expires: auth.exp ? new Date(auth.exp).toISOString() : "never" } : { session: true },
-      bases: { worker: u.origin + "/admin/api/", netfree_bridge: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" },
+      bases: { worker: u.origin + "/admin/api/", netfree_bridge: fl ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/" + fl[1] + "/" : "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" },
       scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
       read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "alerts", "audit?by=<מי>", "autobackups", "polls", "audio?p=<נתיב>", "download?p=<נתיב>"],
       write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "alerts {op:clear}", "autobackups {op:restore,day}", "polls {op:create|close|send|delete}", "ads"],
       yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
       safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
-    });
+      });
+    }
     case "emails": {
+      if (auth.ro && !auth.key) return json({ error: "אין הרשאה" }, 403);
       const owner = ownerEmail(env);
       let list = await managers(env);
       if (req.method === "POST") {

@@ -7,9 +7,11 @@ const LEGACY_LINES = [
   { slug: "shimchas", name: "שימחס", line: "073-351-2880", url: "/07/source/", api: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" },
   { slug: "daat", name: "דעת תורה", line: "079-494-7582", url: "/07/daattorah/", api: "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-daat/" }
 ];
+// קו מהמפעל: הדף שלו באתר (דרך הגשר). כתובת workers.dev עונה "ok" בשורש ונחסמת בנטפרי, ולכן היא רק ב-workerUrl
 const publicLine = line => ({ slug: line.slug, name: line.name, line: line.line,
   enabled: line.enabled !== false, legacy: !!line.legacy, api: line.api || null,
-  url: line.url || "/07/line/?l=" + encodeURIComponent(line.slug),
+  url: line.legacy && line.url ? line.url : "/07/line/?l=" + encodeURIComponent(line.slug),
+  ...(!line.legacy && line.url ? { workerUrl: line.url } : {}),
   manager: line.ownerEmail || "", created: line.created || 0, test: line.test !== false });
 // הקווים הוותיקים (לא מהמפעל). ל-KV של דעת תורה מגיעים לפי שם ה-Worker שלו
 const LEGACY = LEGACY_LINES.map(l => ({ ...l, legacy: true, enabled: true, script: l.slug === "daat" ? "yemot-ai-daat" : undefined }));
@@ -22,6 +24,8 @@ async function legacyKv(env, script) {
   if (cached) return cached;
   const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/workers/scripts/" + script + "/settings", { headers: { Authorization: "Bearer " + env.CF_FACTORY_TOKEN } });
   const j = await r.json().catch(() => ({}));
+  // תקלה ב-Cloudflare (הרשאה, עומס) היא "לא נבדק", לא "אין KV" – אחרת גישה לדעת תורה נשללת בשקט
+  if (!r.ok || !j.success) throw new Error("Cloudflare לא ענה (" + r.status + ")");
   const b = ((j.result || {}).bindings || []).find(x => x.type === "kv_namespace" && x.name === "KV");
   if (!b) return "";
   await env.KV.put(k, b.namespace_id);
@@ -63,16 +67,18 @@ async function syncClientLines(env, lines, email, slugs) {
     if (!Array.isArray(managers)) managers = [];
     const isMe = m => normalize(typeof m === "string" ? m : m && m.e) === email;
     const hits = managers.filter(isMe);
-    // כותבים רק כשהרשימה באמת משתנה – כדי לא לדרוס שינוי שמנהל הקו עשה בינתיים ולא לבזבז כתיבות
-    const change = want ? !(hits.length === 1 && (typeof hits[0] === "string" || hits[0].role !== "viewer")) : hits.length > 0;
+    // כבר רשום בקו בלי שהמרכז הוסיף אותו (מנהל הקו הוסיף) – לא משנים את התפקיד שקבע מנהל הקו, ובביטול השיוך לא מוחקים אותו.
+    // סימון "ext" זוכר את זה. כותבים רק כשהרשימה באמת משתנה – כדי לא לדרוס שינוי שמנהל הקו עשה בינתיים ולא לבזבז כתיבות
+    const ext = old === "ext" || (!old && hits.length > 0);
+    const change = want ? hits.length === 0 : hits.length > 0 && !ext;
     if (change) {
       managers = managers.filter(m => !isMe(m));
       if (want) managers.push({ e: email, role: "admin" });
       const saved = await fetch(endpoint, { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(managers) });
       if (!saved.ok) throw new Error("לא ניתן לעדכן הרשאות קו");
     }
-    if (want) { if (!old) await env.KV.put("portal_synced:" + email + ":" + line.slug, "1"); }
-    else await env.KV.delete("portal_synced:" + email + ":" + line.slug);
+    if (want) { const mark = change || !ext ? "1" : "ext"; if (old !== mark) await env.KV.put("portal_synced:" + email + ":" + line.slug, mark); }
+    else if (old) await env.KV.delete("portal_synced:" + email + ":" + line.slug);
   }
 }
 async function syncClientBlock(env, lines, email, blocked) {
@@ -159,20 +165,23 @@ export async function portal(req, env, verifyGoogle) {
     if (isOwner) {
       const pending = [];
       for (const l of lines) if (l.kv && pending.length < 15 && !(await env.KV.get("portal_synced:" + owner + ":" + l.slug))) pending.push(l);
-      if (pending.length) {
-        try { await syncClientLines(env, pending, owner, pending.map(l => l.slug)); }
-        catch (e) { syncError = String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים"); }
+      // כל קו בנפרד: קו אחד שנכשל (KV שנמחק) לא עוצר את הסנכרון של הקווים שאחריו
+      for (const l of pending) {
+        try { await syncClientLines(env, [l], owner, [l.slug]); }
+        catch (e) { syncError = String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים") + " (" + l.slug + ")"; }
       }
     }
     // קווים ששויכו במרכז אבל החשבון עוד לא רשום בהם – כדי שהדף יוכל להסביר למה הקו חסר
     if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine),
       waiting: memberships.filter(s => !allowed.some(l => l.slug === s)) });
-    const accounts = await env.KV.list({ prefix: "portal_approved:" });
+    // חשבונות מאושרים, וגם חשבונות חסומים שאינם מאושרים – כדי שכל חסימה תופיע ואפשר יהיה לבטל אותה
+    const [accounts, blocks] = await Promise.all([env.KV.list({ prefix: "portal_approved:" }), env.KV.list({ prefix: "portal_blocked:" })]);
+    const approvedSet = new Set(accounts.keys.map(k => k.name.slice("portal_approved:".length)));
+    const blockedSet = new Set(blocks.keys.map(k => k.name.slice("portal_blocked:".length)));
     const clients = [];
-    for (const item of accounts.keys) {
-      const email = item.name.slice("portal_approved:".length);
+    for (const email of new Set([...approvedSet, ...blockedSet])) {
       clients.push({ email, lines: await env.KV.get("portal_memberships:" + email, "json") || [],
-        blocked: !!(await env.KV.get("portal_blocked:" + email)) });
+        blocked: blockedSet.has(email), approved: approvedSet.has(email) });
     }
     return reply({ email: session.email, isOwner, lines: allowed.map(publicLine), clients, ...(syncError ? { syncError } : {}) });
   }
@@ -183,16 +192,23 @@ export async function portal(req, env, verifyGoogle) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email === owner)
       return reply({ error: "חשבון לא תקין" }, 400);
     const assigned = await env.KV.get("portal_memberships:" + email, "json") || [];
-    if (body.blocked === true || body.approved === false) {
+    if (body.blocked === true) {
       // Block centrally first, then remove only memberships created by this portal.
       await env.KV.put("portal_blocked:" + email, "1");
-      if (body.approved === false) await env.KV.delete("portal_approved:" + email);
       await revokeClientSessions(env, email);
       try { await syncClientBlock(env, lines, email, true); }
       catch (e) { return reply({ error: String(e.message || "הגישה נחסמה במרכז, אך לא בכל הקווים") }, 502); }
       try { await syncClientLines(env, lines, email, []); }
       catch (e) { return reply({ error: String(e.message || "הגישה נחסמה במרכז, אך סנכרון קו נכשל") }, 502); }
-      if (body.approved === false) await env.KV.delete("portal_memberships:" + email);
+    }
+    if (body.approved === false) {
+      // הסרה: מבטלים את השיוכים שהמרכז יצר ואת החיבורים – בלי חסימה קבועה (שלא הייתה נראית ברשימה).
+      // האישור והשיוך נמחקים רק אחרי שכל הקווים עודכנו, כדי שהחשבון יישאר ברשימה ואפשר יהיה לנסות שוב
+      try { await syncClientLines(env, lines, email, []); }
+      catch (e) { return reply({ error: String(e.message || "הסרת החשבון מהקווים נכשלה") }, 502); }
+      await env.KV.delete("portal_memberships:" + email);
+      await env.KV.delete("portal_approved:" + email);
+      await revokeClientSessions(env, email);
     }
     if (body.approved === true) {
       await env.KV.put("portal_approved:" + email, "1");
@@ -201,12 +217,13 @@ export async function portal(req, env, verifyGoogle) {
       catch (e) { return reply({ error: String(e.message || "החשבון אושר, אך לא ניתן לעדכן את הגישה בקווים") }, 502); }
     }
     if (body.blocked === false) {
+      // השיוכים חוזרים רק לחשבון מאושר, אבל החסימה בקווים עצמם מוסרת תמיד (אחרת היא נשארת שם בלי שאפשר לראות אותה)
       if (await env.KV.get("portal_approved:" + email)) {
         try { await syncClientLines(env, lines, email, assigned); }
         catch (e) { return reply({ error: String(e.message || "לא ניתן לשחזר את הרשאות הקווים") }, 502); }
-        try { await syncClientBlock(env, lines, email, false); }
-        catch (e) { return reply({ error: String(e.message || "לא ניתן לשחזר את הגישה בכל הקווים") }, 502); }
       }
+      try { await syncClientBlock(env, lines, email, false); }
+      catch (e) { return reply({ error: String(e.message || "לא ניתן לשחזר את הגישה בכל הקווים") }, 502); }
       await env.KV.delete("portal_blocked:" + email);
     }
     return reply({ ok: true });
@@ -233,12 +250,20 @@ export async function portal(req, env, verifyGoogle) {
 // שכפול הגדרות בין קווים (רק בעל השירות). קודם תצוגה מקדימה, ואז כתיבה רק אחרי הקלדת השם הקצר של קו היעד.
 // הערך הקודם בקו היעד נשמר ב-copybak:<מפתח> לשבוע, כדי שאפשר יהיה להחזיר
 const COPY_KEYS = { rules: "כללי העוזר", scheduled: "תזמונים פעילים", strict: "הגדרות בדיקת ההודעות", ads: "פרסומות", event: "אירוע (שלוחה 9)" };
+// מפתחות שנשארים ברשימה (הדף מציג אותם), אבל לא מועתקים: הם שייכים לחברים ולמערכת של קו המקור
+const NO_COPY = {
+  strict: "לא מועתק: רשימת הפיקוח המוגבר היא לפי מספרי הטלפון של חברי קו המקור",
+  ads: "לא מועתק: הפרסומות שמורות לפי מספרי הטלפון של חברי קו המקור",
+  event: "לא מועתק: האירוע קשור לקובץ ההרשמה ולתפריט שלוחה 9 של קו המקור – קובעים אותו בדף הניהול של קו היעד",
+};
+// משימה מתוזמנת שמיועדת לחברים מסוימים (תזכורת או הודעה אישית) – לא עוברת בין קווים
+const personalJob = j => !!j && (!!j.phone || (Array.isArray(j.phones) && j.phones.length > 0) || j.type === "remind" || j.type === "pm");
 async function kvOfLine(env, lines, slug) {
   if (slug === "shimchas") return { get: k => env.KV.get(k), put: (k, v, o) => env.KV.put(k, v, o) };
   const l = lines.find(x => x.slug === slug), legacy = LEGACY.find(x => x.slug === slug && x.script);
   const id = l ? l.kv : legacy && cfReady(env) ? await legacyKv(env, legacy.script) : "";
   if (!id) throw new Error("אין גישה ל-KV של הקו " + slug);
-  return { get: k => kvGetRemote(env, id, k), put: (k, v) => kvPut(env, id, k, v) };
+  return { get: k => kvGetRemote(env, id, k), put: (k, v, o) => kvPut(env, id, k, v, o) };
 }
 async function copySettings(env, lines, body) {
   const from = String(body.from || ""), to = String(body.to || ""), keys = (Array.isArray(body.keys) ? body.keys : []).filter(k => COPY_KEYS[k]);
@@ -247,11 +272,12 @@ async function copySettings(env, lines, body) {
   let src, dst; try { [src, dst] = await Promise.all([kvOfLine(env, lines, from), kvOfLine(env, lines, to)]); } catch (e) { return { error: e.message }; }
   const out = [];
   for (const k of keys) {
+    if (NO_COPY[k]) { out.push({ k, label: COPY_KEYS[k], from: NO_COPY[k], to: "לא ישתנה", same: true, skip: true, _v: null, _old: null }); continue; }
     let v = await src.get(k), old = await dst.get(k), kept = 0;
     if (k === "scheduled" && v) { try {
       // בלי משימות שבוצעו ובלי הודעות אישיות לטלפון מסוים מהמקור. המשימות האישיות של קו היעד עצמו נשמרות
-      const gen = JSON.parse(v).filter(j => j && !j.done && !j.phone);
-      let mineDst = []; try { const o = JSON.parse(old || "[]"); if (Array.isArray(o)) mineDst = o.filter(j => j && j.phone); } catch {}
+      const gen = JSON.parse(v).filter(j => j && !j.done && !personalJob(j));
+      let mineDst = []; try { const o = JSON.parse(old || "[]"); if (Array.isArray(o)) mineDst = o.filter(personalJob); } catch {}
       const ids = new Set(gen.map(j => j.id).filter(Boolean));
       mineDst = mineDst.filter(j => !j.id || !ids.has(j.id)); kept = mineDst.length;
       v = JSON.stringify([...mineDst, ...gen]);

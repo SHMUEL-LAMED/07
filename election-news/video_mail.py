@@ -125,8 +125,11 @@ def probe(path):
     return duration
 
 
-def make_video(url, destination):
+def make_video(url, destination, deadline=None):
     downloaded = None
+    # Never let one clip run past the job's overall budget.
+    def budget(seconds):
+        return seconds if deadline is None else max(1, min(seconds, deadline - time.monotonic()))
     if urllib.parse.urlsplit(url).hostname == 'www.youtube.com':
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
         channel = query.get('channel_id', [''])[0]
@@ -134,7 +137,7 @@ def make_video(url, destination):
             raise ValueError('untrusted_publisher')
         downloaded = destination.with_suffix('.input.mp4')
         filters = '!is_live & !is_upcoming' + (' & channel_id = ' + channel if channel else '')
-        subprocess.run([os.sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-warnings', '--socket-timeout', '20', '--js-runtimes', 'node', '--match-filter', filters, '-f', 'worstvideo[ext=mp4]+bestaudio[ext=m4a]/worst[ext=mp4]', '--merge-output-format', 'mp4', '-o', str(downloaded), url], check=True, capture_output=True, timeout=300)
+        subprocess.run([os.sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-warnings', '--socket-timeout', '20', '--js-runtimes', 'node', '--match-filter', filters, '-f', 'worstvideo[ext=mp4]+bestaudio[ext=m4a]/worst[ext=mp4]', '--merge-output-format', 'mp4', '-o', str(downloaded), url], check=True, capture_output=True, timeout=budget(300))
         inputs, maps = ['-i', str(downloaded)], ['-map', '0:v:0', '-map', '0:a:0']
     else:
         video, audio = video_inputs(url)
@@ -146,7 +149,7 @@ def make_video(url, destination):
         subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', *inputs, *maps,
                         '-vf', 'scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,setsar=1',
                         '-r', '20', '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '128k', '-maxrate', '144k', '-bufsize', '288k', '-g', '40',
-                        '-c:a', 'aac', '-b:a', '32k', '-ac', '2', '-ar', '44100', '-movflags', '+faststart', '-y', str(destination)], check=True, capture_output=True, timeout=600)
+                        '-c:a', 'aac', '-b:a', '32k', '-ac', '2', '-ar', '44100', '-movflags', '+faststart', '-y', str(destination)], check=True, capture_output=True, timeout=budget(600))
         duration = probe(destination)
         if os.environ.get('BLUR_WOMEN') == '1':
             if not BLUR_ENDPOINT:
@@ -159,7 +162,7 @@ def make_video(url, destination):
                 if abs(probe(filtered)-duration) > .3:
                     raise ValueError('blur_duration_mismatch')
                 filtered.replace(destination)
-            retry_processing(process)
+            retry_processing(process, total_seconds=budget(1500))
         return duration
     finally:
         if downloaded:
@@ -288,6 +291,11 @@ def main():
     if pending:
         candidates = {x['id'].split('#')[0]: x['title'] for x in pending['items']}
         required = {x['id'] for x in pending['items']}
+        # discover() is skipped here, so restore the pinned YouTube feed entries from the batch itself.
+        for x in pending['items']:
+            if urllib.parse.urlsplit(x['id']).hostname == 'www.youtube.com' and c.source(x['id']):
+                c.YOUTUBE_ITEMS[c.canonical(x['id'])] = x['title']
+                c.PUBLICATION_DATES[c.canonical(x['id'])] = x['publishedAt']
     else:
         news = c.worker(endpoint, '/collector/state')
         c.RESHET_ITEMS.update(news.get('reshet_items', {}))
@@ -327,7 +335,7 @@ def main():
                 break
             try:
                 path = folder / ('clip-%03d.mp4' % len(clips))
-                duration = make_video(video, path)
+                duration = make_video(video, path, deadline=start + 2400)
                 clips.append(path)
                 items.append({'id': key, 'title': title[:600], 'publishedAt': date})
                 print('video_ready', c.source(key), round(duration), flush=True)

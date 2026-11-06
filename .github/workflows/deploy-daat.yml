@@ -15,7 +15,8 @@ permissions:
 concurrency: deploy-yemot-ai-daat
 jobs:
   deploy:
-    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    # רק מ-main: קוד מענף שלא מוזג לא מגיע לקו החי
+    if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.confirm == 'deploy' }}
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

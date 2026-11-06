@@ -5356,11 +5356,14 @@ out.push({ line, present: ((data && data.managers) || []).some(m => String((type
 }
 return out;
 }
-async function syncLegacyManagers(email, slugs, pre) {
+// מסירים מקו רק שיוך שהמרכז עצמו נתן (prev). מנהל שמנהל הקו הוסיף בעצמו נשאר
+async function syncLegacyManagers(email, slugs, pre, prev) {
 email = String(email || "").toLowerCase();
+const mine = Array.isArray(prev) ? prev : [];
 for (const x of pre || await legacyState(email)) {
 const wanted = slugs.indexOf(x.line.slug) >= 0;
-if (x.present !== wanted) await lineApi(x.line, "emails", { email, op: wanted ? "add" : "remove", role: "admin" });
+if (wanted && !x.present) await lineApi(x.line, "emails", { email, op: "add", role: "admin" });
+else if (!wanted && x.present && mine.indexOf(x.line.slug) >= 0) await lineApi(x.line, "emails", { email, op: "remove" });
 }
 }
 function needGoogle(msg) {
@@ -5370,7 +5373,7 @@ async function saveAccess(email, slugs) {
 needGoogle();
 const pre = await legacyState(email);
 await portalApi("access", { email, approved: true });
-await syncLegacyManagers(email, slugs, pre);
+await syncLegacyManagers(email, slugs, pre, clientOf(email).lines || []);
 await portalApi("assign", { email, lines: slugs });
 }
 // פעולה על חשבון: ביצוע, הודעה וטעינה מחדש של המרכז
@@ -5409,7 +5412,7 @@ try { list = (((await lineApi(line, "emails")) || {}).managers || []).map(m => S
 catch { continue; }
 for (const c of cl) {
 const want = (c.lines || []).indexOf(line.slug) >= 0, has = list.indexOf(String(c.email || "").toLowerCase()) >= 0;
-if (want !== has) bad.push({ c, line, want });
+if (want && !has) bad.push({ c, line, want });   // רק שיוך שחסר בקו. מנהל שהקו הוסיף בעצמו – תקין
 }
 }
 if (!live(s, "accounts")) return;
@@ -5688,7 +5691,7 @@ const email = el.dataset.email, c = clientOf(email), on = el.dataset.on === "on"
 await busy(async () => {
 needGoogle("יש לחדש את החיבור לגוגל");
 const pre = await legacyState(email);
-await syncLegacyManagers(email, on ? [] : (c.lines || []), pre);
+await syncLegacyManagers(email, on ? [] : (c.lines || []), pre, c.lines || []);
 await portalApi("access", { email, blocked: on });
 });
 });
@@ -5698,7 +5701,7 @@ if (!await Dlg.confirm("להסיר את " + email + " ואת כל הקווים �
 await busy(async () => {
 needGoogle("יש לחדש את החיבור לגוגל");
 const pre = await legacyState(email);
-await syncLegacyManagers(email, [], pre);
+await syncLegacyManagers(email, [], pre, clientOf(email).lines || []);
 await portalApi("access", { email, approved: false });
 });
 });
@@ -7497,7 +7500,7 @@ if (!hl) return card({ title, body: h`<p class="mut">${NA}</p>` });
 const def = (hl.deferred || []).filter(Boolean);
 const act = def.length ? h`<button type="button" class="btn s d w-only" data-x="sched.def" data-op="cancel_all">ביטול כולם</button>` : "";
 const body = def.length
-? h`<ul class="list">${def.map(x => h`<li><span class="grow">${x.label || x.phones || ""}</span><span class="acts w-only"><button type="button" class="btn s" data-x="sched.def" data-op="send" data-i="${x.i}">שליחה עכשיו</button><button type="button" class="btn s d" data-x="sched.def" data-op="cancel" data-i="${x.i}">ביטול</button></span></li>`)}</ul>`
+? h`<ul class="list">${def.map(x => h`<li><span class="grow">${x.label || x.phones || ""}</span><span class="acts w-only"><button type="button" class="btn s" data-x="sched.def" data-op="send" data-i="${x.i}" data-phones="${x.phones || ""}">שליחה עכשיו</button><button type="button" class="btn s d" data-x="sched.def" data-op="cancel" data-i="${x.i}" data-phones="${x.phones || ""}">ביטול</button></span></li>`)}</ul>`
 : empty("אין");
 return card({ title, small: String(def.length), act, body });
 };
@@ -7547,7 +7550,9 @@ const ok = op === "cancel_all"
 : await Dlg.confirm(op === "send" ? "לשלוח עכשיו, למרות שבת/חג?" : "לבטל את הצינתוק הזה?", { danger: op !== "send" });
 if (!ok) return;
 const line = Line.cur;
-await api("deferred", { op, i: +el.dataset.i });
+const body = { op, i: +el.dataset.i };
+if (el.dataset.phones) body.phones = el.dataset.phones;   // השרת מזהה את הצינתוק לפי התוכן – הרשימה יכולה להשתנות בינתיים
+await api("deferred", body);
 toast("בוצע");
 if (Line.cur === line) await refreshTabs("sched");
 });

@@ -26,15 +26,20 @@ const BUDGET = 40;
 const budget = () => ({ left: BUDGET, take(n = 1) { if (this.left < n) return false; this.left -= n; return true; } });
 const sha = async t => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, "0")).join("");
 // הטוקן של קו המקור עצמו אסור במפעל (כדי לא לבנות קו נוסף על אותה מערכת ולא לכתוב לשלוחות של המקור)
+// מספרי הקווים הוותיקים שלא נבנו במפעל (דעת תורה) – אסור לבנות עליהם קו נוסף
+const LEGACY_PHONES = ["0794947582"];
 function notSource(env, token, D, phone) {
   if (env.YM_TOKEN && token === String(env.YM_TOKEN).trim()) throw new Error("זה הטוקן של הקו הזה עצמו – צריך טוקן של המערכת החדשה");
   if (phone && D && phone === D.LINE_PHONE) throw new Error("זה המספר של הקו הזה עצמו – צריך מערכת אחרת");
+  if (phone && LEGACY_PHONES.includes(phone)) throw new Error("זה המספר של קו דעת תורה – צריך מערכת אחרת");
 }
 
 const rnd = n => { const b = crypto.getRandomValues(new Uint8Array(n)); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const digits = v => String(v || "").replace(/\D/g, "");
 const okPhone = p => /^0\d{8,9}$/.test(p);
-const slugOk = s => /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/.test(s);
+// שמות שתפוסים בידי הקווים הוותיקים ובכתובות האתר
+const RESERVED_SLUGS = ["shimchas", "daat", "daattorah", "source", "line", "portal", "both"];
+const slugOk = s => /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/.test(s) && !RESERVED_SLUGS.includes(s);
 export const scriptName = slug => "yemot-line-" + slug;
 
 // ---------- ימות המשיח עם טוקן של מערכת אחרת ----------
@@ -91,31 +96,43 @@ export async function kvGetRemote(env, id, key) {
   if (!r.ok) throw new Error(`Cloudflare KV (${r.status})`);
   return r.text();
 }
-export async function kvPut(env, id, key, value) {
-  const r = await cf(env, "PUT", `/{acc}/storage/kv/namespaces/${id}/values/${encodeURIComponent(key)}`, undefined, true, value);
+export async function kvPut(env, id, key, value, opts) {
+  const ttl = opts && opts.expirationTtl ? "?expiration_ttl=" + Math.max(60, Math.floor(opts.expirationTtl)) : "";
+  const r = await cf(env, "PUT", `/{acc}/storage/kv/namespaces/${id}/values/${encodeURIComponent(key)}${ttl}`, undefined, true, value);
   if (!r.ok) throw new Error(`לא ניתן לכתוב ל-KV של הקו (${r.status})`);
 }
 // השהיה ושחזור של קו: הסוד SUSPENDED=1 (השרת עונה "הקו מושהה" ולא מריץ משימות) + ביטול התזמון.
 // הקוד, ההגדרות והנתונים נשמרים. רק לקווים שנבנו במפעל
 export async function setSuspended(env, slug, on, log) {
   if (!cfReady(env)) throw new Error("המפעל לא מוגדר: חסרים CF_FACTORY_TOKEN / CF_ACCOUNT_ID");
-  const reg = await loadReg(env), line = reg.find(l => l.slug === slug);
+  const line = (await loadReg(env)).find(l => l.slug === slug);
   if (!line) throw new Error("הקו לא נמצא ברשימה");
+  const mark = () => patchReg(env, slug, l => { l.enabled = !on; l.suspendedAt = on ? Date.now() : null; });
+  let warning;
   if (on) {
     await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/secrets`, { name: "SUSPENDED", text: "1", type: "secret_text" });
-    await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/schedules`, []);
+    // מכאן הקו כבר מושהה (לא עונה ולא מריץ משימות) – הרשימה מתעדכנת מיד, גם אם ביטול התזמון ייכשל
+    await mark();
+    try { await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/schedules`, []); }
+    catch (e) { warning = "הקו הושהה, אבל ביטול התזמון נכשל (" + e.message + "). הקו המושהה לא מריץ משימות בכל מקרה"; }
   } else {
     const r = await cf(env, "DELETE", `/{acc}/workers/scripts/${line.script}/secrets/SUSPENDED`, undefined, true);
     if (!r.ok && r.status !== 404) throw new Error(`לא ניתן להחזיר את הקו (${r.status})`);
+    // נרשם כפעיל רק אחרי שגם התזמון חזר, כדי שאפשר יהיה ללחוץ שוב על "החזרה" אם הוא נכשל
     await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/schedules`, [{ cron: CRON }]);
+    await mark();
   }
-  line.enabled = !on; line.suspendedAt = on ? Date.now() : null;
-  await saveReg(env, reg);
-  if (log) await log(`מרכז הקווים: הקו "${line.name}" ${on ? "הושהה" : "הוחזר לפעולה"}`).catch(() => {});
-  return { ok: true, slug, enabled: !on };
+  if (log) await log(`מרכז הקווים: הקו "${line.name}" ${on ? "הושהה" : "הוחזר לפעולה"}${warning ? " – " + warning : ""}`).catch(() => {});
+  return { ok: true, slug, enabled: !on, ...(warning ? { warning } : {}) };
 }
 const loadReg = async env => { try { return (await env.KV.get(REG, "json")) || []; } catch { return []; } };
 const saveReg = (env, list) => env.KV.put(REG, JSON.stringify(list));
+// עדכון רשומה אחת מתוך הרשימה העדכנית – לא מעותק שנקרא לפני פעולה ארוכה (שהייתה דורסת שינויים שנעשו בינתיים)
+async function patchReg(env, slug, fn) {
+  const reg = await loadReg(env), l = reg.find(x => x.slug === slug);
+  if (!l) return null;
+  fn(l); await saveReg(env, reg); return l;
+}
 const view = l => ({ slug: l.slug, script: l.script, url: l.url, name: l.name, line: l.line, owner: l.owner, manager: l.ownerEmail || "", created: l.created, ivr: l.ivr || null, test: l.test !== false, enabled: l.enabled !== false });
 
 // ---------- בדיקת טוקן ----------
@@ -140,12 +157,14 @@ async function checkToken(token) {
 async function createLine(env, body, origin, D) {
   if (!cfReady(env)) throw new Error("המפעל לא מוגדר: חסרים CF_FACTORY_TOKEN / CF_ACCOUNT_ID בקו המקור");
   const slug = String(body.slug || "").trim().toLowerCase();
-  if (!slugOk(slug)) throw new Error("שם קצר לא תקין: 3–20 אותיות באנגלית קטנות, ספרות ומקף");
+  if (!slugOk(slug)) throw new Error(RESERVED_SLUGS.includes(slug) ? "השם הקצר הזה שמור לקווים הוותיקים – צריך שם אחר" : "שם קצר לא תקין: 3–20 אותיות באנגלית קטנות, ספרות ומקף");
   const token = String(body.ymToken || "").trim();
   const info = await checkToken(token);
   const linePhone = digits(body.linePhone) || info.linePhone;
   if (!okPhone(linePhone)) throw new Error("מספר הקו לא תקין");
-  notSource(env, token, D, linePhone);
+  // המספרים של המערכת: מה שהוקלד וגם מה שימות החזירו (המספר שהוקלד לבד לא מספיק כדי לזהות מערכת שכבר יש עליה קו)
+  const phones = [...new Set([linePhone, info.linePhone, ...["mainDid", "did", "username"].map(k => digits(info.session[k]))].filter(okPhone))];
+  for (const p of phones) notSource(env, token, D, p);
   const ownerPhone = digits(body.ownerPhone);
   if (ownerPhone && !okPhone(ownerPhone)) throw new Error("מספר הטלפון של בעל הקו לא תקין");
   // מנהל הקו (הלקוח): נכנס לדף הניהול של הקו ולמרכז הקווים, ויכול להוסיף מנהלים בעצמו.
@@ -156,10 +175,13 @@ async function createLine(env, body, origin, D) {
   const name = String(body.name || "").trim().slice(0, 40) || "קו " + linePhone;
   const script = scriptName(slug), reg = await loadReg(env);
   if (reg.some(l => l.slug === slug)) throw new Error("כבר קיים קו בשם הזה");
-  const tokHash = await sha(token), twin = reg.find(l => l.tokHash === tokHash || l.line === linePhone);
+  const tokHash = await sha(token);
+  const twinOf = list => list.find(l => l.tokHash === tokHash || [l.line, ...(l.phones || [])].some(p => phones.includes(p)));
+  const twin = twinOf(reg);
   if (twin) throw new Error(`על המערכת הזו כבר נבנה הקו "${twin.name}" (${twin.slug})`);
   const exists = await cf(env, "GET", `/{acc}/workers/scripts/${script}/settings`, undefined, true);
-  if (exists.status !== 404) throw new Error(`כבר קיים Worker בשם ${script} ב-Cloudflare`);
+  if (exists.ok) throw new Error(`כבר קיים Worker בשם ${script} ב-Cloudflare`);
+  if (exists.status !== 404) throw new Error(`Cloudflare לא אישר את הבדיקה אם ${script} קיים (${exists.status})`);
 
   const steps = [], created = { kv: null, script: false };
   const step = t => steps.push(t);
@@ -190,8 +212,11 @@ async function createLine(env, body, origin, D) {
     await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה כתובת workers.dev");
     const sub = (await cf(env, "GET", "/{acc}/workers/subdomain")).subdomain;
     const url = `https://${script}.${sub}.workers.dev`;
-    const line = { slug, script, url, name, line: linePhone, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, kv: kv.id, template: origin, test: true };
-    await saveReg(env, [...reg, line]);
+    const line = { slug, script, url, name, line: linePhone, phones, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, kv: kv.id, template: origin, test: true };
+    // הבנייה לוקחת זמן: קוראים שוב את הרשימה, בודקים שוב שלא נבנה בינתיים קו באותו שם או על אותה מערכת, ומוסיפים לרשימה העדכנית
+    const cur = await loadReg(env), clash = cur.find(l => l.slug === slug) || twinOf(cur);
+    if (clash) throw new Error(`בינתיים נבנה הקו "${clash.name}" (${clash.slug}) באותו שם או על אותה מערכת`);
+    await saveReg(env, [...cur, line]);
     await D.log(env, `מפעל הקווים: נבנה קו חדש "${name}" (${linePhone}) – ${script}`).catch(() => {});
     return { ok: true, steps, line: view(line), adminPass, adminUrl: url + "/admin", note: "הסיסמה מוצגת פעם אחת. הקו נוצר במצב בדיקה (TEST_MODE=1): צינתוקים יוצאים רק למנהלים עד שתשנו ל-0." };
   } catch (e) {
@@ -292,7 +317,10 @@ async function ivrPlan(env, body, origin, D) {
   }
   // תיקיות עמוקות מדי לא נסרקות – מסמנים בשורה של התיקייה שמעליהן (אם יש לה ext.ini)
   for (const p of deep) {
-    const parent = p.slice(0, p.lastIndexOf("/")) || "/", row = plan.find(x => x.path === parent);
+    // השורה של התיקייה הקרובה ביותר מעליה שיש לה ext.ini (ואם אין – השורה הראשונה), כדי שהאזהרה לא תיעלם
+    let parent = p, row;
+    while (!row && parent !== "/") { parent = parent.slice(0, parent.lastIndexOf("/")) || "/"; row = plan.find(x => x.path === parent); }
+    row = row || plan[0];
     if (row) row.warn = [...row.warn, `תת-שלוחה עמוקה שלא נסרקה ולא תועתק: ${p}`];
   }
   // אין בסבב הזה מה לכתוב – מתקדמים מיד לסבב הבא (ובסוף העץ חוזרים להתחלה); אחרת מתקדמים רק אחרי הכתיבה
@@ -303,12 +331,15 @@ async function ivrPlan(env, body, origin, D) {
 // כתיבה: רק לשלוחות שנבחרו. קוראים מחדש את המקור ואת היעד של כל אחת (בלי לסרוק את כל העץ),
 // לא כותבים על קובץ שלא הצלחנו לקרוא, ושומרים גיבוי של מה שהיה לפני כל כתיבה
 async function ivrApply(env, body, origin, D) {
-  const { reg, line, token } = await lineToken(env, body, D);
+  const { line, token } = await lineToken(env, body, D);
   if (String(body.confirm || "") !== line.slug) throw new Error("לאישור הכתיבה יש להקליד את השם הקצר של הקו");
-  const want = [...new Set((body.paths || []).map(String))].filter(p => /^\/[\w\/.-]*$/.test(p) && !p.includes(".."));
-  if (!want.length) throw new Error("לא נבחרו שלוחות");
+  // אותם שמות תיקיות שהסריקה מציגה (כולל עברית ורווח). נתיב שנדחה מדווח ב-failed ולא נעלם בשקט
+  const okPath = p => /^\/[\w\/.\- \u0590-\u05FF]*$/.test(p) && !p.includes("..") && !p.includes("//");
+  const asked = [...new Set((Array.isArray(body.paths) ? body.paths : []).map(String))];
+  const want = asked.filter(okPath), bad = asked.filter(p => !okPath(p));
+  if (!want.length) throw new Error(bad.length ? "השלוחות שנבחרו לא נתמכות: " + bad.join(", ") : "לא נבחרו שלוחות");
   const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
-  const bud = budget(), ready = [], failed = [], skipped = [];
+  const bud = budget(), ready = [], failed = bad.map(p => `${p}: שם תיקייה לא נתמך – לא נכתב`), skipped = [];
   for (const path of want) {
     if (!bud.take(3)) { skipped.push(path); continue; }
     const src = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
@@ -327,8 +358,7 @@ async function ivrApply(env, body, origin, D) {
   }
   // הסבב נכתב במלואו – לחיצה הבאה על "חיבור שלוחות" ממשיכה מהמקום שבו הסריקה נעצרה (ובסוף העץ חוזרת להתחלה)
   if (!skipped.length) { const c = await planCursor(env, line.slug); await savePlanCursor(env, line.slug, c.next, []); }
-  line.ivr = { at: Date.now(), written: (line.ivr && line.ivr.written || 0) + done.length, backup: ready.length ? backup.at : (line.ivr && line.ivr.backup) || null };
-  await saveReg(env, reg);
+  await patchReg(env, line.slug, l => { l.ivr = { at: Date.now(), written: (l.ivr && l.ivr.written || 0) + done.length, backup: ready.length ? backup.at : (l.ivr && l.ivr.backup) || null }; });
   await D.log(env, `מפעל הקווים: נכתבו ${done.length} קובצי שלוחות לקו "${line.name}"${failed.length ? ` (${failed.length} נכשלו)` : ""}${skipped.length ? ` (${skipped.length} ממתינים לסבב נוסף)` : ""}`).catch(() => {});
   return { ok: !failed.length && !skipped.length, done, failed, skipped, backup: ready.length ? backup.at : null };
 }
