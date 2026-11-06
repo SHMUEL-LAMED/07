@@ -49,6 +49,7 @@ async function alert(env, kind, msg) {
   const a = await kvGet(env, "alerts", []);
   a.unshift({ t: nowIL(), k: kind, m: String(msg).slice(0, 300) });
   await env.KV.put("alerts", JSON.stringify(a.slice(0, 50)));
+  if (env.ALERT_WEBHOOK) used++;
   if (env.ALERT_WEBHOOK) await fetch(env.ALERT_WEBHOOK, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ line: LINE_PHONE, kind, msg, at: nowIL() }), signal: AbortSignal.timeout(5000) }).catch(() => {});
 }
 // ---------- תור צינתוקים שנכשלו: עד 3 ניסיונות נוספים, בכל ריצה של cron ----------
@@ -67,7 +68,10 @@ async function tzRetryRun(env) {
     if (r && (r.responseStatus === "OK" || r.deferred)) { await log(env, `צינתוק שנכשל נשלח בניסיון חוזר (${x.phones})`).catch(() => {}); continue; }
     if (++x.n < 3) left.push(x); else await alert(env, "tz", `צינתוק ל-${x.phones} נכשל 4 פעמים ונמחק מהתור${x.why ? ": " + x.why : ""}`);
   }
-  await env.KV.put("tz_retry", JSON.stringify(left));
+  // צינתוקים שנכשלו בזמן הריצה (בבקשה אחרת) נוספו לתור אחרי שקראנו אותו: שומרים גם אותם ולא דורסים
+  const seen = new Set(q.map(x => x.phones + "|" + x.t));
+  for (const y of await kvGet(env, "tz_retry", [])) if (!seen.has(y.phones + "|" + y.t) && !left.some(z => z.phones === y.phones)) left.push(y);
+  await env.KV.put("tz_retry", JSON.stringify(left.slice(-30)));
 }
 // ---------- גיבוי יומי של ה-KV (אותם מפתחות כמו בגיבוי הידני בדף הניהול), 7 ימים אחרונים ----------
 const AUTO_BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "facts", "dashnotes", "joinmap", "demap", "polls"];
@@ -82,14 +86,14 @@ async function dailyBackup(env) {
 function b64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
 const nowIL = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" });
 async function nextName(env, folder, ext) {
-  const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + folder });
-  let max = -1;
-  for (const f of d.files || []) if (/^\d+\./.test(f.name)) max = Math.max(max, parseInt(f.name, 10));
-  return String(max + 1).padStart(3, "0") + "." + ext;
+  // ימות מחזירים עד 1000 קבצים בכל בקשה, ולכן עוברים על כל הדפים (אחרת השם "הבא" כבר קיים בתיקייה גדולה)
+  return String(await nextFileNum(env, folder)).padStart(3, "0") + "." + ext;
 }
 async function move(env, src, folder, action = "move") {
   const name = await nextName(env, folder, src.split(".").pop());
-  await ym(env, "FileAction", { action, what: "ivr2:" + src, target: "ivr2:" + folder + "/" + name });
+  const r = await ym(env, "FileAction", { action, what: "ivr2:" + src, target: "ivr2:" + folder + "/" + name });
+  // פעולה שנכשלה לא מחזירה שם, כדי שלא ישלחו צינתוק או ירשמו בארכיון קובץ שלא הועבר
+  if (!r || r.responseStatus !== "OK") throw new Error(`FileAction ${action} נכשל: ${(r && r.message) || "אין תשובה"}`);
   return name;
 }
 async function log(env, line) {
@@ -191,7 +195,12 @@ async function aiText(env, { system, compact, contents, models = CHAT_MODELS, gr
         { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
       used++;
       aiTrace.push(`${id} ${r.status} ${Date.now() - t0}ms`);
-      if (r.ok) { const parts = (await r.json()).candidates[0].content.parts; return safeParse(parts[parts.length - 1].text); }
+      if (r.ok) {
+        const j = await r.json(), parts = j.candidates?.[0]?.content?.parts;
+        if (parts?.length) return safeParse(parts[parts.length - 1].text);
+        // תשובה בלי תוכן (חסימת תוכן, SAFETY) היא בעיה של הבקשה ולא של המפתח: לא מסמנים אותו כמת, ועוברים למודל הבא
+        errs.push(model + ":empty " + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || "")); break;
+      }
       if (r.status === 429) dead.set(id, Date.now() + (model.startsWith("gemma") ? 2 : 60) * 60e3);
       if (r.status >= 500) dead.set(id, Date.now() + 3 * 60e3);
       errs.push(model + ":" + r.status);
@@ -200,12 +209,15 @@ async function aiText(env, { system, compact, contents, models = CHAT_MODELS, gr
   const list = force || !groq ? [] : [...providers(env)];
   if (!force && groq && env.GROQ_KEY) list.push({ name: "groq", url: "https://api.groq.com/openai/v1/chat/completions", key: env.GROQ_KEY, models: (env.GROQ_MODELS || "openai/gpt-oss-120b").split(",") });
   const msgs = toChat(compact || system, contents);
+  // הגיבויים לא חורגים מ-deadline ועוד timeout אחד בסך הכול (כל פנייה מקבלת רק את הזמן שנשאר, לפחות 1.5 שניות)
+  const cap = deadline + timeout, over = () => Date.now() - start > cap;
+  const left = () => Math.max(1500, Math.min(timeout, cap - (Date.now() - start)));
   for (const p of list) for (const model of p.models) {
     const id = p.name + "|" + model;
-    if (isDead(id)) continue;
+    if (isDead(id) || over()) continue;
     const t0 = Date.now();
     try {
-      const r = await fetch(p.url, { method: "POST", signal: AbortSignal.timeout(timeout),
+      const r = await fetch(p.url, { method: "POST", signal: AbortSignal.timeout(left()),
         headers: { Authorization: "Bearer " + p.key, "Content-Type": "application/json", ...(p.headers || {}) },
         body: JSON.stringify({ model: model.trim(), messages: msgs, temperature: 0.6 }) });
       used++;
@@ -216,20 +228,21 @@ async function aiText(env, { system, compact, contents, models = CHAT_MODELS, gr
     } catch (e) { aiTrace.push(`${id} ${e.message}`); errs.push(id + ":" + e.message); }
   }
   // אחרון: Cloudflare Workers AI (מכסה יומית חינמית באותו חשבון של השרת)
-  if (cf && env.AI && !isDead("cf-ai")) {
+  if (cf && env.AI && !isDead("cf-ai") && !over()) {
+    const cfRun = (m, x) => Promise.race([env.AI.run(m, x), new Promise((_, rej) => setTimeout(() => rej(new Error("cf timeout")), left()))]);
     try {
       let out = "";
       try {
-        const r = await env.AI.run("@cf/openai/gpt-oss-120b", { instructions: msgs[0].content, input: msgs.slice(1).map(m => ({ role: m.role, content: m.content })) });
+        const r = await cfRun("@cf/openai/gpt-oss-120b", { instructions: msgs[0].content, input: msgs.slice(1).map(m => ({ role: m.role, content: m.content })) });
         for (const item of (r && r.output) || []) for (const c of item.content || []) if (c.type === "output_text" && c.text) out = c.text;
         aiTrace.push("cf-ai gpt-oss " + (out ? "ok" : "empty"));
       } catch (e) { aiTrace.push("cf-ai gpt-oss " + e.message); }
       if (!out) {
-        const r = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: 700 });
+        const r = await cfRun("@cf/meta/llama-3.3-70b-instruct-fp8-fast", { messages: msgs, max_tokens: 700 });
         out = r && r.response; aiTrace.push("cf-ai llama ok");
       }
       if (out) return safeParse(out);
-    } catch (e) { dead.set("cf-ai", Date.now() + 30 * 60e3); aiTrace.push("cf-ai " + e.message); errs.push("cf-ai:" + e.message); }
+    } catch (e) { if (e.message !== "cf timeout") dead.set("cf-ai", Date.now() + 30 * 60e3); aiTrace.push("cf-ai " + e.message); errs.push("cf-ai:" + e.message); }
   }
   await alert(env, "ai", "העוזר לא הצליח לענות – כל ספקי ה-AI נכשלו: " + errs.join(" ").slice(0, 200)).catch(() => {});
   throw new Error(errs.join(" "));
@@ -275,13 +288,15 @@ function cleanupTranscript(t) {
 // תמלול הארכיון ב-AssemblyAI: שולחים כמה הקלטות בכל דקה, ובדקה הבאה אוספים את התוצאות
 // כל הקבצים בתיקייה, גם כשיש יותר מ-1000 (ימות מחזירים עד 1000 בכל בקשה)
 async function allFiles(env, folder) {
-  const out = [];
+  // ok=false: אחד הדפים נכשל (שגיאה של ימות), כך שהרשימה חלקית. אסור למחוק משהו לפי רשימה כזו
+  const out = []; let ok = true;
   for (let from = 0; from < 10000; from += 1000) {
     const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + folder, filesFrom: from, filesLimit: 1000 });
+    if (!d || d.responseStatus !== "OK") { ok = false; break; }
     const fs = d.files || []; out.push(...fs);
     if (fs.length < 1000) break;
   }
-  return { files: out };
+  return { files: out, ok };
 }
 
 async function aaiArchive(env, maxSubmit = 6, maxPoll = 12) {
@@ -340,11 +355,20 @@ async function classify(env, wav) {
 // ---------- התראות אישיות (דגלים) ----------
 async function loadState(env) {
   const r = await ym(env, "GetTextFile", { what: "ivr2:/AIFlags.json" });
-  try { return JSON.parse(r.contents); } catch { return { jobs: [], active: {} }; }
+  // קריאה שנכשלה (תקלה זמנית בימות) היא לא קובץ ריק: זורקים, כדי שהשמירה הבאה לא תמחק את כל הדגלים והמשימות
+  if (!r || (r.responseStatus !== "OK" && typeof r.contents !== "string")) {
+    if (r && /not.?found|לא נמצא|לא קיים|אינו קיים|does not exist|no such/i.test(String(r.message || ""))) return { jobs: [], active: {} };
+    throw new Error("קריאת AIFlags.json נכשלה: " + ((r && r.message) || "אין תשובה"));
+  }
+  let s; try { s = JSON.parse(r.contents || ""); } catch { s = null; }
+  if (!s || typeof s !== "object") s = {};
+  if (!Array.isArray(s.jobs)) s.jobs = [];
+  if (!s.active || typeof s.active !== "object") s.active = {};
+  return s;
 }
 const saveState = (env, s) => ym(env, "UploadTextFile", { what: "ivr2:/AIFlags.json", contents: JSON.stringify(s) });
 async function addFlags(env, phones, flag) {
-  const s = await loadState(env);
+  const s = await loadState(env).catch(() => loadState(env)); // ניסיון נוסף אחד אם הקריאה נכשלה
   for (const p of phones) s.jobs.push([p, flag]);
   await saveState(env, s);
 }
@@ -356,15 +380,22 @@ async function membersFor(env, list) {
 }
 async function processFlags(env, budget = 44) {
   const s = await loadState(env);
-  let changed = false;
+  const done = [];
   while (s.jobs.length && used < budget) {
-    const [phone, flag] = s.jobs.shift(); changed = true;
+    const [phone, flag] = s.jobs.shift();
     s.active[phone] = s.active[phone] || {};
     if (!s.active[phone][flag])
       await ym(env, "FileAction", { action: "copy", what: "ivr2:" + FLAG_TEMPLATE, target: `ivr2:/${flag}/Phone/${phone}/000.wav` });
-    s.active[phone][flag] = nowIL();
+    s.active[phone][flag] = nowIL(); done.push([phone, flag, s.active[phone][flag]]);
   }
-  if (changed) await saveState(env, s);
+  if (!done.length) return;
+  // בזמן ההעתקות בקשה אחרת יכלה להוסיף משימות או לנקות דגלים: קוראים שוב ומחילים רק את מה שנעשה כאן
+  const f = await loadState(env);
+  for (const [phone, flag, ts] of done) {
+    const i = f.jobs.findIndex(j => j && j[0] === phone && j[1] === flag); if (i >= 0) f.jobs.splice(i, 1);
+    f.active[phone] = f.active[phone] || {}; f.active[phone][flag] = ts;
+  }
+  await saveState(env, f);
 }
 // מוחק התראה אחרי שהחבר נכנס לשלוחה שעליה היא מודיעה
 async function clearFlags(env) {
@@ -382,15 +413,19 @@ async function clearFlags(env) {
     const k = d.Phone + "|" + d.Folder;
     if (!seen[k] || seen[k] < t) seen[k] = t;
   }
-  let changed = false;
+  const gone = [];
   for (const p of phones) for (const [flag, ts] of Object.entries(s.active[p])) {
     const t = seen[p + "|main"];
     if (t && t > ts && used < 45) {
       await ym(env, "FileAction", { action: "delete", what: `ivr2:/${flag}/Phone/${p}/000.wav` });
-      delete s.active[p][flag]; changed = true;
+      gone.push([p, flag]);
     }
   }
-  if (changed) await saveState(env, s);
+  if (!gone.length) return;
+  // קוראים שוב לפני השמירה, כדי לא לדרוס משימות שנוספו בזמן הקריאה של היומן והמחיקות
+  const f = await loadState(env);
+  for (const [p, flag] of gone) if (f.active[p]) delete f.active[p][flag];
+  await saveState(env, f);
 }
 
 // ---------- טיפול בהקלטה ----------
@@ -410,6 +445,12 @@ async function handleFile(env, f, kind) {
   if (w && w.hold && (!w.until || w.until > Date.now())) {
     await move(env, src, kind === "important" ? P.problem : P.general); await ym(env, "RunTzintuk", { phones: "tzl:admins" });
     await log(env, `${f.name} מ-${who}: המקליט בפיקוח, ההודעה מחכה לאישור מנהל בשלוחה 7-4`); return "בפיקוח";
+  }
+  // פיקוח מוגבר גם בהודעה רגילה: היא לא עולה לקו, אלא ממתינה לאישור מנהל (ההודעה החשובה נבדקת למטה, עם חוות דעת ה-AI)
+  if (kind === "general" && env.KV && (await kvGet(env, "strict", [])).includes(f.phone)) {
+    await move(env, src, P.general); await ym(env, "RunTzintuk", { phones: "tzl:admins" });
+    await log(env, `${f.name} מ-${who} (${names(env)[f.phone] || ""}): פיקוח מוגבר, ההודעה ממתינה לאישור מנהל בשלוחה 7-4-2`);
+    return "פיקוח מוגבר";
   }
   if (kind === "general") return publishGeneral(env, f, src);
   try {
@@ -482,10 +523,11 @@ const stripIntro = t => { const s = String(t || ""), i = s.indexOf("מרתקים
 // הודעה רגילה עולה מיד לכל ההודעות ונשלח צינתוק. אחר כך ה-AI בודק אותה, ומוריד רק תוכן חריג באמת
 async function publishGeneral(env, f, src) {
   const allName = await move(env, src, ALL);
-  await addIntro(env, f.phone, `${ALL}/${allName}`).catch(e => aiTrace.push("intro: " + e.message));
-  await tzintuk(env, "general"); await addFlags(env, await membersFor(env, "general"), "NRegular");
+  // נרשמת לבדיקה מיד אחרי שעלתה, כדי שתקלה בצינתוק או בדגלים לא תשאיר אותה בקו בלי בדיקת AI
   const pc = await kvGet(env, "postcheck", {}); pc[allName] = { p: f.phone || "", d: f.date || f.mtime || "", t: Date.now() };
   await env.KV.put("postcheck", JSON.stringify(pc));
+  await addIntro(env, f.phone, `${ALL}/${allName}`).catch(e => aiTrace.push("intro: " + e.message));
+  await tzintuk(env, "general"); await addFlags(env, await membersFor(env, "general"), "NRegular");
   await log(env, `${f.name} מ-${f.phone || "?"}: הודעה רגילה עלתה מיד (${allName}) ונשלח צינתוק. ה-AI בודק אותה עכשיו`);
   try { await postCheck(env, allName); } catch (e) { aiTrace.push("postcheck: " + e.message); }
   return "הודעה רגילה עלתה מיד";
@@ -498,12 +540,34 @@ async function postCheck(env, allName) {
   if (await env.KV.get(lk)) return;
   await env.KV.put(lk, "1", { expirationTtl: 600 });
   const done = async () => { const p2 = await kvGet(env, "postcheck", {}); delete p2[allName]; await env.KV.put("postcheck", JSON.stringify(p2)); };
-  const wav = await ym(env, "DownloadFile", { path: "ivr2:" + ALL + "/" + allName });
-  if (wav.length < 1000) return done(); // כבר נמחקה
-  const v = await classify(env, wav);
-  if (typeof v.problem !== "boolean") throw new Error("תשובה לא תקינה");
-  if ((await kvGet(env, "intro", {}))[it.p]) v.transcript = stripIntro(v.transcript);
   const who = it.p + (names(env)[it.p] ? " (" + names(env)[it.p] + ")" : "");
+  let v;
+  try {
+    const wav = await ym(env, "DownloadFile", { path: "ivr2:" + ALL + "/" + allName });
+    if (wav.length < 1000) {
+      // תשובה קצרה: רק "הקובץ לא נמצא" (או תשובה ריקה) אומר שההודעה כבר נמחקה. שגיאה אחרת של ימות = מנסים שוב
+      let j = null; try { j = JSON.parse(new TextDecoder().decode(wav)); } catch {}
+      if (!wav.length || (j && /not.?found|לא נמצא|לא קיים|אינו קיים|does not exist|no such/i.test(String(j.message || "")))) return done();
+      throw new Error("הורדת ההודעה נכשלה: " + ((j && (j.message || j.responseStatus)) || wav.length + " בתים"));
+    }
+    v = await classify(env, wav);
+    if (typeof v.problem !== "boolean") throw new Error("תשובה לא תקינה");
+  } catch (e) {
+    // מונה ניסיונות: הודעה שהבדיקה שלה נכשלת שוב ושוב יוצאת מהתור (עם התראה), כדי שלא תחסום את הבדיקה של ההודעות שאחריה
+    const p2 = await kvGet(env, "postcheck", {}), cur = p2[allName];
+    if (cur) {
+      cur.n = (cur.n || 0) + 1;
+      if (cur.n >= 5 || Date.now() - (cur.t || 0) > 6 * 3600e3) {
+        delete p2[allName]; await env.KV.put("postcheck", JSON.stringify(p2));
+        await alert(env, "postcheck", `בדיקת ה-AI של ההודעה הרגילה ${allName} מ-${who} נכשלה ${cur.n} פעמים (${e.message}). ההודעה נשארת בקו בלי בדיקה, כדאי לשמוע אותה`).catch(() => {});
+        await log(env, `${allName} מ-${who}: בדיקת ה-AI נכשלה ${cur.n} פעמים והופסקה (${e.message}). ההודעה נשארת בקו, כדאי לשמוע אותה`).catch(() => {});
+        return;
+      }
+      await env.KV.put("postcheck", JSON.stringify(p2));
+    }
+    throw e;
+  }
+  if ((await kvGet(env, "intro", {}))[it.p]) v.transcript = stripIntro(v.transcript);
   if (v.problem) {
     const pend = await move(env, ALL + "/" + allName, P.general); await ym(env, "RunTzintuk", { phones: "tzl:admins" });
     await log(env, `${allName} מ-${who}: ה-AI הוריד מהקו הודעה רגילה (אפשר להחזיר אותה בשלוחה 7-4-2 כ-${pend}). סיבה: ${v.reason}. תמלול: ${v.transcript}`);
@@ -518,7 +582,7 @@ async function postCheck(env, allName) {
 // ---------- הודעות מתוזמנות (נשלחות מהריצה הקבועה כל דקה) ----------
 async function nextFileNum(env, folder) {
   let max = -1;
-  for (const from of [0, 1000, 2000]) {
+  for (let from = 0; from < 10000; from += 1000) {
     const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + folder, filesFrom: from, filesLimit: 1000 });
     const fs = d.files || []; for (const f of fs) if (/^\d+\./.test(f.name)) max = Math.max(max, parseInt(f.name, 10));
     if (fs.length < 1000) break;
@@ -539,13 +603,13 @@ async function runScheduled(env) {
         const ns = Object.values(await rsvpLoad(env)).sort((a, b) => (a.ts > b.ts ? 1 : -1)).map(x => x.n);
         const text = `${j.intro || "תזכורת חשובה: שמחת בית השואבה ביום ראשון אצל סטפנסקי!"} עד עכשיו נרשמו ${ns.length} בחורים: ${ns.join(", ")}. מי שעוד לא נרשם, בבקשה תירשמו כבר עכשיו, כדי שנדע בדיוק כמה אנחנו ונתכונן כמו שצריך: בתפריט הראשי מקישים 9 ואז 1. מחכים לכולם!`;
         await postVoice(env, [IMPORTANT, ALL], text);
-        used = 0; await tzintuk(env, "members"); await addFlags(env, await membersFor(env, "members"), "NImportant"); await processFlags(env);
+        await tzintuk(env, "members"); await addFlags(env, await membersFor(env, "members"), "NImportant"); await processFlags(env);
         await log(env, `נשלחה ההודעה המתוזמנת על שמחת בית השואבה (${ns.length} נרשמים) עם צינתוק לכל החברים`);
       }
       if (j.type === "post") { // הודעה מתוזמנת שמנהל קבע דרך העוזר
         await postVoice(env, j.important ? [IMPORTANT, ALL] : [ALL], j.text);
         // postVoice כבר העלה גם לכל ההודעות, ולכן בחשובה לא קוראים ל-notify("important") (הוא היה מעתיק אותה לשם שוב)
-        used = 0;
+        // בלי לאפס את מונה הפניות: הפניות של postVoice כבר נספרו באותה ריצה (מגבלה של 50)
         if (j.important) { await tzintuk(env, "members").catch(() => {}); await addFlags(env, await membersFor(env, "members"), "NImportant").catch(() => {}); }
         else await notify(env, "regular").catch(() => {});
         await processFlags(env).catch(() => {});
@@ -608,7 +672,7 @@ async function weeklySummary(env, dry = false) {
   if (!summary) throw new Error("לא התקבל סיכום");
   if (dry) return { summary, count: week.length };
   const [num] = await postVoice(env, [ALL], summary);
-  used = 0; await notify(env, "regular").catch(() => {});
+  await notify(env, "regular").catch(() => {});
   await log(env, `עלה הסיכום השבועי לכל ההודעות (${week.length} הודעות השבוע)`);
   return { summary, count: week.length, file: num };
 }
@@ -663,15 +727,20 @@ async function runRetorts(env) {
   try {
     // כמה הודעות רצופות של אותו חבר מקבלות תגובה אחת משותפת
     const it = q[0], same = q.filter(x => x.p === it.p);
-    const rest = q.filter(x => x.p !== it.p);
-    const reply = await writeRetort(env, it.p, same.map(x => x.t).join("\n---\n").slice(-4000));
+    // מוציאים מהתור רק את מה שטופל כאן, לפי תור עדכני: הודעות שנכנסו לתור בזמן הכתיבה וההקראה לא נמחקות
+    const drop = async () => { const cur = await kvGet(env, "retortq", []); await env.KV.put("retortq", JSON.stringify(cur.filter(x => !same.some(y => y.at === x.at && y.p === x.p)))); };
+    const old = () => Date.now() - it.at > 30 * 60e3;
+    // תקלה ב-AI לא תוקעת את התור: נחשבת כתגובה ריקה (ניסיון חוזר בריצה הבאה, ויתור אחרי חצי שעה)
+    let reply = "";
+    try { reply = await writeRetort(env, it.p, same.map(x => x.t).join("\n---\n").slice(-4000)); } catch (e) { aiTrace.push("retort: " + e.message); }
     // תגובה קצרה מדי (בדרך כלל ממודל גיבוי כשגוגל עמוס) לא עולה, ומנסים שוב בריצה הבאה, עד 20 דקות
     const tooWeak = reply.length < 120 && Date.now() - it.at < 20 * 60e3;
     if (reply && !tooWeak) {
-      const [num] = await postVoice(env, [ALL], reply);
+      let num;
+      try { [num] = await postVoice(env, [ALL], reply); } catch (e) { if (old()) await drop(); throw e; }
+      await drop();
       await log(env, `העוזר החכם הגיב בעקיצה ל${names(env)[it.p] || it.p} (${num}): ${reply}`);
-      await env.KV.put("retortq", JSON.stringify(rest));
-    } else if (Date.now() - it.at > 30 * 60e3) await env.KV.put("retortq", JSON.stringify(rest)); // מוותרים אחרי חצי שעה
+    } else if (old()) await drop(); // מוותרים אחרי חצי שעה
     else aiTrace.push("retort: weak or empty, retry later (" + reply.length + ")");
   } finally { await env.KV.delete("retortlock"); }
 }
@@ -715,7 +784,14 @@ async function geminiTTS(env, text, budgetMs, voice = "Charon") {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, signal: AbortSignal.timeout(left),
         body: JSON.stringify({ contents: [{ parts: [{ text: TTS_STYLE + text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }) });
-      if (!r.ok) { ttsDead.set(id, Date.now() + (r.status === 429 ? 600000 : r.status >= 500 ? 60000 : 6 * 3600000)); aiTrace.push(`tts ${id} ${r.status}`); continue; }
+      used++;
+      if (!r.ok) {
+        aiTrace.push(`tts ${id} ${r.status}`);
+        // 400 = בעיה בבקשה הזו (הטקסט או הקול), לא במפתח: לא חוסמים את המפתח, ועוברים למודל הבא
+        // (חוץ ממפתח לא תקין, שגוגל מחזירים עליו גם 400 – אותו חוסמים כרגיל)
+        if (r.status === 400 && !/API.?key|API_KEY/i.test(await r.text().catch(() => ""))) break;
+        ttsDead.set(id, Date.now() + (r.status === 429 ? 600000 : r.status >= 500 ? 60000 : [400, 401, 403, 404].includes(r.status) ? 6 * 3600000 : 300000)); continue;
+      }
       const j = await r.json();
       const b64 = (j.candidates?.[0]?.content?.parts || []).find(p => p.inlineData)?.inlineData?.data;
       if (b64) { aiTrace.push(`tts ok ${id} ${Date.now() - start}ms`); return b64ToBytes(b64); }
@@ -733,6 +809,7 @@ async function elevenTTS(env, text, budgetMs, voiceId = "bIHbv24MWmeRgasZH58o") 
     const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_24000`, {
       method: "POST", headers: { "xi-api-key": env.ELEVEN_KEY, "Content-Type": "application/json" }, signal: AbortSignal.timeout(budgetMs),
       body: JSON.stringify({ text, model_id: "eleven_v3", language_code: "he" }) });
+    used++;
     if (!r.ok) { aiTrace.push("eleven " + r.status); return null; }
     const pcm = new Uint8Array(await r.arrayBuffer());
     await env.KV.put(mk, String(used0 + text.length), { expirationTtl: 40 * 86400 });
@@ -760,6 +837,7 @@ async function ymUpload(env, path, bytes) {
   fd.append("token", env.YM_TOKEN); fd.append("path", "ivr2:" + path); fd.append("convertAudio", "1");
   fd.append("file", new Blob([bytes], { type: "audio/wav" }), path.split("/").pop());
   const r = await fetch(YM + "UploadFile", { method: "POST", body: fd });
+  used++;
   const j = await r.json();
   if (j.responseStatus !== "OK") throw new Error("upload: " + (j.message || j.responseStatus));
   return j;
@@ -812,7 +890,11 @@ async function cleanVoice(env) {
   if (new Date(nowIL().replace(" ", "T") + "Z").getUTCMinutes() !== 7) return;
   const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + VOICE_DIR });
   let n = 0;
-  for (const f of d.files || []) if (((/^a/.test(f.name) && ageMinutes(f) > 14 * 1440) || (/^s/.test(f.name) && ageMinutes(f) > 29 * 1440)) && n++ < 40) await ym(env, "FileAction", { action: "delete", what: `ivr2:${VOICE_DIR}/${f.name}` });
+  for (const f of d.files || []) if (((/^a/.test(f.name) && ageMinutes(f) > 14 * 1440) || (/^s/.test(f.name) && ageMinutes(f) > 29 * 1440)) && n++ < 40) {
+    // קול קבוע מהמטמון: מוחקים קודם את הסימון ב-KV, אחרת התפריט ימשיך להפנות לקובץ שכבר נמחק עד שהסימון יפוג
+    if (/^s/.test(f.name) && env.KV) await env.KV.delete("voice:" + f.name.replace(/\.wav$/i, "")).catch(() => {});
+    await ym(env, "FileAction", { action: "delete", what: `ivr2:${VOICE_DIR}/${f.name}` });
+  }
 }
 
 // ---------- מי בקו עכשיו (שלוחה 5-5) ----------
@@ -890,15 +972,23 @@ async function queueFiles(env, kind) {
   return (d.files || []).filter(f => /^\d+\.wav$/.test(f.name));
 }
 // ---------- שמירת שבת וחג (לפי זמני ירושלים, מ-Hebcal) ----------
-let HOLY_MEM = null;
+let HOLY_MEM = null, HOLY_FAIL = 0;
 async function holyPeriods(env) {
   const day = nowIL().slice(0, 10);
   if (HOLY_MEM && HOLY_MEM.day === day) return HOLY_MEM.p;
   let p = await kvGet(env, "holy2:" + day, null);
-  if (!p) {
+  if (!Array.isArray(p) || !p.length) { // רשימה ריקה שנשמרה פעם היא תשובה פגומה: מושכים מחדש
+    // אחרי כישלון לא פונים שוב ל-Hebcal במשך 10 דקות (isHoly משתמש בינתיים בגיבוי)
+    if (Date.now() < HOLY_FAIL) throw new Error("hebcal: נכשל לאחרונה");
     const iso = ms => new Date(ms).toISOString().slice(0, 10);
-    const r = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&i=on&c=on&ss=on&geonameid=281184&M=on&b=0&start=${iso(Date.now() - 4 * 864e5)}&end=${iso(Date.now() + 20 * 864e5)}`, { signal: AbortSignal.timeout(5000) });
-    const items = ((await r.json()).items || []).filter(i => i.category === "candles" || i.category === "havdalah").sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+    let items;
+    try {
+      const r = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&i=on&c=on&ss=on&geonameid=281184&M=on&b=0&start=${iso(Date.now() - 4 * 864e5)}&end=${iso(Date.now() + 20 * 864e5)}`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw new Error("hebcal " + r.status);
+      items = ((await r.json()).items || []).filter(i => i.category === "candles" || i.category === "havdalah").sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+      // בטווח של 24 יום יש תמיד כמה שבתות: רשימה ריקה היא תשובה פגומה, ואסור לשמור אותה (אחרת כל היום "לא קודש")
+      if (!items.length) throw new Error("hebcal: אין זמני הדלקת נרות והבדלה");
+    } catch (e) { HOLY_FAIL = Date.now() + 10 * 60e3; throw e; }
     p = []; let st = null;
     for (const i of items) { const t = Date.parse(i.date);
       if (i.category === "candles") { if (st === null) st = t; }
@@ -911,10 +1001,17 @@ async function holyPeriods(env) {
 }
 // זמן קודש: משקיעת החמה בערב שבת או חג (לא מהדלקת נרות) ועד 5 דקות אחרי צאת שבת או חג
 async function isHoly(env, at = Date.now()) {
-  try { return (await holyPeriods(env)).some(([a, b]) => at >= a && at <= b + 5 * 60e3); }
-  catch { // בלי חיבור ל-Hebcal: שבת רגילה, מיום שישי 16:00 עד מוצאי שבת 20:30
+  const inP = p => p.some(([a, b]) => at >= a && at <= b + 5 * 60e3);
+  try { return inP(await holyPeriods(env)); }
+  catch {
+    // בלי חיבור ל-Hebcal: קודם הזמנים שנשמרו בימים הקודמים (כל רשימה מכסה 20 יום קדימה, כולל חגים)
+    for (let i = 1; i <= 3; i++) {
+      const p = await kvGet(env, "holy2:" + new Date(Date.now() - i * 864e5).toLocaleString("sv-SE", { timeZone: "Asia/Jerusalem" }).slice(0, 10), null);
+      if (Array.isArray(p) && p.length) return inP(p);
+    }
+    // ואם אין: שבת רגילה, מיום שישי 16:00 (בחורף השקיעה כבר לפני 17:00) עד מוצאי שבת 20:30
     const il = new Date(new Date(at).toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })), d = il.getDay(), h = il.getHours() + il.getMinutes() / 60;
-    return (d === 5 && h >= 17.5) || (d === 6 && h < 20.5); }
+    return (d === 5 && h >= 16) || (d === 6 && h < 20.5); }
 }
 async function releaseDeferred(env) {
   const d = await kvGet(env, "deferred_tz", []);
@@ -927,9 +1024,12 @@ async function releaseDeferred(env) {
 async function cron(env) {
   used = 0;
   for (const kind of Object.keys(QUEUES))
-    for (const f of await queueFiles(env, kind)) if (ageMinutes(f) >= 3 && used < 25) await handleFile(env, f, kind);
-  if (env.KV) { const pc = await kvGet(env, "postcheck", {});
-    for (const [name, it] of Object.entries(pc).slice(0, 2)) if (Date.now() - it.t > 90000 && used < 30) await postCheck(env, name).catch(e => aiTrace.push("postcheck: " + e.message)); }
+    for (const f of await queueFiles(env, kind)) if (ageMinutes(f) >= 3 && used < 25) await handleFile(env, f, kind).catch(e => log(env, `שגיאה בטיפול ב-${f.name} מ-${f.phone || "?"}: ${e.message}`).catch(() => {}));
+  // בדיקת ההודעות הרגילות שעלו: הוותיקות קודם, ומדלגים על מה שכבר בבדיקה (נעול), כדי שהודעה תקועה לא תחסום את השאר
+  if (env.KV) { const pc = await kvGet(env, "postcheck", {}); let k = 0;
+    const ready = Object.entries(pc).filter(([, it]) => Date.now() - it.t > 90000).sort((a, b) => a[1].t - b[1].t).slice(0, 10);
+    for (const [name] of ready) { if (k >= 2 || used >= 30) break; if (await env.KV.get("pclock:" + name)) continue; k++;
+      await postCheck(env, name).catch(e => aiTrace.push("postcheck: " + e.message)); } }
   const holy = env.KV ? await isHoly(env) : false;
   if (env.KV && !holy) await releaseDeferred(env).catch(e => log(env, "שגיאה בצינתוקים שחיכו: " + e.message));
   if (env.KV && !holy) await tzRetryRun(env).catch(e => aiTrace.push("tzretry: " + e.message));
@@ -947,8 +1047,8 @@ async function cron(env) {
   await cleanVoice(env).catch(() => {});
   // דוגמה אחת של שיחה פעילה, כדי לוודא שקריאת "מי בקו עכשיו" מתאימה לפורמט של ימות
   if (env.KV && !(await env.KV.get("incall_sample"))) await onlineNow(env).catch(() => {});
-  await processFlags(env);
-  if (used < 40) await clearFlags(env);
+  await processFlags(env).catch(e => aiTrace.push("flags: " + e.message));
+  if (used < 40) await clearFlags(env).catch(e => aiTrace.push("clearflags: " + e.message));
   // משימות כבדות (תמלול ופרופילים) רצות רק אם הריצה הקודמת כבר הסתיימה, כדי לא לדרוס נתונים
   if (!env.KV) return;
   const lock = +(await env.KV.get("cronlock")) || 0;
@@ -961,20 +1061,23 @@ async function cron(env) {
     // שחרור מתוזמן של הפרומו
     const promo = (await env.KV.get("promo")) || "";
     if (promo.startsWith("at:") && Date.now() >= +promo.slice(3) && used < 40) {
-      const n = await releasePromo(env, "all"); await env.KV.put("promo", "sent");
-      await log(env, `הפרומו על העוזר החכם שוחרר ל-${n} חברים`);
+      // אם השחרור נכשל, promo נשאר כמו שהוא וננסה בריצה הבאה (והתמלול שאחריו ממשיך לרוץ)
+      try { const n = await releasePromo(env, "all"); await env.KV.put("promo", "sent");
+        await log(env, `הפרומו על העוזר החכם שוחרר ל-${n} חברים`);
+      } catch (e) { await alert(env, "promo", "שחרור הפרומו נכשל: " + e.message).catch(() => {}); }
     }
     if (used < 30) await aaiArchive(env, 8);
   } finally { await env.KV.delete("cronlock"); }
   if (env.KV && used < 42 && (await env.KV.get("promo")) === "pending") {
-    const n = await releasePromo(env, "all"); await env.KV.put("promo", "sent");
-    await log(env, `הפרומו על העוזר החכם שוחרר ל-${n} חברים`);
+    try { const n = await releasePromo(env, "all"); await env.KV.put("promo", "sent");
+      await log(env, `הפרומו על העוזר החכם שוחרר ל-${n} חברים`);
+    } catch (e) { await alert(env, "promo", "שחרור הפרומו נכשל: " + e.message).catch(() => {}); }
   }
 }
 async function checkNow(env, phone, kind) {
   used = 0;
   const mine = (await queueFiles(env, kind)).filter(f => f.phone === phone).sort((a, b) => parseInt(b.name) - parseInt(a.name));
-  if (mine.length) await handleFile(env, mine[0], kind);
+  if (mine.length) await handleFile(env, mine[0], kind).catch(e => log(env, `שגיאה בטיפול ב-${mine[0].name} מ-${phone || "?"}: ${e.message}`).catch(() => {}));
   await processFlags(env);
 }
 
@@ -993,7 +1096,8 @@ async function transcribeBatch(env, max = 6) {
   const files = (d.files || []).filter(f => /^\d+\.wav$/.test(f.name));
   const live = new Set(files.map(f => f.name));
   let changed = false;
-  for (const k of Object.keys(archive)) if (!live.has(k)) { delete archive[k]; changed = true; }
+  // מוחקים מהארכיון רק לפי רשימה מלאה ותקינה: שגיאה של ימות (רשימה ריקה או חלקית) לא תמחק את כל התמלולים
+  if (d.ok && files.length) for (const k of Object.keys(archive)) if (!live.has(k)) { delete archive[k]; changed = true; }
   const todo = files.filter(f => !archive[f.name] || archive[f.name].s !== "g").sort((a, b) => parseInt(b.name) - parseInt(a.name)).slice(0, max);
   for (const f of todo) {
     if (used > 40) break;
@@ -1004,7 +1108,7 @@ async function transcribeBatch(env, max = 6) {
         const r = await aiAudio(env, { models: ["gemini-flash-lite-latest", "gemini-3.5-flash"], deadline: 40000,
           contents: [{ parts: [{ text: 'תמלל את ההקלטה בעברית, מילה במילה, בלי לסכם ובלי להוסיף. אם אין בה דיבור ברור, החזר t ריק. החזר JSON בלבד: {"t":"..."}' }, { inline_data: { mime_type: "audio/wav", data: b64(wav) } }] }] });
         t = r.t || r.transcript || "";
-      } catch (e) { break; } // המכסה נגמרה: ממשיכים בלילה הבא
+      } catch (e) { if (!e.empty) break; } // המכסה נגמרה: ממשיכים בלילה הבא. הקלטה שכל המודלים חוסמים נשמרת ריקה, כדי שלא תתקע את התור
     }
     archive[f.name] = { p: f.phone || "", n: names(env)[f.phone] || "", d: f.date || f.mtime || "", t: realText(t) ? t.slice(0, 3000) : "", s: "g" };
     changed = true;
@@ -1016,8 +1120,8 @@ async function transcribeBatch(env, max = 6) {
 // קריאה ל-Gemini עם הקלטה (רק Gemini מבין טוב את ההקלטות)
 const AUDIO_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-lite-latest"];
 async function aiAudio(env, { system, contents, models = AUDIO_MODELS, deadline = 22000, timeout = 10000 }) {
-  const start = Date.now(), errs = [];
-  for (const model of models) for (const key of geminiKeys(env)) {
+  const start = Date.now(), errs = [], empty = new Set();
+  models: for (const model of models) for (const key of geminiKeys(env)) {
     const id = key.slice(-4) + "|" + model;
     if (isDead(id) || Date.now() - start > deadline) continue;
     const t0 = Date.now();
@@ -1028,13 +1132,20 @@ async function aiAudio(env, { system, contents, models = AUDIO_MODELS, deadline 
         { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: AbortSignal.timeout(Math.max(2000, Math.min(timeout, deadline - (Date.now() - start)))) });
       used++;
       aiTrace.push(`audio ${id} ${r.status} ${Date.now() - t0}ms`);
-      if (r.ok) { const parts = (await r.json()).candidates[0].content.parts; return safeParse(parts[parts.length - 1].text); }
+      if (r.ok) {
+        const j = await r.json(), parts = j.candidates?.[0]?.content?.parts;
+        if (parts?.length) return safeParse(parts[parts.length - 1].text);
+        // תשובה בלי תוכן (חסימת תוכן, SAFETY/RECITATION) היא בעיה של ההקלטה ולא של המפתח: לא מסמנים אותו כמת, ועוברים למודל הבא
+        errs.push(id + ":empty " + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || "")); empty.add(model); continue models;
+      }
       if (r.status === 429) dead.set(id, Date.now() + 60 * 60e3);
       if (r.status >= 500) dead.set(id, Date.now() + 3 * 60e3);
       errs.push(id + ":" + r.status);
     } catch (e) { dead.set(id, Date.now() + 3 * 60e3); aiTrace.push(`audio ${id} ${e.message}`); errs.push(id + ":" + e.message); }
   }
-  throw new Error(errs.join(" ") || "no gemini");
+  const err = new Error(errs.join(" ") || "no gemini");
+  if (empty.size === models.length) err.empty = true; // כל המודלים החזירו תשובה ריקה על ההקלטה הזו
+  throw err;
 }
 const sortable = d => { const m = /(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : ""; };
 async function buildProfiles(env, max = 2) {
@@ -1056,7 +1167,12 @@ async function buildProfiles(env, max = 2) {
         contents: [{ role: "user", parts: [{ text }] }] });
       const quotes = (r.quotes || []).filter(q => { const body = normHe(String(q).replace(/^\s*\[[^\]]*\]\s*/, "")).trim(); return body.split(" ").length >= 2 && corpusP.includes(body); });
       profiles[p] = { n: name, style: r.style || "", quotes, ts: Date.now(), count: byPhone[p].length };
-    } catch (e) { aiTrace.push("profile error: " + e.message); if (profiles[p]) profiles[p].ts = Date.now(); else profiles[p] = { n: name, style: "", quotes: [], ts: Date.now(), count: 0 }; break; }
+    } catch (e) {
+      aiTrace.push("profile error: " + e.message);
+      // השהיה אחרי כישלון: גם count מתעדכן, אחרת החבר הזה נבחר שוב בכל ריצה וחוסם את הפרופילים של כל השאר (ניסיון חוזר אחרי שבוע או 10 הודעות חדשות)
+      profiles[p] = { ...(profiles[p] || { n: name, style: "", quotes: [] }), ts: Date.now(), count: byPhone[p].length, fail: Date.now() };
+      break;
+    }
   }
   if (todo.length) await env.KV.put("profiles", JSON.stringify(profiles));
   return todo.length;
@@ -1068,7 +1184,9 @@ async function releasePromo(env, who) {
     const all = [];
     for (const list of ["members", "admins"]) {
       const r = await ym(env, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: list });
-      for (const e of r.enteres || []) all.push(e.phone);
+      // שגיאה של ימות (בלי רשימה) זורקת, כדי שהפרומו לא יסומן "נשלח" בלי שאף אחד קיבל אותו
+      if (!r || r.responseStatus !== "OK" || !Array.isArray(r.enteres)) throw new Error("getlistEnteres " + list + ": " + ((r && (r.message || r.responseStatus)) || "אין תשובה"));
+      for (const e of r.enteres) all.push(e.phone);
     }
     phones = [...new Set(all)];
   }
@@ -1167,15 +1285,28 @@ function retrieveContext(line, query, nm, limit = 26000, compact = false) {
 // משאיר רק ציטוטים שנאמרו באמת: משפט עם ציטוט שלא מופיע מילה במילה באף הודעה נמחק מהתשובה
 function verifyQuotes(answer, corpus) {
   let removed = 0;
-  const kept = String(answer || "").split(/(?<=[.!?])\s+/).filter(sent => {
-    // «...» נבדק מ-2 מילים, ומירכאות רגילות מ-3 מילים (כדי לא להתבלבל עם קיצורים כמו רש"י)
-    const qs = [...sent.matchAll(/«([^»]+)»/g)].map(m => [m[1], 2])
-      .concat([...sent.matchAll(/["״“]([^"״”]+)["״”]/g)].map(m => [m[1], 3]));
-    const ok = qs.every(([t, min]) => { const q = normHe(t).trim(); return q.split(" ").length < min || corpus.includes(q); });
-    if (!ok) removed++;
-    return ok;
-  });
-  return { text: kept.join(" ").replace(/[«»״“”]/g, ""), removed };
+  const text = String(answer || "");
+  // מירכאות בתוך מילה (רש"י, חז"ל) הן קיצור ולא ציטוט: מחליפים אותן בתו ניטרלי באותו אורך, כדי שהמיקומים לא יזוזו
+  const masked = text.replace(/([א-ת])["״]([א-ת])/g, "$1\u0001$2");
+  // ציטוטים נבדקים על כל התשובה לפני החלוקה למשפטים, כך שגם ציטוט שנמשך על פני שני משפטים נבדק.
+  // «...» נבדק מ-2 מילים, ומירכאות רגילות מ-3 מילים
+  const bad = [];
+  const check = (re, min) => { for (const m of masked.matchAll(re)) {
+    const q = normHe(m[1].replace(/\u0001/g, '"')).trim();
+    if (q.split(" ").length >= min && !corpus.includes(q)) bad.push([m.index, m.index + m[0].length]);
+  } };
+  check(/«([^»]+)»/g, 2);
+  check(/["״“]([^"״”]+)["״”]/g, 3);
+  const kept = [];
+  let pos = 0;
+  for (const sent of masked.split(/(?<=[.!?])\s+/)) {
+    const start = masked.indexOf(sent, pos), end = start + sent.length; pos = end;
+    // מירכאה או « » שנשארו בלי זוג במשפט – סימן לציטוט שבור; משפט כזה נחשב לא מאומת
+    const lone = (sent.match(/[«»]/g) || []).length % 2 === 1;
+    if (bad.some(([a, b]) => a < end && b > start) || lone) { removed++; continue; }
+    kept.push(text.slice(start, end));
+  }
+  return { text: kept.join(" ").replace(/[«»“”]/g, "").replace(/(^|[^א-ת])["״]|["״](?=[^א-ת]|$)/g, "$1"), removed };
 }
 
 // ---------- שיחה עם AI בשלוחה 8 ----------
@@ -1254,6 +1385,7 @@ async function chatTurn(env, question, history, line, extra = "", opts = {}) {
 function historyContents(history) {
   const c = [];
   for (const [q, a] of history.slice(-6)) {
+    if (!String(q || "").trim()) continue; // תור בלי תמלול – Gemini דוחה חלק טקסט ריק
     c.push({ role: "user", parts: [{ text: q }] });
     c.push({ role: "model", parts: [{ text: JSON.stringify({ answer: a }) }] });
   }
@@ -1350,7 +1482,8 @@ async function routeAnswer(a) {
   if (!A || !B) return `לא הצלחתי למצוא על המפה את ${!A ? a.from || "נקודת היציאה" : a.to || "היעד"}. אפשר להגיד שם של רחוב או מקום מוכר.`;
   const [foot, car] = await Promise.all([osrm("foot", A, B), osrm("car", A, B)]);
   if (!foot && !car) return "לא הצלחתי לחשב מסלול כרגע. אפשר לנסות שוב עוד מעט.";
-  const walkOk = foot && foot.min <= 40 && a.mode !== "car";
+  // ביקשו רכב אבל נמצא רק מסלול הליכה – עדיף לתת אותו מאשר תשובה ריקה
+  const walkOk = foot && ((foot.min <= 40 && a.mode !== "car") || !car);
   const cut = x => String(x || "").split(",")[0].replace(/^ה(?=[א-ת])/, "");
   let t = `מ${cut(a.from)} ל${cut(a.to)}: `;
   if (walkOk) t += `ברגל בערך ${foot.min} דקות, ${foot.km} קילומטר. ${foot.steps.join(", ")}.`;
@@ -1400,20 +1533,50 @@ async function webAnswer(env, query, context = "", queryEn = "") {
 const PM = p => "/personalMessages/Phone/" + p;
 async function personalNew(env, phone) {
   const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + PM(phone) }).catch(() => ({}));
-  const played = new Set((await kvGet(env, "pmplayed", [])).map(x => x.path));
+  // הודעה ששמעו מוסתרת רק אם זה אותו קובץ (שם, זמן וגודל): שם של קובץ שהועבר ל-Old חוזר לשימוש בהודעה חדשה
+  const played = new Map(); for (const x of await kvGet(env, "pmplayed", [])) (played.get(x.path) || played.set(x.path, []).get(x.path)).push(x);
+  const isPlayed = (path, f) => (played.get(path) || []).some(x => x.m == null || (x.m === (f.mtime || "") && String(x.z ?? "") === String(f.size ?? "")));
   const snd = await kvGet(env, "pm_sender", {});
-  return (d.files || []).filter(f => /^\d+\.(wav|tts)$/.test(f.name) && !played.has(PM(phone) + "/" + f.name))
-    .map(f => ({ id: f.name.replace(/\.\w+$/, ""), file: f.name, from: snd[PM(phone) + "/" + f.name] || names(env)[f.phone] || (f.phone ? "מספר " + f.phone : "לא ידוע"), d: f.mtime || "" }));
+  const dir = PM(phone) + "/", files = d.files || [];
+  // שם השולח שנשמר תקף רק לקובץ שנוצר בזמן השמירה, ולא לקובץ חדש בהרבה שקיבל אחר כך את אותו שם
+  const sender = f => { const e = snd[dir + f.name]; if (!e) return null; if (typeof e === "string") return e;
+    const a = ageMinutes(f); return a === 999 || a > (Date.now() - (e.t || 0)) / 60000 - 10 ? e.s : null; };
+  // ניקוי שמות שולחים של קבצים שכבר לא בתיקייה (למשל הועברו ל-Old בשלוחה 0-1), רק לפי רשימה תקינה
+  if (d.responseStatus === "OK") {
+    const here = new Set(files.map(f => dir + f.name));
+    const stale = Object.keys(snd).filter(k => k.startsWith(dir) && !here.has(k) && (typeof snd[k] === "string" || Date.now() - (snd[k].t || 0) > 10 * 60e3));
+    if (stale.length) { const cur = await kvGet(env, "pm_sender", {}); for (const k of stale) delete cur[k]; await env.KV.put("pm_sender", JSON.stringify(cur)).catch(() => {}); }
+  }
+  return files.filter(f => /^\d+\.(wav|tts)$/.test(f.name) && !isPlayed(dir + f.name, f))
+    .map(f => ({ id: f.name.replace(/\.\w+$/, ""), file: f.name, from: sender(f) || names(env)[f.phone] || (f.phone ? "מספר " + f.phone : "לא ידוע"), d: f.mtime || "", sz: f.size }));
 }
 // הודעה ששמעו דרך העוזר עוברת לתיקיית ההודעות הישנות (כמו בשלוחה 0-1), כמה דקות אחרי שהושמעה
 async function pmCleanup(env) {
   const l = await kvGet(env, "pmplayed", []); if (!l.length) return;
-  const keep = [];
+  const key = x => x.path + "|" + x.t, drop = new Set(), retry = new Map(), gone = [], lists = {};
   for (const x of l) {
-    if (Date.now() - x.t < 5 * 60e3 || used > 40) { keep.push(x); continue; }
-    try { const dir = x.path.replace(/\/[^/]+$/, ""); await move(env, x.path, dir + "/Old"); } catch {}
+    if (Date.now() - x.t < 5 * 60e3 || used > 40) continue;
+    const dir = x.path.replace(/\/[^/]+$/, ""), name = x.path.split("/").pop();
+    try {
+      // בודקים שהקובץ שבנתיב הוא עדיין זה שהושמע: אם כבר הועבר (למשל בשלוחה 0-1), או שהשם עבר להודעה חדשה, לא מזיזים
+      if (!lists[dir]) { const r = await ym(env, "GetIVR2Dir", { path: "ivr2:" + dir }); if (!r || r.responseStatus !== "OK") throw new Error("list"); lists[dir] = r.files || []; }
+      const f = lists[dir].find(y => y.name === name);
+      if (f && (x.m == null || (x.m === (f.mtime || "") && String(x.z ?? "") === String(f.size ?? "")))) await move(env, x.path, dir + "/Old");
+      drop.add(key(x)); gone.push(x);
+    } catch {
+      // העברה שנכשלה נשארת ברשימה ומנסים שוב (עד 5 פעמים), אחרת ההודעה תוצג שוב כחדשה
+      const n = (x.n || 0) + 1; if (n >= 5) drop.add(key(x)); else retry.set(key(x), n);
+    }
   }
-  await env.KV.put("pmplayed", JSON.stringify(keep));
+  if (!drop.size && !retry.size) return;
+  // קוראים שוב לפני השמירה: הודעות שהושמעו בזמן ההעברות (בשיחה אחרת) לא נמחקות
+  const cur = await kvGet(env, "pmplayed", []);
+  await env.KV.put("pmplayed", JSON.stringify(cur.filter(x => !drop.has(key(x))).map(x => retry.has(key(x)) ? { ...x, n: retry.get(key(x)) } : x)));
+  if (gone.length) {
+    const snd = await kvGet(env, "pm_sender", {}); let ch = false;
+    for (const x of gone) { const v = snd[x.path]; if (v && (typeof v === "string" || !v.t || v.t < x.t)) { delete snd[x.path]; ch = true; } }
+    if (ch) await env.KV.put("pm_sender", JSON.stringify(snd));
+  }
 }
 async function tellFriend(env, from, to, text) {
   const nm = names(env), sender = nm[from] || "חבר";
@@ -1422,7 +1585,11 @@ async function tellFriend(env, from, to, text) {
   let fname;
   if (pcm) { fname = await nextName(env, folder, "wav"); await ymUpload(env, `${folder}/${fname}`, pcmToWav(pcm)); }
   else { await ensureDir(env, folder, false); fname = await nextName(env, folder, "tts"); await ym(env, "UploadTextFile", { what: `ivr2:${folder}/${fname}`, contents: msg }); }
-  const snd = await kvGet(env, "pm_sender", {}); snd[`${folder}/${fname}`] = sender; await env.KV.put("pm_sender", JSON.stringify(snd));
+  // נשמר עם זמן היצירה, כדי שלא ייוחס לקובץ אחר שיקבל את אותו שם בעתיד
+  const snd = await kvGet(env, "pm_sender", {}); snd[`${folder}/${fname}`] = { s: sender, t: Date.now() }; await env.KV.put("pm_sender", JSON.stringify(snd));
+  // הודעה חדשה בנתיב שכבר הושמע פעם (השם חזר לשימוש) לא תוסתר
+  const pl = await kvGet(env, "pmplayed", []), path = `${folder}/${fname}`;
+  if (pl.some(x => x.path === path)) await env.KV.put("pmplayed", JSON.stringify(pl.filter(x => x.path !== path)));
   await log(env, `${sender} השאיר דרך העוזר הודעה אישית ל${nm[to] || to}: ${text}`).catch(() => {});
 }
 // גיבוי: שמואל (מנהל הקו) תמיד מנהל בשרת, גם אם הוסר מרשימת המנהלים בימות
@@ -1431,7 +1598,14 @@ async function isAdminPhone(env, phone) {
   if (!phone) return false;
   if (phone === OWNER) return true;
   let a = await kvGet(env, "admins_cache", null);
-  if (!a || Date.now() - a.t > 10 * 60e3) { try { a = { t: Date.now(), l: await listPhones(env, "admins") }; await env.KV.put("admins_cache", JSON.stringify(a)); } catch { a = a || { l: [] }; } }
+  if (!a || Date.now() - a.t > 10 * 60e3) {
+    // שומרים רק תשובה תקינה של ימות: שגיאה (בלי רשימה) לא תהפוך את כל המנהלים לחברים רגילים ל-10 דקות
+    try {
+      const r = await ym(env, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: "admins" });
+      if (!r || r.responseStatus !== "OK" || !Array.isArray(r.enteres)) throw new Error("admins list");
+      a = { t: Date.now(), l: r.enteres.filter(e => e.active).map(e => e.phone) }; await env.KV.put("admins_cache", JSON.stringify(a));
+    } catch { a = a || { l: [] }; }
+  }
   return a.l.includes(phone);
 }
 const ACTIONS_USER = `- פעולות: בשדה do אפשר להחזיר רשימת פעולות. ברוב התשובות היא ריקה. מחזירים פעולה רק כשהמשתמש באמת ביקש:
@@ -1529,10 +1703,11 @@ async function answerWithCheck(env, input, history) {
   }
   // החלפת מיקום: שומרים ועונים שוב עם הזמנים ומזג האוויר של המקום החדש
   const locAct = out.do.find(a => a && a.type === "location" && a.place);
-  if (locAct && input.phone && out.transcript) {
+  // המיקום נשמר גם כשהמודל לא החזיר תמלול; רק התשובה החוזרת לפי המקום החדש צריכה את התמלול
+  if (locAct && input.phone) {
     const g = await geocode(locAct.place, locAct.lat, locAct.lon);
-    if (g) {
-      await env.KV.put("loc:" + input.phone, JSON.stringify(g));
+    if (g) await env.KV.put("loc:" + input.phone, JSON.stringify(g));
+    if (g && out.transcript) {
       const ex2 = e => [who, `המיקום של המדבר עודכן עכשיו ל${g.name}. תענה על השאלה שלו לפי המקום הזה.`, e].filter(Boolean).join("\n- ");
       const extras2 = await extrasFor(env, input.phone, input.callId || "", isAdmin, line);
       try {
@@ -1540,7 +1715,7 @@ async function answerWithCheck(env, input, history) {
         const v2 = verifyQuotes(r2.answer, line.corpus);
         if (v2.text.trim()) out.answer = v2.text;
       } catch (e) { aiTrace.push("relocate: " + e.message); }
-    } else out.answer += " לא הצלחתי למצוא את המקום הזה, אז נשארתי עם המיקום הקודם.";
+    } else if (!g && out.transcript) out.answer += " לא הצלחתי למצוא את המקום הזה, אז נשארתי עם המיקום הקודם.";
     out.do = out.do.filter(a => a !== locAct);
   }
   return out;
@@ -1552,10 +1727,13 @@ async function applyActions(env, acts, { phone, callId, isAdmin }) {
     if (!a || typeof a.type !== "string") continue;
     try {
       if (a.type === "rsvp" && phone) {
-        const list = await rsvpLoad(env);
-        const was = !!list[phone];
-        if (a.value === "cancel") delete list[phone]; else list[phone] = { n: nm[phone] || phone, ts: list[phone]?.ts || nowIL() };
-        await rsvpSave(env, list); await env.KV.delete("admintext");
+        let list = {}, was = false; // קריאה בטוחה ושמירה בנעילה, כמו בשלוחה 9
+        await withKvLock(env, "rsvplock", async () => {
+          list = await rsvpLoad(env, true); was = !!list[phone];
+          if (a.value === "cancel") delete list[phone]; else list[phone] = { n: nm[phone] || phone, ts: list[phone]?.ts || nowIL() };
+          await rsvpSave(env, list);
+        });
+        await env.KV.delete("admintext");
         if (a.value !== "cancel" && !was) await announceRsvp(env, nm[phone] || "חבר חדש", Object.keys(list).length).catch(() => {});
         await log(env, `${nm[phone] || phone} ${a.value === "cancel" ? "ביטל את ההרשמה" : "נרשם"} לאירוע דרך העוזר החכם`).catch(() => {});
       } else if (a.type === "remember" && a.text) await memSave(env, phone, callId, "", "", a.text);
@@ -1616,7 +1794,13 @@ async function chat(env, u, ctx, persona = "tzibtzer") {
     const akey = "act:" + callId + ":" + n, acts = await kvGet(env, akey, null);
     let msg = acts ? "הפעולה בוטלה" : "ההודעה לא פורסמה";
     if (p && q["C" + n] === "1") {
-      ctx.waitUntil((async () => { await postVoice(env, p.important ? [IMPORTANT, ALL] : [ALL], p.text); used = 0; await notify(env, p.important ? "important" : "regular").catch(() => {}); await processFlags(env).catch(() => {}); })().catch(e => log(env, "שגיאה בפרסום: " + e.message)));
+      // postVoice כבר מעלה גם לכל ההודעות, ולכן בחשובה לא קוראים ל-notify("important") (הוא היה מעתיק אותה לשם שוב,
+      // או מעתיק הודעה חשובה ישנה כשנוצר קובץ tts). כמו בהודעה המתוזמנת: צינתוק ודגלים ישירות.
+      // בלי לאפס את מונה הפניות: הפניות של השיחה ושל postVoice כבר נספרו באותה הרצה (מגבלה של 50)
+      ctx.waitUntil((async () => { await postVoice(env, p.important ? [IMPORTANT, ALL] : [ALL], p.text);
+        if (p.important) { await tzintuk(env, "members").catch(() => {}); await addFlags(env, await membersFor(env, "members"), "NImportant").catch(() => {}); }
+        else await notify(env, "regular").catch(() => {});
+        await processFlags(env).catch(() => {}); })().catch(e => log(env, "שגיאה בפרסום: " + e.message)));
       await log(env, `מנהל ${phone} פרסם דרך העוזר החכם הודעה ${p.important ? "חשובה" : "רגילה"}: ${p.text}`);
       msg = p.important ? "ההודעה פורסמה כהודעה חשובה ונשלח צינתוק לכל החברים" : "ההודעה פורסמה בהודעות הרגילות";
     }
@@ -1639,7 +1823,7 @@ async function chat(env, u, ctx, persona = "tzibtzer") {
     if (audio.length < 3000) return await bye();
     res = await answerWithCheck(env, { audio, phone, persona: P, callId }, history);
     answer = String(res.answer || "").trim() || "לא הצלחתי להבין, נסו לשאול שוב";
-    history.push([res.transcript, res.answer]); chats.set(callId, history);
+    if (String(res.transcript || "").trim()) { history.push([res.transcript, res.answer]); chats.set(callId, history); }
     if (chats.size > 200) chats.delete(chats.keys().next().value);
   } catch (e) {
     answer = "מצטער, הייתה תקלה, נסו לשאול שוב";
@@ -1671,7 +1855,7 @@ async function chat(env, u, ctx, persona = "tzibtzer") {
     const have = await personalNew(env, phone).catch(() => []);
     const ok = pms.map(id => have.find(m => m.id === id.padStart(3, "0"))).filter(Boolean);
     if (ok.length) { plays += ok.map(m => `.f-${PM(phone)}/${m.id}`).join("");
-      const l = await kvGet(env, "pmplayed", []); for (const m of ok) l.push({ path: `${PM(phone)}/${m.file}`, t: Date.now() }); await env.KV.put("pmplayed", JSON.stringify(l)); }
+      const l = await kvGet(env, "pmplayed", []); for (const m of ok) l.push({ path: `${PM(phone)}/${m.file}`, t: Date.now(), m: m.d, z: m.sz ?? "" }); await env.KV.put("pmplayed", JSON.stringify(l)); }
   }
   if (res.isAdmin) plays += reqs.filter(x => /^join/.test(x)).map(x => x.replace(/\D/g, "")).filter(Boolean).map(id => `.f-/JoinRequests/${id.padStart(3, "0")}`).join("");
   if (!res.failed) ctx.waitUntil(Promise.all([
@@ -1713,7 +1897,7 @@ async function convosMenu(env, u, ctx) {
     if (d === "1") { // השמעת השיחה: השאלה בקול של המתקשר ואחריה התשובה של העוזר
       const s = sessions[idx] || sessions[0];
       const items = s.flatMap(e => [e.qf ? "f-/" + String(e.qf).replace(/^\//, "").replace(/\.wav$/, "") : "", e.af && String(e.af).startsWith("f-") ? e.af : "t-" + clean(e.a).slice(0, 300)]).filter(Boolean);
-      const menu = await sayC(env, ctx, "לשמיעה חוזרת הקישו 1. לשיחה הבאה 2. לשיחה הקודמת 3. ליציאה כוכבית");
+      const menu = await sayC(env, ctx, "לשמיעה חוזרת הקישו 1. לשיחה הבאה 2. לשיחה הקודמת 3. ליציאה 0");
       return `read=${items.join(".")}.${menu}=${vn(idx)},no,1,1,7,No,no,no,,1.2.3.0`;
     }
     i = d === "2" ? Math.min(sessions.length - 1, idx + 1) : d === "3" ? Math.max(0, idx - 1) : idx;
@@ -1763,6 +1947,12 @@ async function worldText(env, loc) {
   const wd = d => DAYS[new Date(d + "T12:00:00Z").getUTCDay()];
   let t = `מיקום לזמנים ולמזג האוויר: ${loc.name}.`;
   t += ` היום יום ${wd(day)}, ${day.split("-").reverse().join("/")}${heb && heb.hebrew ? ", " + heb.hebrew : ""}.`;
+  // אחרי השקיעה התאריך העברי כבר של מחר (פנייה נוספת רק בערב)
+  const sun = zm && zm.times && zm.times.sunset && zm.times.sunset[day];
+  if (sun && now.slice(11, 16) >= hhmm(sun)) {
+    const heb2 = await get(`https://www.hebcal.com/converter?cfg=json&date=${day}&g2h=1&strict=1&gs=on`);
+    if (heb2 && heb2.hebrew && (!heb || heb2.hebrew !== heb.hebrew)) t += ` השקיעה כבר עברה, ולכן התאריך העברי עכשיו הוא ${heb2.hebrew}.`;
+  }
   if (zm && zm.times) {
     const Z = [["alotHaShachar", "עלות השחר"], ["misheyakir", "משיכיר"], ["sunrise", "הנץ החמה"], ["sofZmanShmaMGA", "סוף זמן קריאת שמע מגן אברהם"], ["sofZmanShma", "סוף זמן קריאת שמע הגר\"א"], ["sofZmanTfilla", "סוף זמן תפילה הגר\"א"], ["chatzot", "חצות היום"], ["minchaGedola", "מנחה גדולה"], ["plagHaMincha", "פלג המנחה"], ["sunset", "שקיעה"], ["tzeit7083deg", "צאת הכוכבים"]];
     for (const [d, label] of [[day, "היום"], [tmr, "מחר"]])
@@ -1777,7 +1967,9 @@ async function worldText(env, loc) {
     const cur = wx.current ? `עכשיו ${Math.round(wx.current.temperature_2m)} מעלות, ${WMO[wx.current.weather_code] || ""}. ` : "";
     t += ` מזג אוויר ב${loc.name} (תחזית אמיתית): ${cur}` + wx.daily.time.map((d, i) => `יום ${wd(d)}: ${WMO[wx.daily.weather_code[i]] || ""}, ${Math.round(wx.daily.temperature_2m_min[i])} עד ${Math.round(wx.daily.temperature_2m_max[i])} מעלות, סיכוי לגשם ${wx.daily.precipitation_probability_max[i] ?? 0} אחוז${wx.daily.precipitation_sum[i] > 0.2 ? ` (${wx.daily.precipitation_sum[i]} מ"מ)` : ""}, רוח עד ${Math.round(wx.daily.wind_speed_10m_max[i])} קמ"ש`).join("; ") + ".";
   }
-  await env.KV.put(key, t, { expirationTtl: 3600 });
+  // תוצאה חלקית (שירות שלא ענה) נשמרת רק לשתי דקות, כדי שלא תיתקע לשעה שלמה
+  const full = heb && heb.hebrew && zm && zm.times && cal && cal.items && wx && wx.daily;
+  await env.KV.put(key, t, { expirationTtl: full ? 3600 : 120 });
   return t;
 }
 
@@ -1868,6 +2060,12 @@ function wavSamples(bytes) {
 const DEFAULT_EVENT = { id: "shoeva", title: "שמחת בית השואבה", desc: "ביום ראשון בבית של סטפנסקי", file: "ivr2:/9/רשימת_המגיעים.txt" };
 async function curEvent(env) { return (await kvGet(env, "event", null)) || DEFAULT_EVENT; }
 const event9Menu = ev => `${ev.title}${ev.desc ? ", " + ev.desc : ""}. לאישור הגעה או לביטול הגעה הקישו 1. לשמיעת מספר הנרשמים ומי מגיע הקישו 2. לחזרה לתפריט הראשי הקישו כוכבית.`;
+// ה-ext.ini של שלוחה 9. כשסקר פתוח השלוחה מחוברת לסקר, ולכן מעדכנים רק את העותק השמור (שיחזור בסגירת הסקר)
+async function ini9Steps(env, title) {
+  const ini = `type=menu\ntitle=${String(title || "").replace(/[\r\n]+/g, " ")}\n`;
+  if (await env.KV.get("poll_prev_ini9") !== null) { await env.KV.put("poll_prev_ini9", ini); return []; }
+  return [{ k: "ini", path: "/9", text: ini }];
+}
 
 // ---------- רשימת החברים (שם, מספר, מנהל, קוד בתפריט ההודעות האישיות) ----------
 async function peopleList(env) { return await kvGet(env, "people", []); }
@@ -1926,7 +2124,10 @@ async function ensureDir(env, path, keepIni = true) {
   await ym(env, "UpdateExtension", { path: "ivr2:" + path });
   if (!keepIni) await ym(env, "FileAction", { action: "delete", what: `ivr2:${path}/ext.ini` }).catch(() => {});
 }
-async function bgAdd(env, steps) { const q = await kvGet(env, "bgjobs", []); q.push(...steps); await env.KV.put("bgjobs", JSON.stringify(q)); }
+// לכל משימה מזהה משלה, כדי שהריצה ברקע תמחק מהתור רק את מה שביצעה (ולא תדרוס משימות שנוספו או בוטלו בינתיים)
+const bgId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const bgKey = s => s.id2 || JSON.stringify(s);
+async function bgAdd(env, steps) { const q = await kvGet(env, "bgjobs", []); for (const s of steps) if (s && !s.id2) s.id2 = bgId(); q.push(...steps); await env.KV.put("bgjobs", JSON.stringify(q)); }
 async function ttsLong(env, text, voice = "Charon", budget = 25000) {
   const parts = text.length > 240 ? chunkText(text) : [text], out = [];
   for (const p of parts) { const pcm = await geminiTTS(env, p, budget, voice); if (!pcm) return null; out.push(pcmTrim(pcm)); }
@@ -1946,23 +2147,36 @@ async function runBg(env) {
   if (!q.length || await env.KV.get("bglock")) return;
   await env.KV.put("bglock", "1", { expirationTtl: 90 });
   const t0 = Date.now();
+  // מונה הפניות של הריצה הזו. המונה הכללי used משותף לבקשות שרצות במקביל ומתאפס בהן,
+  // ולכן סופרים כאן בנפרד (איפוס באמצע נספר כאילו כל מה שנספר מאז הוא שלנו), כדי לא לעבור את מגבלת ה-50
+  let mine = 0, seen = used;
+  const tick = () => { mine += used >= seen ? used - seen : used; seen = used; return mine; };
   try {
-    while (q.length && used < 38 && Date.now() - t0 < 20000) {
-      const s = q[0];
+    while (q.length && tick() < 38 && Date.now() - t0 < 20000) {
+      const s = q[0], sk = bgKey(s); let again = false;
       try {
         if (s.k === "tts") {
           const pcm = await ttsLong(env, s.text);
           if (pcm) { await ymUpload(env, `${s.path}/${s.name}.wav`, pcmToWav(pcm)); await ym(env, "FileAction", { action: "delete", what: `ivr2:${s.path}/${s.name}.tts` }).catch(() => {}); }
-          else if ((s.tries = (s.tries || 0) + 1) < 4) { q.push(q.shift()); break; } // המכסה של הקול נגמרה: ננסה בריצה הבאה
+          else if ((s.tries = (s.tries || 0) + 1) < 4) again = true; // המכסה של הקול נגמרה: ננסה בריצה הבאה
           else { await ym(env, "UploadTextFile", { what: `ivr2:${s.path}/${s.name}.tts`, contents: s.text }); await ym(env, "FileAction", { action: "delete", what: `ivr2:${s.path}/${s.name}.wav` }).catch(() => {}); }
         } else if (s.k === "ini") { await ensureDir(env, s.path); await ym(env, "UploadTextFile", { what: `ivr2:${s.path}/ext.ini`, contents: s.text }); }
         else if (s.k === "fa") await ym(env, "FileAction", { action: s.action, what: "ivr2:" + s.what, ...(s.target ? { target: "ivr2:" + s.target } : {}) });
         else if (s.k === "bc") await broadcastOne(env, s);
         else if (s.k === "log") await log(env, s.line);
-      } catch (e) { aiTrace.push("bg " + s.k + ": " + e.message); }
-      q.shift(); await env.KV.put("bgjobs", JSON.stringify(q));
+      } catch (e) {
+        aiTrace.push("bg " + s.k + ": " + e.message);
+        // תקלה רגעית (ימות או הרשת): המשימה חוזרת לסוף התור, ורק אחרי 4 כישלונות היא נמחקת ונשלחת התראה
+        if ((s.err = (s.err || 0) + 1) < 4) again = true;
+        else await alert(env, "bg", `משימת רקע (${s.k}${s.path ? " " + s.path : ""}) נכשלה 4 פעמים ונמחקה: ${e.message}`).catch(() => {});
+      }
+      // קוראים את התור מחדש ומוציאים רק את המשימה הזו: משימות שנוספו בינתיים נשמרות, ומשימות שבוטלו (למשל ביטול שידור) לא חוזרות
+      const cur = await kvGet(env, "bgjobs", []), i = cur.findIndex(x => bgKey(x) === sk);
+      if (i >= 0) { cur.splice(i, 1); if (again) { if (!s.id2) s.id2 = bgId(); cur.push(s); } }
+      await env.KV.put("bgjobs", JSON.stringify(cur));
+      q = cur;
+      if (again) break;
     }
-    await env.KV.put("bgjobs", JSON.stringify(q));
   } finally { await env.KV.delete("bglock"); }
 }
 // הודעה אישית לכל חבר: השם שלו (מההקלטה שבקו) ואחריו ההודעה בקול העוזר
@@ -1986,7 +2200,11 @@ async function lineStats(env) {
   const calls = {}, last = {}, bot = new Set(), heard = {};
   const imp = await ym(env, "GetIVR2Dir", { path: "ivr2:" + IMPORTANT }).catch(() => ({}));
   const lastImp = (imp.files || []).filter(f => /^\d+\.wav$/.test(f.name)).map(f => ({ f: f.name, t: sortable(f.mtime) })).sort((a, b) => a.t < b.t ? 1 : -1)[0];
-  for (const line of ((r && r.contents) || "").split("\n")) {
+  const weekAgo = ilAt(Date.now() - 7 * 864e5).slice(0, 16);
+  // בשבוע הראשון של החודש "השבוע האחרון" מתחיל בחודש הקודם, ולכן קוראים גם את היומן שלו
+  let prevTxt = "";
+  if (weekAgo.slice(0, 7) !== month) { const pr = await ym(env, "GetTextFile", { what: `ivr2:/Log/LogFolderEnterExit-${weekAgo.slice(0, 7)}.ymgr` }).catch(() => null); prevTxt = (pr && pr.contents) || ""; }
+  for (const line of (prevTxt + "\n" + ((r && r.contents) || "")).split("\n")) {
     const d = Object.fromEntries(line.split("%").map(x => x.split("#")));
     if (!d.Phone || !d.EnterDate) continue;
     const [dd, mm, yy] = d.EnterDate.split("/"), t = `${yy}-${mm}-${dd} ${d.EnterTime}`;
@@ -1996,7 +2214,6 @@ async function lineStats(env) {
   }
   const who = p => nm[p] || p;
   const todayPh = [...new Set(Object.values(calls))];
-  const weekAgo = ilAt(Date.now() - 7 * 864e5).slice(0, 16);
   const quiet = Object.keys(nm).filter(p => !last[p] || last[p] < weekAgo).map(who);
   let text = `סטטיסטיקה מהיומנים של ימות (החודש): היום היו ${Object.keys(calls).length} שיחות מ-${todayPh.length} מתקשרים: ${todayPh.map(who).join(", ") || "אף אחד"}. היום דיברו עם העוזר: ${[...bot].map(who).join(", ") || "אף אחד"}. חברים שלא נכנסו לקו בשבוע האחרון: ${quiet.join(", ") || "אין"}.`;
   if (lastImp) text += ` ההודעה החשובה האחרונה (${lastImp.f}, ${lastImp.t}) נשמעה בשלוחת ההודעות החשובות על ידי: ${Object.keys(heard).map(who).join(", ") || "אף אחד עדיין"}.`;
@@ -2059,20 +2276,34 @@ async function pushUndo(env, desc, ops) {
   await env.KV.delete("admintext");
 }
 async function findImportantCopy(env, id) {
-  const [a, b] = await Promise.all([allFiles(env, ALL), ym(env, "GetIVR2Dir", { path: "ivr2:" + IMPORTANT })]);
+  const [a, b, im] = await Promise.all([allFiles(env, ALL), allFiles(env, IMPORTANT), kvGet(env, "impmap", {})]);
   const f = (a.files || []).find(x => x.name === id + ".wav"); if (!f) return { exists: false };
-  const same = (b.files || []).filter(x => /^\d+\.wav$/.test(x.name) && x.size === f.size);
+  // קודם לפי הרישום שנשמר כשההודעה הועתקה לחשובות (רק אם הקובץ עדיין שם ובאותו גודל, כי מספרים מתמחזרים)
+  const known = im[id + ".wav"] && (b.files || []).find(x => x.name === im[id + ".wav"] && x.size === f.size);
+  if (known) return { exists: true, imp: known.name };
+  let same = (b.files || []).filter(x => /^\d+\.wav$/.test(x.name) && x.size === f.size);
+  // כמה קבצים באותו גודל: מעדיפים את זה של אותו מתקשר
+  if (same.length > 1 && f.phone) { const mine = same.filter(x => x.phone === f.phone); if (mine.length) same = mine; }
   return { exists: true, imp: same.length ? same[same.length - 1].name : null };
+}
+async function impmapSet(env, id, name) {
+  const im = await kvGet(env, "impmap", {}); if (name) im[id + ".wav"] = name; else if (im[id + ".wav"]) delete im[id + ".wav"]; else return;
+  await env.KV.put("impmap", JSON.stringify(im));
 }
 async function doAdmin(env, a, admin, via = "העוזר") {
   const nm = names(env), who = p => nm[p] || p, id = String(a.id || "").replace(/\D/g, "");
   const tag = `(מנהל ${who(admin)} דרך ${via})`;
+  // בדיקת השדות לפני ביצוע (כמו בדף הניהול), כי בדרך הקולית הם מגיעים ישר מה-AI
+  if (a.type === "schedule" && (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(a.at || "") || !String(a.text || "").trim())) return "הזמן או הנוסח של ההודעה לא תקינים";
+  if (["mute", "unmute", "rename"].includes(a.type) && !/^0\d{8,9}$/.test(String(a.phone || ""))) return "מספר הטלפון לא תקין";
+  if (["rename", "approve_join"].includes(a.type)) { a = { ...a, name: String(a.name || "").replace(/[\r\n]+/g, " ").trim().slice(0, 40) }; if (!a.name) return "חסר שם"; }
+  if (a.type === "event") { a = { ...a, title: String(a.title || "").replace(/[\r\n]+/g, " ").trim().slice(0, 80) }; if (!a.title) return "חסר שם לאירוע"; }
   switch (a.type) {
     case "delete": {
       const f = await findImportantCopy(env, id); if (!f.exists) return "לא מצאתי את ההודעה הזו בקו";
       const ops = [];
       const n1 = await move(env, `${ALL}/${id}.wav`, "/DeletedByAdmin"); ops.push({ mv: [`/DeletedByAdmin/${n1}`, `${ALL}/${id}.wav`] });
-      if (f.imp) { const n2 = await move(env, `${IMPORTANT}/${f.imp}`, "/DeletedByAdmin"); ops.push({ mv: [`/DeletedByAdmin/${n2}`, `${IMPORTANT}/${f.imp}`] }); }
+      if (f.imp) { const n2 = await move(env, `${IMPORTANT}/${f.imp}`, "/DeletedByAdmin"); ops.push({ mv: [`/DeletedByAdmin/${n2}`, `${IMPORTANT}/${f.imp}`] }); await impmapSet(env, id, null).catch(() => {}); }
       const ar = await kvGet(env, "archive", {}); if (ar[id + ".wav"]) { ops.push({ archive: [id + ".wav", ar[id + ".wav"]] }); delete ar[id + ".wav"]; await env.KV.put("archive", JSON.stringify(ar)); }
       await pushUndo(env, `מחיקת הודעה ${id}`, ops); await log(env, `הודעה ${id} נמחקה מהקו ${tag}`);
       return `הודעה ${id} נמחקה${f.imp ? " גם מההודעות החשובות" : ""}`;
@@ -2082,12 +2313,14 @@ async function doAdmin(env, a, admin, via = "העוזר") {
       if (a.to === "important") {
         if (f.imp) return "ההודעה הזו כבר נמצאת בהודעות החשובות";
         const n = await move(env, `${ALL}/${id}.wav`, IMPORTANT, "copy");
+        await impmapSet(env, id, n).catch(() => {});
         used = 0; await tzintuk(env, "members"); await addFlags(env, await membersFor(env, "members"), "NImportant"); await processFlags(env).catch(() => {});
         await pushUndo(env, `העברת הודעה ${id} לחשובות`, [{ mv: [`${IMPORTANT}/${n}`, `/DeletedByAdmin/imp-${n}`] }]); await log(env, `הודעה ${id} הועברה לחשובות ונשלח צינתוק ${tag}`);
         return "ההודעה הועברה להודעות החשובות ונשלח צינתוק לכל החברים";
       }
       if (!f.imp) return "ההודעה הזו לא נמצאת בהודעות החשובות";
       const n = await move(env, `${IMPORTANT}/${f.imp}`, "/DeletedByAdmin");
+      await impmapSet(env, id, null).catch(() => {});
       await pushUndo(env, `הוצאת הודעה ${id} מהחשובות`, [{ mv: [`/DeletedByAdmin/${n}`, `${IMPORTANT}/${f.imp}`] }]); await log(env, `הודעה ${id} הוצאה מהחשובות ונשארה ברגילות ${tag}`);
       return "ההודעה הוצאה מההודעות החשובות ונשארה בהודעות הרגילות";
     }
@@ -2100,7 +2333,7 @@ async function doAdmin(env, a, admin, via = "העוזר") {
     case "event": {
       const old = await curEvent(env), ev = { id: "e" + Date.now().toString(36), title: a.title, desc: a.desc || "", file: `ivr2:/9/רשימה_${Date.now().toString(36)}.txt` };
       await env.KV.put("event", JSON.stringify(ev));
-      await bgAdd(env, [{ k: "tts", path: "/9", name: "M1000", text: event9Menu(ev) }, { k: "ini", path: "/9", text: `type=menu\ntitle=${ev.title}\n` }]);
+      await bgAdd(env, [{ k: "tts", path: "/9", name: "M1000", text: event9Menu(ev) }, ...await ini9Steps(env, ev.title)]);
       await pushUndo(env, `פתיחת הרשמה ל${ev.title}`, [{ event: old }]); await log(env, `נפתחה הרשמה חדשה בשלוחה 9: ${ev.title} ${ev.desc} ${tag}`);
       return `נפתחה הרשמה ל${ev.title}. התפריט של שלוחה 9 יתעדכן תוך כמה דקות`;
     }
@@ -2123,12 +2356,19 @@ async function doAdmin(env, a, admin, via = "העוזר") {
     case "approve_join": {
       const phone = String(a.phone || "").replace(/\D/g, ""); if (!/^0\d{8,9}$/.test(phone)) return "מספר הטלפון לא תקין";
       const people = await peopleList(env);
-      if (people.some(p => p.p === phone)) { const jm0 = await kvGet(env, "joinmap", {}), rq = Object.keys(jm0).find(k => jm0[k] === phone); const r = await approveJoin(env, phone, rq, admin); return `הבקשה של ${r.name} אושרה. הוא יצטרף לקבוצה אוטומטית בפעם הבאה שהוא יתקשר`; }
+      // הקובץ של הבקשה: מי שקרא לנו (approveJoin) מעביר אותו. רק בלעדיו מחפשים לפי המספר ברשימת הבקשות
+      const reqFile = /^\d+\.wav$/.test(String(a.file || "")) ? String(a.file) : "";
+      if (people.some(p => p.p === phone)) { const jm0 = await kvGet(env, "joinmap", {}), rq = reqFile || Object.keys(jm0).find(k => jm0[k] === phone); const r = await approveJoin(env, phone, rq, admin); return `הבקשה של ${r.name} אושרה. הוא יצטרף לקבוצה אוטומטית בפעם הבאה שהוא יתקשר`; }
       const code = String(Math.max(0, ...people.map(p => +p.c)) + 1).padStart(2, "0"), np = { n: a.name, p: phone, a: false, c: code };
       people.push(np); await saveNames(env, people);
       await bgAdd(env, peopleRegenSteps(people, [np]));
-      const jm = await kvGet(env, "joinmap", {}), req = Object.keys(jm).find(k => jm[k] === phone);
-      if (req) await ym(env, "FileAction", { action: "move", what: "ivr2:/JoinRequests/" + req, target: "ivr2:/JoinRequestsDone/" + Date.now().toString(36) + ".wav" }).catch(() => {});
+      const jm = await kvGet(env, "joinmap", {}), req = reqFile || Object.keys(jm).find(k => jm[k] === phone);
+      if (req) {
+        await ensureDir(env, "/JoinRequestsDone", false).catch(() => {});
+        const mv = await ym(env, "FileAction", { action: "move", what: "ivr2:/JoinRequests/" + req, target: "ivr2:/JoinRequestsDone/" + Date.now().toString(36) + ".wav" }).catch(() => null);
+        // הבקשה טופלה: מוחקים את הרישום שלה, כדי ששם קובץ שימוחזר לא יצביע על המספר הזה
+        if (mv && mv.responseStatus === "OK" && jm[req]) { delete jm[req]; await env.KV.put("joinmap", JSON.stringify(jm)); }
+      }
       await pushUndo(env, `הצטרפות של ${a.name}`, [{ unjoin: phone }]); await log(env, `${a.name} (${phone}) אושר והוסף לקבוצה בקוד ${code} ${tag}`);
       if (!a.fromJoin) { const ap = await kvGet(env, "approved", {}); ap[phone] = { t: nowIL(), by: admin }; await env.KV.put("approved", JSON.stringify(ap)); }
       return `${a.name} נוסף לקבוצה, בקוד ${spell(code)} בתפריט ההודעות האישיות. בפעם הבאה שהוא יתקשר הוא יצטרף אוטומטית לרשימת הצינתוקים`;
@@ -2159,13 +2399,22 @@ async function doAdmin(env, a, admin, via = "העוזר") {
     }
     case "undo": {
       const u = await kvGet(env, "undo", []), last = u.pop(); if (!last) return "אין פעולה לבטל";
+      const renamed = {}, moved = [];
       for (const op of last.ops) {
-        if (op.mv) await ym(env, "FileAction", { action: "move", what: "ivr2:" + op.mv[0], target: "ivr2:" + op.mv[1] });
+        if (op.mv) {
+          // החזרה להודעות: אם המספר הישן כבר נתפס בינתיים על ידי הודעה חדשה, משחזרים למספר הפנוי הבא ולא דורסים אותה
+          const cut = op.mv[1].lastIndexOf("/"), dir = op.mv[1].slice(0, cut), base = op.mv[1].slice(cut + 1);
+          const l = dir === ALL || dir === IMPORTANT ? await allFiles(env, dir) : null;
+          if (l && l.ok && l.files.some(x => x.name === base)) {
+            const n = await move(env, op.mv[0], dir); moved.push(n.replace(/\.wav$/, ""));
+            if (dir === ALL) renamed[base] = n;
+          } else await ym(env, "FileAction", { action: "move", what: "ivr2:" + op.mv[0], target: "ivr2:" + op.mv[1] });
+        }
         if (op.copy) await ym(env, "FileAction", { action: "copy", what: "ivr2:" + op.copy[0], target: "ivr2:" + op.copy[1] });
         if (op.del) await ym(env, "FileAction", { action: "delete", what: "ivr2:" + op.del });
-        if (op.archive) { const ar = await kvGet(env, "archive", {}); ar[op.archive[0]] = op.archive[1]; await env.KV.put("archive", JSON.stringify(ar)); }
+        if (op.archive) { const ar = await kvGet(env, "archive", {}); ar[renamed[op.archive[0]] || op.archive[0]] = op.archive[1]; await env.KV.put("archive", JSON.stringify(ar)); }
         if (op.unsched) { const j = await kvGet(env, "scheduled", []); await env.KV.put("scheduled", JSON.stringify(j.filter(x => x.id !== op.unsched || x.done))); }
-        if (op.event) { await env.KV.put("event", JSON.stringify(op.event)); await bgAdd(env, [{ k: "tts", path: "/9", name: "M1000", text: event9Menu(op.event) }, { k: "ini", path: "/9", text: `type=menu\ntitle=${op.event.title}\n` }]); }
+        if (op.event) { await env.KV.put("event", JSON.stringify(op.event)); await bgAdd(env, [{ k: "tts", path: "/9", name: "M1000", text: event9Menu(op.event) }, ...await ini9Steps(env, op.event.title)]); }
         if (op.watch) { const w = await kvGet(env, "watch", {}); if (op.watch[1]) w[op.watch[0]] = op.watch[1]; else delete w[op.watch[0]]; await env.KV.put("watch", JSON.stringify(w)); }
         if (op.rules) await env.KV.put("rules", JSON.stringify(op.rules));
         if (op.rename) { const people = await peopleList(env), p = people.find(x => x.p === op.rename[0]); if (p) { p.n = op.rename[1].n; if (op.rename[1].s) p.s = op.rename[1].s; await saveNames(env, people); await bgAdd(env, peopleRegenSteps(people, [p])); } }
@@ -2175,7 +2424,7 @@ async function doAdmin(env, a, admin, via = "העוזר") {
           for (const f of await kvGet(env, "bcfiles:" + op.bcdel, [])) await ym(env, "FileAction", { action: "delete", what: "ivr2:" + f }).catch(() => {}); }
       }
       await env.KV.put("undo", JSON.stringify(u)); await env.KV.delete("admintext"); await log(env, `בוטלה הפעולה: ${last.desc} ${tag}`);
-      return `בוטל: ${last.desc}`;
+      return `בוטל: ${last.desc}${moved.length ? `. המספר הקודם כבר נתפס, ולכן ההודעה שוחזרה במספר ${moved.join(", ")}` : ""}`;
     }
   }
   return "לא הבנתי איזו פעולה לבצע";
@@ -2226,7 +2475,7 @@ async function applyReview(env, ctx, kind, f, act, admin, via = "") {
       used = 0; const r = await approveJoin(env, p, f.name, admin);
       return `הבקשה אושרה. ${r.name} ${r.isNew ? "נוסף לרשימות של הקו, ו" : ""}יצטרף לקבוצה אוטומטית בפעם הבאה שהוא יתקשר`;
     }
-    if (act === "3") { await del(f); await log(env, `מנהל ${adm} מחק בקשת הצטרפות של ${phoneOf(f)}`); return "הבקשה נמחקה"; }
+    if (act === "3") { const p = phoneOf(f); await del(f); if (jmap[f.name]) { delete jmap[f.name]; await env.KV.put("joinmap", JSON.stringify(jmap)).catch(() => {}); } await log(env, `מנהל ${adm} מחק בקשת הצטרפות של ${p}`); return "הבקשה נמחקה"; }
     return "";
   }
   if (kind === "demoted") {
@@ -2320,8 +2569,11 @@ async function approveJoin(env, phone, file, admin) {
   const isNew = !people.some(p => p.p === phone);
   if (isNew) {
     name = name || (file ? await nameFromRecording(env, file) : "") || "חבר חדש " + phone.slice(-4);
-    await doAdmin(env, { type: "approve_join", phone, name, fromJoin: true }, admin);
-  } else if (file) await ensureDir(env, "/JoinRequestsDone", false).then(() => ym(env, "FileAction", { action: "move", what: "ivr2:/JoinRequests/" + file, target: "ivr2:/JoinRequestsDone/" + Date.now().toString(36) + ".wav" })).catch(() => {});
+    await doAdmin(env, { type: "approve_join", phone, name, fromJoin: true, file }, admin);
+  } else if (file) {
+    const mv = await ensureDir(env, "/JoinRequestsDone", false).then(() => ym(env, "FileAction", { action: "move", what: "ivr2:/JoinRequests/" + file, target: "ivr2:/JoinRequestsDone/" + Date.now().toString(36) + ".wav" })).catch(() => null);
+    if (mv && mv.responseStatus === "OK") { const jm = await kvGet(env, "joinmap", {}); if (jm[file]) { delete jm[file]; await env.KV.put("joinmap", JSON.stringify(jm)); } }
+  }
   const ap = await kvGet(env, "approved", {}); ap[phone] = { t: nowIL(), by: admin }; await env.KV.put("approved", JSON.stringify(ap));
   await env.KV.delete("admintext");
   await log(env, `מנהל ${nm[admin] || admin} אישר את ההצטרפות של ${name} (${phone}). הוא יצטרף לרשימת הצינתוקים אוטומטית כשיתקשר`);
@@ -2336,7 +2588,11 @@ async function joinGate(env, u, ctx) {
   }
   const ap = await kvGet(env, "approved", {});
   if (ap[phone]) { // מנהל כבר אישר: מצרפים אותו מיד לרשימה, בלי בקשה נוספת
-    delete ap[phone]; await env.KV.put("approved", JSON.stringify(ap));
+    // האישור נשאר עד 3 פעמים: אם ניתק בתפריט ההצטרפות בלי להקיש 1, בשיחה הבאה ההזמנה תחכה לו שוב.
+    // מי שהצטרף כבר לא מגיע לכאן (הוא ברשימת הצינתוקים)
+    ap[phone].n = (+ap[phone].n || 0) + 1;
+    if (ap[phone].n >= 3) delete ap[phone];
+    await env.KV.put("approved", JSON.stringify(ap));
     const first = (names(env)[phone] || "").split(" ")[0];
     await log(env, `${names(env)[phone] || phone} התקשר אחרי שהבקשה שלו אושרה, ומצטרף עכשיו לרשימת הצינתוקים`).catch(() => {});
     return `id_list_message=${await sayC(env, ctx, `שלום${first ? " " + first : ""}, הבקשה שלך אושרה. בתפריט שיישמע עכשיו, כדי להצטרף לקבוצה הקישו 1`)}&go_to_folder=/JoinOK`;
@@ -2349,7 +2605,7 @@ async function joinGate(env, u, ctx) {
   }
   if (!q.J) {
     await log(env, `שיחה ממספר שלא רשום בקבוצה: ${phone}`).catch(() => {});
-    const name = await nextName(env, "/JoinRequests", "wav");
+    const name = await joinReqName(env);
     const prompt = "שלום. המספר שלך עדיין לא רשום בקבוצה. כדי לבקש להצטרף, אמרו את השם המלא שלכם אחרי הצליל, ובסיום הקישו סולמית. הבקשה תישלח למנהלי הקבוצה";
     return `read=${await sayC(env, ctx, prompt)}=J,no,record,/JoinRequests,${name.replace(".wav", "")},no,yes,no,1,30`;
   }
@@ -2359,19 +2615,56 @@ async function joinGate(env, u, ctx) {
   await log(env, `בקשת הצטרפות חדשה מ-${phone} נשמרה בשלוחה 7-0 ונשלח צינתוק למנהלים`).catch(() => {});
   return `id_list_message=${await sayC(env, ctx, "הבקשה שלך נשלחה למנהלי הקבוצה. אחרי שהיא תאושר תקבלו הזמנה להצטרף. תודה ולהתראות")}&go_to_folder=hangup`;
 }
+// שם לקובץ של בקשת הצטרפות: המספר הפנוי הבא, בלי מספרים שניתנו בדקות האחרונות למתקשר אחר שעדיין מקליט
+// (הקובץ נוצר רק בסוף ההקלטה, ולכן שני מתקשרים באותו זמן היו מקבלים אותו שם ומקליטים זה על זה)
+async function joinReqName(env) {
+  let n = await nextFileNum(env, "/JoinRequests");
+  const res = await kvGet(env, "joinres", {}), now = Date.now();
+  for (const k of Object.keys(res)) if (!(res[k] > now)) delete res[k];
+  while (res[String(n).padStart(3, "0")]) n++;
+  const name = String(n).padStart(3, "0");
+  res[name] = now + 3 * 60e3; await env.KV.put("joinres", JSON.stringify(res), { expirationTtl: 600 });
+  return name + ".wav";
+}
+// ההקלטה נשמרת גם כשהמתקשר ניתק בלי להקיש סולמית. אז מגיעה רק הקריאה של הניתוק (hangup=yes) עם J,
+// ובה רושמים מאיזה מספר הבקשה ומצנתקים למנהלים. אם המתקשר כבר הקיש סולמית, joinGate טיפל בזה ולא עושים שוב
+async function joinHangup(env, u) {
+  const J = u.searchParams.get("J"), phone = u.searchParams.get("ApiPhone") || "לא מזוהה";
+  if (!J) return;
+  const fname = String(J).split("/").pop().replace(/\.wav$/, "") + ".wav";
+  if (!/^\d+\.wav$/.test(fname) || (await kvGet(env, "blocked", [])).includes(phone)) return;
+  const jm = await kvGet(env, "joinmap", {}); if (jm[fname] === phone) return;
+  jm[fname] = phone; await env.KV.put("joinmap", JSON.stringify(jm));
+  await ym(env, "RunTzintuk", { phones: "tzl:admins" }).catch(() => {});
+  await log(env, `בקשת הצטרפות חדשה מ-${phone} נשמרה בשלוחה 7-0 (המתקשר ניתק בסוף ההקלטה) ונשלח צינתוק למנהלים`).catch(() => {});
+}
 
 // ---------- הרשמה לשמחת בית השואבה (שלוחה 9: 1 הרשמה, 2 שמיעת הנרשמים) ----------
 // הרשימה של האירוע הפעיל (ברירת מחדל: שמחת בית השואבה). מנהל יכול לפתוח אירוע חדש דרך העוזר
-async function rsvpLoad(env) {
+// strict: לפני שמירה. קריאה שנכשלה זורקת שגיאה במקום להחזיר רשימה ריקה, כדי שהשמירה לא תמחק את כל הנרשמים.
+// קובץ שלא קיים (אירוע חדש) הוא רשימה ריקה רגילה: יודעים שהיו בו נרשמים לפי המונה שנשמר ב-KV בכל שמירה
+async function rsvpLoad(env, strict = false) {
   const list = {}, ev = await curEvent(env);
-  try { const r = await ym(env, "GetTextFile", { what: ev.file });
-    for (const line of (r.contents || "").split("\n")) { const m = /^(\d{9,10})\s*\|\s*(.*?)\s*\|\s*(.*)$/.exec(line.trim()); if (m) list[m[1]] = { n: m[2], ts: m[3] }; } } catch {}
+  let r;
+  try { r = await ym(env, "GetTextFile", { what: ev.file }); } catch (e) { if (strict) throw e; return list; }
+  if (strict && (!r || r.responseStatus !== "OK" || typeof r.contents !== "string") && +(await env.KV.get("rsvpn:" + ev.file)) > 0)
+    throw new Error("קריאת רשימת הנרשמים נכשלה: " + ((r && (r.message || r.responseStatus)) || "אין תשובה"));
+  for (const line of ((r && r.contents) || "").split("\n")) { const m = /^(\d{9,10})\s*\|\s*(.*?)\s*\|\s*(.*)$/.exec(line.trim()); if (m) list[m[1]] = { n: m[2], ts: m[3] }; }
   return list;
 }
 async function rsvpSave(env, list) {
   const ev = await curEvent(env), rows = Object.entries(list).sort((a, b) => (a[1].ts > b[1].ts ? 1 : -1));
   const txt = `רשומים ל${ev.title}: ${rows.length} בחורים\n` + rows.map(([p, x]) => `${p} | ${x.n} | ${x.ts}`).join("\n") + "\n";
   await ym(env, "UploadTextFile", { what: ev.file, contents: txt });
+  await env.KV.put("rsvpn:" + ev.file, String(rows.length), { expirationTtl: 180 * 86400 }).catch(() => {});
+}
+// נעילה קצרה סביב קריאה-שינוי-שמירה (הרשמה לאירוע, הצבעה בסקר), כדי ששני מתקשרים באותו רגע לא ימחקו זה לזה.
+// מחכים עד 3 שניות לנעילה של מישהו אחר, ואחר כך ממשיכים בכל מקרה (נעילה שנתקעה פגה לבד)
+async function withKvLock(env, name, fn) {
+  for (let i = 0; i < 12 && await env.KV.get(name); i++) await new Promise(r => setTimeout(r, 250));
+  const tok = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await env.KV.put(name, tok, { expirationTtl: 60 });
+  try { return await fn(); } finally { if ((await env.KV.get(name).catch(() => null)) === tok) await env.KV.delete(name).catch(() => {}); }
 }
 // כל הרשמה חדשה מתפרסמת כהודעה קצרה בהודעות הכלליות (בלי צינתוק)
 async function announceRsvp(env, name, count) {
@@ -2382,24 +2675,33 @@ async function announceRsvp(env, name, count) {
 async function rsvp(env, u, ctx) {
   const q = Object.fromEntries(u.searchParams);
   const phone = q.ApiPhone || "", me = names(env)[phone] || "";
-  const [list, ev] = await Promise.all([rsvpLoad(env), curEvent(env)]);
+  const save = q.A === "1" || q.A === "2";
+  const [list0, ev] = await Promise.all([save ? {} : rsvpLoad(env), curEvent(env)]);
+  let list = list0, was = false;
   const n = () => Object.keys(list).length;
   if (!q.A) {
     const status = list[phone] ? "אתה כבר רשום שמגיע" : "עדיין לא אישרת הגעה";
     return `read=${await sayC(env, ctx, `הרשמה ל${ev.title}. ${status}. כרגע רשומים ${n()} בחורים. לאישור הגעה הקישו 1. לביטול הגעה הקישו 2`)}=A,no,1,1,7,No,no,no,,1.2`;
   }
+  if (save) {
+    // קריאה בטוחה ושמירה בתוך נעילה: קריאה שנכשלה לא מוחקת את כל הנרשמים, ושני מתקשרים במקביל לא מוחקים זה את זה
+    try {
+      await withKvLock(env, "rsvplock", async () => {
+        list = await rsvpLoad(env, true);
+        was = !!list[phone];
+        if (q.A === "1") list[phone] = { n: me || phone, ts: list[phone]?.ts || nowIL() }; else delete list[phone];
+        await rsvpSave(env, list);
+      });
+    } catch (e) {
+      await log(env, "שגיאה בהרשמה לאירוע: " + e.message).catch(() => {});
+      return "id_list_message=t-הייתה תקלה נסו שוב&go_to_folder=/9";
+    }
+  }
   if (q.A === "1") {
-    const was = !!list[phone];
-    list[phone] = { n: me || phone, ts: list[phone]?.ts || nowIL() };
-    await rsvpSave(env, list);
     if (!was) ctx.waitUntil(announceRsvp(env, me || "חבר חדש", n()).catch(e => log(env, "שגיאה בפרסום הרשמה: " + e.message)));
     return `id_list_message=${await sayC(env, ctx, `${was ? "אתה כבר רשום" : "נרשמת בהצלחה"}${me ? " " + me : ""}. מחכים לך ב${ev.title}. כרגע רשומים ${n()} בחורים`)}&go_to_folder=/9`;
   }
-  if (q.A === "2") {
-    delete list[phone];
-    await rsvpSave(env, list);
-    return `id_list_message=${await sayC(env, ctx, `ההגעה שלך בוטלה. כרגע רשומים ${n()} בחורים`)}&go_to_folder=/9`;
-  }
+  if (q.A === "2") return `id_list_message=${await sayC(env, ctx, `ההגעה שלך בוטלה. כרגע רשומים ${n()} בחורים`)}&go_to_folder=/9`;
   return "go_to_folder=/9";
 }
 async function rsvpCount(env, ctx) {
@@ -2413,10 +2715,12 @@ async function rsvpCount(env, ctx) {
 // ---------- סקר מהיר בהקשה: המנהל יוצר סקר בדף הניהול, החברים מקישים מספר בשלוחת הסקר (api_link=/poll/x/<RUN_KEY>) ----------
 const pollActive = async env => (await kvGet(env, "polls", [])).find(p => !p.closed) || null;
 async function pollVote(env, id, phone, choice) {
-  const polls = await kvGet(env, "polls", []), p = polls.find(x => x.id === id && !x.closed);
-  if (!p || !phone || !(choice >= 1 && choice <= p.opts.length)) return false;
-  p.votes = p.votes || {}; p.votes[phone] = { c: choice, t: nowIL() }; // הצבעה חוזרת מחליפה את הקודמת
-  await env.KV.put("polls", JSON.stringify(polls)); return true;
+  return withKvLock(env, "polllock", async () => { // כמה מצביעים באותו רגע: בלי נעילה האחרון היה מוחק את הקודמים
+    const polls = await kvGet(env, "polls", []), p = polls.find(x => x.id === id && !x.closed);
+    if (!p || !phone || !(choice >= 1 && choice <= p.opts.length)) return false;
+    p.votes = p.votes || {}; p.votes[phone] = { c: choice, t: nowIL() }; // הצבעה חוזרת מחליפה את הקודמת
+    await env.KV.put("polls", JSON.stringify(polls)); return true;
+  });
 }
 async function pollMenu(env, u, ctx) {
   const q = Object.fromEntries(u.searchParams), p = await pollActive(env);
@@ -2441,10 +2745,12 @@ function applyLineEnv(env) {
   DASH.LINE_PHONE = LINE_PHONE; DASH.OWNER = OWNER;
 }
 export default {
-  async scheduled(event, env, ctx) { if (env.SUSPENDED === "1") return; applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env); ctx.waitUntil(cron(env).catch(e => Promise.all([log(env, "שגיאה בריצה: " + e.message), alert(env, "cron", "הריצה התקופתית נכשלה: " + e.message)]))); },
+  // בלי לאפס את NAMES_CACHE לפני הטעינה: loadNames מחליף אותו בבת אחת, ואיפוס היה משאיר אותו ריק לבקשות שרצות במקביל
+  async scheduled(event, env, ctx) { if (env.SUSPENDED === "1") return; applyLineEnv(env); await loadNames(env); ctx.waitUntil(cron(env).catch(e => Promise.all([log(env, "שגיאה בריצה: " + e.message), alert(env, "cron", "הריצה התקופתית נכשלה: " + e.message)]))); },
   async fetch(req, env, ctx) {
-    applyLineEnv(env); NAMES_CACHE = {}; await loadNames(env);
-    const u = new URL(req.url), raw = decodeURIComponent(req.url);
+    applyLineEnv(env); await loadNames(env);
+    // כתובת עם % שבור (למשל ?x=%) לא מפילה את כל הבקשה: משתמשים בה כמו שהיא
+    const u = new URL(req.url); let raw; try { raw = decodeURIComponent(req.url); } catch { raw = req.url; }
     const param = n => { const m = new RegExp("[?&/]" + n + "=([^&?/]*)").exec(raw); return m ? m[1] : ""; };
     const parts = u.pathname.split("/").filter(Boolean);
     const key = parts[2] || param("key");
@@ -2453,10 +2759,16 @@ export default {
     if (parts[0] === "dash") return Response.redirect(new URL("/admin", u).href, 302);
     if (key !== env.RUN_KEY) return new Response("ok");
     // כשהמתקשר מנתק, ימות קוראים שוב לאותה כתובת עם אותם נתונים. מתעלמים, כדי שלא יתבצע אותו דבר פעמיים
-    if (u.searchParams.get("hangup") === "yes") return reply("");
+    // חוץ מבקשת הצטרפות שנשמרה בניתוק (בלי סולמית): אותה רושמים כאן פעם אחת
+    if (u.searchParams.get("hangup") === "yes") { if (parts[0] === "join" && env.SUSPENDED !== "1") await joinHangup(env, u).catch(() => {}); return reply(""); }
     // קו מושהה ממרכז הקווים: לא מפעילים כלום, רק מודיעים למתקשר (דף הניהול ממשיך לעבוד)
     if (env.SUSPENDED === "1") return reply("id_list_message=t-הקו מושהה זמנית&go_to_folder=hangup");
-    if (parts[0] === "ymx") { const m = u.searchParams.get("m"); if (m !== "DownloadFile" && m !== "GetIVR2Dir") return reply("no"); const q = {}; for (const [k, v] of u.searchParams) if (k !== "m" && k !== "key") q[k] = v; const r = await ym(env, m, q); return m === "DownloadFile" ? new Response(r) : Response.json(r); } // זמני: הורדת הקלטות לרמיקס
+    // נתיבי בדיקה שמבצעים פעולות (ניהול, קבצים, צינתוקים, fetch לכל כתובת): RUN_KEY כתוב בקבצי ext.ini של הקו, ולכן הם דורשים
+    // גם את הסוד DEBUG_KEY בפרמטר dk. בלי הסוד מוגדר – הנתיבים האלה כבויים. הנתיבים שימות קוראים להם לא מושפעים
+    const DEBUG_ROUTES = ["ymx", "admintest", "bgadd", "bctest", "fetchtest_off", "introtest", "cronnow", "promo", "bgrun", "tb", "prof", "cls", "hear", "route", "speak", "speakel", "stats"];
+    const debugCall = DEBUG_ROUTES.includes(parts[0]) || (parts[0] === "ask" && u.searchParams.get("apply") === "1") || (parts[0] === "weekly" && u.searchParams.get("go") === "1");
+    if (debugCall && (!env.DEBUG_KEY || u.searchParams.get("dk") !== env.DEBUG_KEY)) return new Response("ok");
+    if (parts[0] === "ymx") { const m = u.searchParams.get("m"); if (m !== "DownloadFile" && m !== "GetIVR2Dir") return reply("no"); const q = {}; for (const [k, v] of u.searchParams) if (k !== "m" && k !== "key" && k !== "dk") q[k] = v; const r = await ym(env, m, q); return m === "DownloadFile" ? new Response(r) : Response.json(r); } // זמני: הורדת הקלטות לרמיקס
     if (parts[0] === "check") {
       const kind = parts[1] === "general" ? "general" : "important", phone = param("ApiPhone");
       ctx.waitUntil(checkNow(env, phone, kind).catch(e => log(env, "שגיאה בבדיקה: " + e.message)));
@@ -2494,7 +2806,7 @@ export default {
     if (parts[0] === "rsvpcount") return reply(await rsvpCount(env, ctx));
     if (parts[0] === "rsvplist") return Response.json(await rsvpLoad(env));
     if (parts[0] === "ask") { aiTrace = []; force = u.searchParams.get("force") || ""; const t0 = Date.now(); let r; try { r = await answerWithCheck(env, { text: u.searchParams.get("q") || "", phone: u.searchParams.get("phone") || "", persona: u.searchParams.get("persona") || "tzibtzer", callId: "test" }, []); if (u.searchParams.get("apply") === "1" && r.do && r.do.length) r.applied = await applyActions(env, r.do, { phone: u.searchParams.get("phone") || "", callId: "test", isAdmin: r.isAdmin }); } catch (e) { r = { error: String(e.message || e) }; } force = ""; return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
-    if (parts[0] === "promo") { used = 0; const n = await releasePromo(env, parts[1]); ctx.waitUntil(processFlags(env)); return Response.json({ flagged: n }); }
+    if (parts[0] === "promo") { used = 0; const n = await releasePromo(env, parts[1]); ctx.waitUntil(processFlags(env).catch(e => log(env, "שגיאה בדגלים: " + e.message).catch(() => {}))); return Response.json({ flagged: n }); }
     if (parts[0] === "hear") { aiTrace = []; force = u.searchParams.get("force") || ""; const t0 = Date.now(); let r;
       try { const audio = await ym(env, "DownloadFile", { path: "ivr2:" + u.searchParams.get("f") }); r = await answerWithCheck(env, { audio }, []); } catch (e) { r = { error: String(e.message || e) }; }
       force = ""; return Response.json({ ...r, ms: Date.now() - t0, trace: aiTrace }); }
