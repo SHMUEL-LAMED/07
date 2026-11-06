@@ -2,6 +2,7 @@
 """Hourly MP4 digest. Runs on GitHub's server; Google credentials stay in Cloudflare."""
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,29 @@ def analyze_frames(endpoint, frames):
         raise ValueError('blur_analysis_failed: ' + str(reason)[:180]) from None
 
 
+def cached_analyzer(endpoint):
+    # One clip's validated observations survive full processing retries.
+    cache = {}
+    def analyze(frames):
+        key = hashlib.sha256(json.dumps(frames).encode()).hexdigest()
+        if key not in cache:
+            result = analyze_frames(endpoint, frames)
+            from women_blur import POLICY, padded_boxes
+            observations = result.get('frames')
+            if result.get('policy') != POLICY or not isinstance(observations, list) or len(observations) != len(frames):
+                raise ValueError('incomplete_blur_analysis')
+            if {x.get('index') for x in observations} != set(range(len(frames))):
+                raise ValueError('incomplete_blur_analysis')
+            for observation in observations:
+                boxes = observation.get('boxes')
+                if not isinstance(boxes, list) or len(boxes) > 50:
+                    raise ValueError('invalid_blur_analysis')
+                padded_boxes(boxes, 1000, 1000)
+            cache[key] = result
+        return cache[key]
+    return analyze
+
+
 def retry_processing(operation, attempts=3, total_seconds=1500):
     deadline = time.monotonic() + total_seconds
     for attempt in range(1, attempts + 1):
@@ -37,8 +61,8 @@ def retry_processing(operation, attempts=3, total_seconds=1500):
             raise TimeoutError('blur_processing_budget_exceeded')
         try:
             return operation(remaining)
-        except Exception:
-            delay = (2, 5)[min(attempt - 1, 1)]
+        except Exception as error:
+            delay = (30, 60)[min(attempt - 1, 1)] if "blur_provider_429" in str(error) else (2, 5)[min(attempt - 1, 1)]
             if attempt == attempts or deadline - time.monotonic() <= delay:
                 raise
             print('blur_processing_retry', attempt + 1, 'of', attempts, flush=True)
@@ -129,8 +153,7 @@ def make_video(url, destination):
                 raise ValueError('blur_service_missing')
             from women_blur import sanitize_video
             filtered = destination.with_suffix('.filtered.mp4')
-            def analyze(frames):
-                return analyze_frames(BLUR_ENDPOINT, frames)
+            analyze = cached_analyzer(BLUR_ENDPOINT)
             def process(remaining):
                 sanitize_video(destination, filtered, analyze, deadline_seconds=remaining)
                 if abs(probe(filtered)-duration) > .3:
@@ -158,6 +181,21 @@ def split_digest(clips, folder):
     return parts
 
 
+def part_titles(parts, items):
+    titles = []
+    for number, part in enumerate(parts):
+        match = re.fullmatch(r'part-(\d+)-(\d+)\.mp4', part.name)
+        index = int(match[1]) if match else number
+        if index >= len(items):
+            raise ValueError('part_article_mapping_missing')
+        title = items[index]['title']
+        siblings = [x for x in parts if x.name.startswith('part-%03d-' % index)]
+        if len(siblings) > 1:
+            title += ' — חלק %d מתוך %d' % (int(match[2])+1, len(siblings))
+        titles.append(title)
+    return titles
+
+
 def eligible(date, state, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     value = c.publication_time(date)
@@ -168,6 +206,43 @@ def eligible(date, state, now=None):
     else:
         cutoff = now.astimezone(ZoneInfo('Asia/Jerusalem')).replace(hour=0, minute=0, second=0, microsecond=0)
     return value >= cutoff
+
+
+def postprocess_archive(mail, budget=480):
+    """Originals are already durable; failures leave the queue for a later run."""
+    from women_blur import sanitize_video
+    started = time.monotonic()
+    try:
+        queue = c.worker(mail, '/news-video/post-blur').get('items', [])
+    except Exception as error:
+        print('post_blur_queue_failed', c.error_code(error), flush=True)
+        return
+    for item in queue[:3]:
+        remaining = budget - (time.monotonic() - started)
+        if remaining < 45:
+            break
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                source, output = Path(tmp)/'source.mp4', Path(tmp)/'blurred.mp4'
+                route = '/news-video/post-blur/%s/%d' % (item['batch'], item['part'])
+                source.write_bytes(c.fetch(mail + route, {'Authorization': 'Bearer ' + c.authorization(mail)}))
+                if hashlib.sha256(source.read_bytes()).hexdigest() != item['rawHash']:
+                    raise ValueError('archive_source_changed')
+                duration = probe(source)
+                analyze = cached_analyzer(mail)
+                retry_processing(lambda seconds: sanitize_video(source, output, analyze, deadline_seconds=seconds), total_seconds=min(remaining, 240))
+                if abs(probe(output) - duration) > .3 or not 0 < output.stat().st_size <= LIMIT:
+                    raise ValueError('post_blur_output_invalid')
+                result = c.worker(mail, route, output.read_bytes(), {'Content-Type': 'video/mp4', 'X-News-Filter': 'women-body-v1', 'X-Original-SHA256': item['rawHash']})
+                if not result.get('ok'):
+                    raise ValueError('replacement_not_confirmed')
+                print('post_blur_replaced', result.get('id'), flush=True)
+        except Exception as error:
+            print('post_blur_deferred', c.error_code(error), flush=True)
+            try:
+                c.worker(mail, '/news-video/post-blur/defer', json.dumps({'key': item['key']}).encode(), {'Content-Type': 'application/json'})
+            except Exception:
+                pass
 
 
 def main():
@@ -262,12 +337,14 @@ def main():
         if pending and {x['id'] for x in items} != required:
             raise SystemExit('pending_digest_incomplete: retry retained batch on next run')
         if not clips:
+            if os.environ.get('POST_BLUR') == '1':
+                postprocess_archive(mail)
             if failures:
                 raise SystemExit('no_video_collected: source failures; no email sent')
             print('no_new_videos', flush=True)
             return
         parts = split_digest(clips, folder)
-        batch = c.worker(mail, '/news-video/start', json.dumps({'items': items, 'parts': len(parts)}, ensure_ascii=False).encode(), {'Content-Type': 'application/json'})
+        batch = c.worker(mail, '/news-video/start', json.dumps({'items': items, 'parts': len(parts), 'partTitles': part_titles(parts, items)}, ensure_ascii=False).encode(), {'Content-Type': 'application/json'})
         for number, part in enumerate(parts, 1):
             if number in batch.get('sent', []):
                 continue
@@ -277,12 +354,14 @@ def main():
                     result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], number), part.read_bytes(), {'Content-Type': 'video/mp4', **({'X-News-Filter': 'women-body-v1'} if os.environ.get('BLUR_WOMEN') == '1' else {})})
                     if not result.get('ok'):
                         raise ValueError('email_not_confirmed')
-                    print('video_emailed' if result.get('gmailId') else 'video_staged', number, len(parts), result.get('gmailId', ''), flush=True)
+                    print('video_archived' if result.get('archived') else ('video_emailed' if result.get('gmailId') else 'video_staged'), number, len(parts), result.get('gmailId', ''), flush=True)
                     break
                 except (urllib.error.URLError, TimeoutError):
                     if attempt == 2:
                         raise
                     time.sleep(5)
+        if os.environ.get('POST_BLUR') == '1':
+            postprocess_archive(mail)
         print('video_digest_complete', len(items), 'clips', 0 if batch.get('delivery') == 'drive-only' else (1 if batch.get('delivery') == 'single-email' else len(parts)), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
 
 

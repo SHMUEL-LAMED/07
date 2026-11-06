@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVideoMailBridge,validateVideoManifest,parseWomenFrameResult} from './video-mail-bridge.mjs';
+import {createVideoMailBridge,validateVideoManifest,parseWomenFrameResult,archiveFilename} from './video-mail-bridge.mjs';
 
 const owner='owner@example.test';
 function setup(sendMail=true,extraGoogle=()=>null,options={}){
@@ -45,6 +45,19 @@ test('failed Gmail delivery keeps the pending digest and does not mark it sent',
 });
 
 const tinyVideo=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);
+test('Eretz exception archives original then separate blur, rejects unrelated raw video, and never sends mail',async()=>{
+ const s=setup(false,()=>null,{requireWomenBlur:true});
+ const headers={'Content-Type':'video/mp4','Content-Length':'12','X-Eretz-Source':'https://www.mako.co.il/mako-vod-keshet/eretz_nehederet-s24/VOD-abc123.htm','X-Eretz-Variant':'original','X-Eretz-Part':'1','X-Eretz-Parts':'1'};
+ const send=h=>s.route(s.request('/news-video/eretz',tinyVideo,{...headers,...h}),s.env);
+ assert.equal((await send({'X-Eretz-Source':s.item.id})).status,400);
+ assert.equal((await send({'X-Eretz-Variant':'blurred'})).status,409);
+ const first=await(await send({})).json();assert.equal(first.ok,true);
+ const again=await(await send({})).json();assert.equal(again.existing,true);assert.equal(again.id,first.id);
+ const blurred=await(await send({'X-Eretz-Variant':'blurred','X-News-Filter':'women-body-v1'})).json();assert.equal(blurred.ok,true);assert.notEqual(blurred.id,first.id);
+ assert.equal(Object.keys((await(await s.route(s.request('/news-video/eretz'),s.env)).json()).files).length,2);
+ assert.equal(s.calls.filter(x=>x.url.includes('messages')).length,0);
+ assert.equal(s.values.has('news-video:pending'),false);
+});
 async function upload(s,b,part){return s.route(s.request(`/news-video/part/${b.id}/${part}`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);}
 test('two MP4 files produce exactly one mail after both arrive, including after retry',async()=>{
  const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
@@ -55,7 +68,7 @@ test('two MP4 files produce exactly one mail after both arrive, including after 
  const sends=s.calls.filter(x=>x.url.endsWith('/send'));assert.equal(sends.length,1);
  const raw=Buffer.from(sends[0].options.body.raw,'base64url').toString();
  assert.equal((raw.match(/Content-Disposition: attachment/g)||[]).length,2);
- assert.match(raw,/filename="news-[a-f0-9]+-1.mp4"/);assert.match(raw,/filename="news-[a-f0-9]+-2.mp4"/);
+ assert.match(raw,/filename="כתבת בחירות — [a-f0-9]+-1.mp4"/);assert.match(raw,/filename="כתבת בחירות — [a-f0-9]+-2.mp4"/);
 });
 test('oversized batch sends one mail with all private Drive links and no attachments',async()=>{
  const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:3})),s.env)).json();
@@ -110,4 +123,31 @@ test('required filtering blocks raw uploads and historical unfiltered backfill',
  assert.equal((await upload(s,b,1)).status,409);assert.equal(s.days.length,0);
  const archived=await(await s.route(s.request('/news-video/backfill','{}'),s.env)).json();
  assert.equal(archived.archived,0);assert.equal(archived.disabled,'unfiltered_backfill_disabled');
+});
+
+test('raw file is archived first; only a validated processed replacement removes its queued task',async()=>{
+ let fail=true,replacements=0;
+ const s=setup(false,()=>null,{replaceVideo:async(env,id,bytes,hash)=>{replacements++;if(fail)throw Error('drive_replace_failed');return {id};}});
+ const batch=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:1})),s.env)).json();
+ const raw=await(await s.route(s.request(`/news-video/part/${batch.id}/1`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env)).json();
+ assert.equal(raw.archived,true);
+ const queue=await(await s.route(s.request('/news-video/post-blur'),s.env)).json();
+ assert.equal(queue.items.length,1);
+ const task=queue.items[0],path=`/news-video/post-blur/${task.batch}/${task.part}`;
+ assert.equal((await s.route(s.request(path),s.env)).status,200);
+ const headers={'Content-Type':'video/mp4','Content-Length':'12','X-News-Filter':'women-body-v1','X-Original-SHA256':task.rawHash};
+ assert.equal((await s.route(s.request(path,tinyVideo,{...headers,'X-Original-SHA256':'wrong'}),s.env)).status,409);
+ assert.equal(replacements,0);
+ assert.equal((await s.route(s.request(path,tinyVideo,headers),s.env)).status,502);
+ assert.equal(JSON.parse(s.values.get('news-video:post-blur')).length,1);
+ fail=false;
+ const result=await(await s.route(s.request(path,tinyVideo,headers),s.env)).json();
+ assert.equal(result.blurred,true);assert.equal(result.id,archiveFilename(s.item.title,batch.id,1));
+ assert.deepEqual(JSON.parse(s.values.get('news-video:post-blur')),[]);
+ assert.equal(s.calls.some(x=>x.url.endsWith('/send')),false);
+});
+
+test('archive names preserve Hebrew article titles and remove unsafe filename characters',()=>{
+ assert.equal(archiveFilename('כותרת מקורית: כתבה/חדשה', 'abcdef123456', 2),'כותרת מקורית כתבה חדשה — abcdef12-2.mp4');
+ const s=setup();assert.throws(()=>validateVideoManifest({items:[s.item],parts:2,partTitles:['one']}));
 });

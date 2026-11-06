@@ -12,6 +12,11 @@ const digest = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256
 const get = async (env,key,fallback=null) => JSON.parse(await env.KV.get('news-video:'+key) || JSON.stringify(fallback));
 const put = (env,key,value) => env.KV.put('news-video:'+key,JSON.stringify(value));
 
+export function archiveFilename(title, batch, part) {
+ const safe=String(title).normalize('NFC').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,160)||'כתבה';
+ return `${safe} — ${batch.slice(0,8)}-${part}.mp4`;
+}
+
 export function validateVideoManifest(value, now=Date.now()) {
  if(!value || !Array.isArray(value.items) || !value.items.length || value.items.length>100 || !Number.isInteger(value.parts) || value.parts<1 || value.parts>100)throw Error('invalid_manifest');
  const ids=new Set();
@@ -22,7 +27,8 @@ export function validateVideoManifest(value, now=Date.now()) {
   const published=Date.parse(item.publishedAt);if(!Number.isFinite(published)||published>now+600000||published<now-7*86400000)throw Error('invalid_date');
   if(ids.has(item.id))throw Error('duplicate_item');ids.add(item.id);
  }
- return {items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
+ if(value.partTitles!==undefined&&(!Array.isArray(value.partTitles)||value.partTitles.length!==value.parts||value.partTitles.some(x=>typeof x!=='string'||!x.trim()||x.length>700)))throw Error('invalid_part_titles');
+ return {...(value.partTitles?{partTitles:value.partTitles}:{}),items:value.items.map(x=>({id:x.id,title:x.title,publishedAt:x.publishedAt})),parts:value.parts};
 }
 
 export function parseWomenFrameResult(value,count){
@@ -37,7 +43,7 @@ export function parseWomenFrameResult(value,count){
  return {policy:'women-body-v1',frames:parsed.frames};
 }
 
-export function createVideoMailBridge({verify, google, storeVideo, loadVideo, sendMail=false, analyzeFrames, requireWomenBlur=false}) {
+export function createVideoMailBridge({verify, google, storeVideo, loadVideo, replaceVideo, sendMail=false, analyzeFrames, requireWomenBlur=false}) {
  async function mailbox(env){
   const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
   if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
@@ -102,6 +108,67 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
   try{if(!token)throw Error();await verify(token,env,u.origin);}catch{return json({error:'unauthorized'},401);}
   try{
    const recipient=await mailbox(env);
+   // Only files created by this authenticated archive may be post-processed.
+   if(path==='/news-video/post-blur'&&request.method==='GET')return json({items:await get(env,'post-blur',[])});
+   if(path==='/news-video/post-blur/defer'&&request.method==='POST'){
+    const length=Number(request.headers.get('Content-Length'));if(!length||length>512)return json({error:'invalid_task'},400);
+    const {key}=await request.json(),queue=await get(env,'post-blur',[]),item=queue.find(x=>x.key===key);
+    if(!item)return json({error:'unknown_task'},404);
+    await put(env,'post-blur',[...queue.filter(x=>x.key!==key),item]);return json({ok:true});
+   }
+   const postBlur=/^\/news-video\/post-blur\/([a-f0-9]{64})\/(\d+)$/.exec(path);
+   if(postBlur){
+    const key=postBlur[1]+':'+postBlur[2],file=await get(env,'file:'+key);
+    if(!file?.rawHash)return json({error:'unknown_archive_file'},404);
+    if(request.method==='GET')return new Response(await loadVideo(env,file.id),{headers:{'Content-Type':'video/mp4','Cache-Control':'no-store'}});
+    if(request.method!=='POST')return json({error:'method_not_allowed'},405);
+    if(request.headers.get('X-News-Filter')!=='women-body-v1'||request.headers.get('X-Original-SHA256')!==file.rawHash)return json({error:'filter_or_source_mismatch'},409);
+    if(file.blurred)return json({ok:true,existing:true,id:file.id});
+    if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
+    const length=Number(request.headers.get('Content-Length'));
+    if(!length||length>LIMIT)return json({error:'video_size'},413);
+    const reader=request.body.getReader(),chunks=[];let size=0;
+    while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>LIMIT){await reader.cancel();return json({error:'video_size'},413);}chunks.push(value);}
+    if(size!==length)return json({error:'length_mismatch'},400);
+    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    if(size<12||new TextDecoder().decode(bytes.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
+    if(!replaceVideo)throw Error('archive_replacement_unavailable');
+    const saved=await replaceVideo(env,file.id,bytes,file.rawHash);
+    if(saved?.id!==file.id)throw Error('replacement_not_confirmed');
+    await put(env,'file:'+key,{...file,blurred:true,size});
+    const queue=await get(env,'post-blur',[]);await put(env,'post-blur',queue.filter(x=>x.key!==key));
+    return json({ok:true,id:file.id,blurred:true});
+   }
+   // Explicit owner exception: Eretz Nehederet originals plus separately blurred copies.
+   // Independent receipts avoid interfering with the news digest's pending batch.
+   if(path==='/news-video/eretz'&&request.method==='GET')return json(await get(env,'eretz',{files:{}}));
+   if(path==='/news-video/eretz'&&request.method==='POST'){
+    const source=request.headers.get('X-Eretz-Source')||'',variant=request.headers.get('X-Eretz-Variant');
+    const sourceUrl=new URL(source);
+    if(sourceUrl.origin!=='https://www.mako.co.il'||!/^\/mako-vod-keshet\/eretz_nehederet-s\d+\/VOD-[a-f0-9]+\.htm$/.test(sourceUrl.pathname)||sourceUrl.search||sourceUrl.hash)return json({error:'invalid_episode_source'},400);
+    if(!['original','blurred'].includes(variant))return json({error:'invalid_episode_variant'},400);
+    if(variant==='blurred'&&request.headers.get('X-News-Filter')!=='women-body-v1')return json({error:'filtered_video_required'},409);
+    const part=Number(request.headers.get('X-Eretz-Part')),total=Number(request.headers.get('X-Eretz-Parts'));
+    if(!Number.isInteger(part)||!Number.isInteger(total)||part<1||part>total||total>100)return json({error:'invalid_episode_part'},400);
+    const key=await digest(source+':'+variant+':'+part);
+    const state=await get(env,'eretz',{files:{}});
+    if(state.files[key])return json({ok:true,existing:true,...state.files[key]});
+    if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
+    const length=Number(request.headers.get('Content-Length'));
+    if(!length||length>LIMIT)return json({error:'video_size'},413);
+    const reader=request.body.getReader(),chunks=[];let size=0;
+    while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>LIMIT){await reader.cancel();return json({error:'video_size'},413);}chunks.push(value);}
+    if(size!==length)return json({error:'length_mismatch'},400);
+    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    if(size<12||new TextDecoder().decode(bytes.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
+    const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+    const name=`eretz-${(await digest(source)).slice(0,12)}-${variant}-${part}-of-${total}.mp4`;
+    const saved=await storeVideo(env,{name,bytes,day});
+    if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
+    state.files[key]={id:saved.id,url:saved.webViewLink,source,variant,part,total,day};
+    await put(env,'eretz',state);
+    return json({ok:true,...state.files[key]});
+   }
    if(path==='/news-video/blur-frames'&&request.method==='POST'){
     const text=await request.text();if(text.length>2400000)return json({error:'frames_too_large'},413);
     const frames=JSON.parse(text).frames;
@@ -186,13 +253,20 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
     const video=new Uint8Array(size);let offset=0;for(const chunk of chunks){video.set(chunk,offset);offset+=chunk.length;}
     if(size<12||new TextDecoder().decode(video.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
     if(pending.delivery==='single-email'||!sendMail){
-     const name=`news-${pending.id.slice(0,12)}-${part}.mp4`;
+     const title=pending.partTitles?.[part-1]||(pending.items.length===1?pending.items[0].title:'כתבות חדשות — חלק '+part);
+     const name=archiveFilename(title,pending.id,part);
      const day=new Date(pending.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
      const saved=await storeVideo(env,{name,bytes:video,day});
      if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
      const link=new URL(saved.webViewLink);
      if(link.protocol!=='https:'||link.hostname!=='drive.google.com')throw Error('invalid_drive_link');
-     await put(env,`file:${pending.id}:${part}`,{id:saved.id,url:link.href,name,size});
+     const rawHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',video))].map(x=>x.toString(16).padStart(2,'0')).join('');
+     const key=pending.id+':'+part;
+     await put(env,`file:${key}`,{id:saved.id,url:link.href,name,size,rawHash});
+     if(request.headers.get('X-News-Filter')!=='women-body-v1'){
+      const queue=await get(env,'post-blur',[]);
+      if(!queue.some(x=>x.key===key))await put(env,'post-blur',[...queue,{key,batch:pending.id,part,rawHash}]);
+     }
      return json(await finishSingle(env,pending,recipient));
     }
     const messageId=`news-video-${pending.id}-${part}@yemot-mail.smwlyqswkwt232.workers.dev`;

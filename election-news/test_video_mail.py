@@ -6,6 +6,10 @@ import video_mail as v
 
 
 class VideoDigestTests(unittest.TestCase):
+    def test_split_parts_keep_correct_original_article_title(self):
+        parts = [Path('part-000-000.mp4'), Path('part-000-001.mp4'), Path('part-001-000.mp4')]
+        self.assertEqual(v.part_titles(parts, [{'title':'כתבה א'}, {'title':'כתבה ב'}]), ['כתבה א — חלק 1 מתוך 2', 'כתבה א — חלק 2 מתוך 2', 'כתבה ב'])
+
     def test_processing_retries_transient_failure_then_returns_processed_result(self):
         calls = []
         def process(remaining):
@@ -18,6 +22,32 @@ class VideoDigestTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual([x.args[0] for x in sleep.call_args_list], [2, 5])
         self.assertTrue(all(0 < x <= 1500 for x in calls))
+
+    def test_rate_limit_uses_longer_bounded_backoff(self):
+        with patch.object(v.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(ValueError, 'blur_provider_429'):
+                v.retry_processing(lambda _: (_ for _ in ()).throw(ValueError('blur_provider_429')))
+        self.assertEqual([x.args[0] for x in sleep.call_args_list], [30, 60])
+
+    def test_successful_observations_reused_after_later_failure(self):
+        from women_blur import POLICY
+        valid = {'policy': POLICY, 'frames': [{'index': 0, 'boxes': []}]}
+        with patch.object(v, 'analyze_frames', side_effect=[valid, ValueError('blur_provider_429'), valid]) as provider:
+            analyze = v.cached_analyzer('https://mail.example')
+            self.assertEqual(analyze(['first']), valid)
+            with self.assertRaises(ValueError):
+                analyze(['second'])
+            self.assertEqual(analyze(['first']), valid)
+            self.assertEqual(analyze(['second']), valid)
+            self.assertEqual(provider.call_count, 3)
+
+    def test_incomplete_analysis_is_not_cached(self):
+        with patch.object(v, 'analyze_frames', return_value={'frames': []}) as provider:
+            analyze = v.cached_analyzer('https://mail.example')
+            for _ in range(2):
+                with self.assertRaises(ValueError):
+                    analyze(['first'])
+            self.assertEqual(provider.call_count, 2)
 
     def test_processing_stops_after_three_failures_and_never_returns_raw_fallback(self):
         from unittest.mock import Mock
