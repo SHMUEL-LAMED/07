@@ -21,3 +21,19 @@ class EretzTests(unittest.TestCase):
         with patch.object(eretz.c,'worker') as worker:
             eretz.upload('https://mail.example',url,'original',[None],{'files':{key:{'id':'saved'}}})
             worker.assert_not_called()
+
+    def test_transient_download_failure_retries_and_resumes(self):
+        import subprocess
+        with patch.object(eretz.subprocess, 'run', side_effect=[subprocess.TimeoutExpired('download', 600), None]) as run, patch.object(eretz.time, 'sleep'):
+            eretz.download_episode('https://publisher.example/episode', 'episode.mp4')
+            self.assertEqual(run.call_count, 2)
+            self.assertIn('--continue', run.call_args.args[0])
+
+    def test_access_denied_stops_without_repeated_requests(self):
+        import subprocess
+        error = subprocess.CalledProcessError(1, 'download', stderr=b'HTTP Error 403')
+        with patch.object(eretz.subprocess, 'run', side_effect=error) as run, patch.object(eretz.time, 'sleep') as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                eretz.download_episode('https://publisher.example/episode', 'episode.mp4')
+            self.assertEqual(run.call_count, 1)
+            sleep.assert_not_called()
