@@ -102,6 +102,36 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, se
   try{if(!token)throw Error();await verify(token,env,u.origin);}catch{return json({error:'unauthorized'},401);}
   try{
    const recipient=await mailbox(env);
+   // Explicit owner exception: Eretz Nehederet originals plus separately blurred copies.
+   // Independent receipts avoid interfering with the news digest's pending batch.
+   if(path==='/news-video/eretz'&&request.method==='GET')return json(await get(env,'eretz',{files:{}}));
+   if(path==='/news-video/eretz'&&request.method==='POST'){
+    const source=request.headers.get('X-Eretz-Source')||'',variant=request.headers.get('X-Eretz-Variant');
+    const sourceUrl=new URL(source);
+    if(sourceUrl.origin!=='https://www.mako.co.il'||!/^\/mako-vod-keshet\/eretz_nehederet-s\d+\/VOD-[a-f0-9]+\.htm$/.test(sourceUrl.pathname)||sourceUrl.search||sourceUrl.hash)return json({error:'invalid_episode_source'},400);
+    if(!['original','blurred'].includes(variant))return json({error:'invalid_episode_variant'},400);
+    if(variant==='blurred'&&request.headers.get('X-News-Filter')!=='women-body-v1')return json({error:'filtered_video_required'},409);
+    const part=Number(request.headers.get('X-Eretz-Part')),total=Number(request.headers.get('X-Eretz-Parts'));
+    if(!Number.isInteger(part)||!Number.isInteger(total)||part<1||part>total||total>100)return json({error:'invalid_episode_part'},400);
+    const key=await digest(source+':'+variant+':'+part);
+    const state=await get(env,'eretz',{files:{}});
+    if(state.files[key])return json({ok:true,existing:true,...state.files[key]});
+    if(request.headers.get('Content-Type')!=='video/mp4')return json({error:'mp4_required'},415);
+    const length=Number(request.headers.get('Content-Length'));
+    if(!length||length>LIMIT)return json({error:'video_size'},413);
+    const reader=request.body.getReader(),chunks=[];let size=0;
+    while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>LIMIT){await reader.cancel();return json({error:'video_size'},413);}chunks.push(value);}
+    if(size!==length)return json({error:'length_mismatch'},400);
+    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    if(size<12||new TextDecoder().decode(bytes.subarray(4,8))!=='ftyp')return json({error:'invalid_mp4'},400);
+    const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+    const name=`eretz-${(await digest(source)).slice(0,12)}-${variant}-${part}-of-${total}.mp4`;
+    const saved=await storeVideo(env,{name,bytes,day});
+    if(!saved?.id||!saved.webViewLink)throw Error('drive_upload_not_confirmed');
+    state.files[key]={id:saved.id,url:saved.webViewLink,source,variant,part,total,day};
+    await put(env,'eretz',state);
+    return json({ok:true,...state.files[key]});
+   }
    if(path==='/news-video/blur-frames'&&request.method==='POST'){
     const text=await request.text();if(text.length>2400000)return json({error:'frames_too_large'},413);
     const frames=JSON.parse(text).frames;

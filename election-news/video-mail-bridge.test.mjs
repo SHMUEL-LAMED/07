@@ -45,6 +45,19 @@ test('failed Gmail delivery keeps the pending digest and does not mark it sent',
 });
 
 const tinyVideo=new Uint8Array([0,0,0,12,102,116,121,112,105,115,111,109]);
+test('Eretz exception archives original then separate blur, rejects unrelated raw video, and never sends mail',async()=>{
+ const s=setup(false,()=>null,{requireWomenBlur:true});
+ const headers={'Content-Type':'video/mp4','Content-Length':'12','X-Eretz-Source':'https://www.mako.co.il/mako-vod-keshet/eretz_nehederet-s24/VOD-abc123.htm','X-Eretz-Variant':'original','X-Eretz-Part':'1','X-Eretz-Parts':'1'};
+ const send=h=>s.route(s.request('/news-video/eretz',tinyVideo,{...headers,...h}),s.env);
+ assert.equal((await send({'X-Eretz-Source':s.item.id})).status,400);
+ assert.equal((await send({'X-Eretz-Variant':'blurred'})).status,409);
+ const first=await(await send({})).json();assert.equal(first.ok,true);
+ const again=await(await send({})).json();assert.equal(again.existing,true);assert.equal(again.id,first.id);
+ const blurred=await(await send({'X-Eretz-Variant':'blurred','X-News-Filter':'women-body-v1'})).json();assert.equal(blurred.ok,true);assert.notEqual(blurred.id,first.id);
+ assert.equal(Object.keys((await(await s.route(s.request('/news-video/eretz'),s.env)).json()).files).length,2);
+ assert.equal(s.calls.filter(x=>x.url.includes('messages')).length,0);
+ assert.equal(s.values.has('news-video:pending'),false);
+});
 async function upload(s,b,part){return s.route(s.request(`/news-video/part/${b.id}/${part}`,tinyVideo,{'Content-Type':'video/mp4','Content-Length':'12'}),s.env);}
 test('two MP4 files produce exactly one mail after both arrive, including after retry',async()=>{
  const s=setup();const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
