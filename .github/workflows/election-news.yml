@@ -38,7 +38,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ inputs.blur_existing && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.eretz_latest) && 'election-news-video-mail' || 'election-news-collector' }}
+  group: ${{ inputs.blur_existing && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))) && 'election-news-video-mail' || 'election-news-collector' }}
   cancel-in-progress: false
 jobs:
   test:
@@ -53,7 +53,7 @@ jobs:
       - run: node --test election-news/*.test.mjs
   collect:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && github.event.schedule != '7 * * * *' && !inputs.video_email && !inputs.eretz_latest && !inputs.blur_existing
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && github.event.schedule != '7 * * * *' && !inputs.video_email && !inputs.eretz_latest && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')) && !inputs.blur_existing
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -99,7 +99,7 @@ jobs:
           --max-files 16 --deadline-seconds 540
   video-mail:
     needs: test
-    if: github.ref == 'refs/heads/main' && !inputs.blur_existing && (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.eretz_latest)
+    if: github.ref == 'refs/heads/main' && !inputs.blur_existing && (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -134,14 +134,14 @@ jobs:
           ffprobe -version >/dev/null
 
       - name: ארץ נהדרת — הפרק האחרון לדרייב, מקור ואחריו טשטוש
-        if: github.event.schedule == '7 * * * *' || inputs.eretz_latest
+        if: github.event.schedule == '7 * * * *' || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ '${{ inputs.eretz_latest }}' = 'true' ]; then python scripts/deploy-news-archive.py; fi
           python election-news/eretz.py --endpoint https://yemot-mail.smwlyqswkwt232.workers.dev
       - name: וידאו מקורי ושליחה שעתית למייל
-        if: github.event.schedule != '7 * * * *' && !inputs.eretz_latest
+        if: github.event.schedule != '7 * * * *' && !inputs.eretz_latest && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))
         env:
           BLUR_CHECK_ONLY: ${{ inputs.blur_check_only }}
           BLUR_WOMEN: '1'
