@@ -145,6 +145,7 @@ jobs:
         env:
           BLUR_CHECK_ONLY: ${{ inputs.blur_check_only }}
           BLUR_WOMEN: '0'
+          POST_BLUR: '1'
           CHECK_ONLY: ${{ inputs.video_mail_check_only }}
         run: |
           args=()
