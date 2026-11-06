@@ -193,6 +193,43 @@ def eligible(date, state, now=None):
     return value >= cutoff
 
 
+def postprocess_archive(mail, budget=480):
+    """Originals are already durable; failures leave the queue for a later run."""
+    from women_blur import sanitize_video
+    started = time.monotonic()
+    try:
+        queue = c.worker(mail, '/news-video/post-blur').get('items', [])
+    except Exception as error:
+        print('post_blur_queue_failed', c.error_code(error), flush=True)
+        return
+    for item in queue[:3]:
+        remaining = budget - (time.monotonic() - started)
+        if remaining < 45:
+            break
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                source, output = Path(tmp)/'source.mp4', Path(tmp)/'blurred.mp4'
+                route = '/news-video/post-blur/%s/%d' % (item['batch'], item['part'])
+                source.write_bytes(c.fetch(mail + route, {'Authorization': 'Bearer ' + c.authorization(mail)}))
+                if hashlib.sha256(source.read_bytes()).hexdigest() != item['rawHash']:
+                    raise ValueError('archive_source_changed')
+                duration = probe(source)
+                analyze = cached_analyzer(mail)
+                retry_processing(lambda seconds: sanitize_video(source, output, analyze, deadline_seconds=seconds), total_seconds=min(remaining, 240))
+                if abs(probe(output) - duration) > .3 or not 0 < output.stat().st_size <= LIMIT:
+                    raise ValueError('post_blur_output_invalid')
+                result = c.worker(mail, route, output.read_bytes(), {'Content-Type': 'video/mp4', 'X-News-Filter': 'women-body-v1', 'X-Original-SHA256': item['rawHash']})
+                if not result.get('ok'):
+                    raise ValueError('replacement_not_confirmed')
+                print('post_blur_replaced', result.get('id'), flush=True)
+        except Exception as error:
+            print('post_blur_deferred', c.error_code(error), flush=True)
+            try:
+                c.worker(mail, '/news-video/post-blur/defer', json.dumps({'key': item['key']}).encode(), {'Content-Type': 'application/json'})
+            except Exception:
+                pass
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--endpoint', required=True)
@@ -285,6 +322,8 @@ def main():
         if pending and {x['id'] for x in items} != required:
             raise SystemExit('pending_digest_incomplete: retry retained batch on next run')
         if not clips:
+            if os.environ.get('POST_BLUR') == '1':
+                postprocess_archive(mail)
             if failures:
                 raise SystemExit('no_video_collected: source failures; no email sent')
             print('no_new_videos', flush=True)
@@ -306,6 +345,8 @@ def main():
                     if attempt == 2:
                         raise
                     time.sleep(5)
+        if os.environ.get('POST_BLUR') == '1':
+            postprocess_archive(mail)
         print('video_digest_complete', len(items), 'clips', 0 if batch.get('delivery') == 'drive-only' else (1 if batch.get('delivery') == 'single-email' else len(parts)), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
 
 
