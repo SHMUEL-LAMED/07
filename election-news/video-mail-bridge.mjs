@@ -1,6 +1,8 @@
 // Narrow server-to-server bridge: the pinned collector can mail only its owner.
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me/';
 const LIMIT = 8 * 1024 * 1024;
+const PENDING_TTL = 86400000;
+const INTENT_GRACE = 30 * 60000;
 const HOSTS = ['mako.co.il','n12.co.il','13tv.co.il','c14.co.il','i24news.tv','kan.org.il','youtube.com'];
 const enc = new TextEncoder();
 const b64 = bytes => { let out=''; for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192)); return btoa(out); };
@@ -76,7 +78,8 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
   let gmailId=old.messages?.[0]?.id;
   if(!gmailId){
    const intentKey=`intent:${pending.id}:all`;
-   if(await get(env,intentKey))throw Error('delivery_uncertain: waiting for sent-message verification');
+   const intent=await get(env,intentKey);
+   if(intent&&Date.now()-Number(intent.at||0)<INTENT_GRACE)throw Error('delivery_uncertain: waiting for sent-message verification');
    const attach=files.reduce((n,x)=>n+x.size,0)<=16*1024*1024;
    const date=new Date().toLocaleString('he-IL',{timeZone:'Asia/Jerusalem'});
    const subject=`כתבות הפוליטיקה — עדכון שעתי — ${date}`;
@@ -220,6 +223,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
     if(pending){
      const receipts=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`receipt:${pending.id}:${i+1}`)));
      if(receipts.every(x=>x?.gmailId)){await recordPart(env,pending,1,receipts[0].gmailId);state=await get(env,'state',state);pending=null;}
+     else if(Date.now()-Number(pending.createdAt||0)>PENDING_TTL){await put(env,'pending-expired:'+pending.id,pending);await env.KV.delete('news-video:pending');pending=null;}
     }
     return json({...state,pending,recipient,requireWomenBlur});
    }
@@ -279,7 +283,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
      const boundary='news-'+pending.id.slice(0,32);
      const raw=[`To: ${recipient}`,`From: ${recipient}`,`Subject: =?UTF-8?B?${utf64(subject)}?=`,`Message-ID: <${messageId}>`,'MIME-Version: 1.0',`Content-Type: multipart/mixed; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',wrap(utf64(body)),`--${boundary}`,'Content-Type: video/mp4',`Content-Disposition: attachment; filename="news-${pending.id.slice(0,12)}-${part}.mp4"`,'Content-Transfer-Encoding: base64','',wrap(b64(video)),`--${boundary}--`,''].join('\r\n');
      const intent=await get(env,`intent:${pending.id}:${part}`);
-     if(intent)throw Error('delivery_uncertain: waiting for sent-message verification');
+     if(intent&&Date.now()-Number(intent.at||0)<INTENT_GRACE)throw Error('delivery_uncertain: waiting for sent-message verification');
      await put(env,`intent:${pending.id}:${part}`,{at:Date.now()});
      let result;
      try{result=await google(env,GMAIL+'messages/send',{body:{raw:url64(raw)}});}catch(error){

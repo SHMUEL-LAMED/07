@@ -96,7 +96,7 @@ export function mediaFrom(html){
  }
  return [...new Set(result)].filter(u=>/^https:\/\//.test(u)&&/\.(mp3|wav|m4a|mp4)(\?|$)/i.test(u));
 }
-async function get(url,headers={}){for(let i=0;i<5;i++){safeURL(url);const r=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'Mozilla/5.0',...headers}});if(r.status>=300&&r.status<400){url=new URL(r.headers.get('location'),url).href;continue;}if(!r.ok)throw Error('http_'+r.status);return r;}throw Error('redirect_limit');}
+async function get(url,headers={},allow){for(let i=0;i<5;i++){const checked=safeURL(url);if(allow&&!allow(checked))throw Error('redirect_not_allowed');const r=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'Mozilla/5.0',...headers}});if(r.status>=300&&r.status<400){url=new URL(r.headers.get('location'),url).href;continue;}if(!r.ok)throw Error('http_'+r.status);return r;}throw Error('redirect_limit');}
 export function reshetEntry(html){
  const raw=html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)?.[1];
  if(!raw)return null;
@@ -250,6 +250,8 @@ export async function processItem(env,item){
   const existing=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});
   const name=recordingName(date,existing.files||[],item.file||String(item.id).padStart(6,'0')+'.wav');const path='ivr2:1/'+name;
   if(!(existing.files||[]).some(f=>f.name===name&&f.size>0)){
+   // Keep the chosen name so a retry after a landed upload reuses it instead of adding a duplicate.
+   await env.DB.prepare('UPDATE items SET file=? WHERE id=?').bind(name,item.id).run();
    const form=new FormData();form.set('token',env.YEMOT_TOKEN);form.set('path',path);form.set('convertAudio','1');form.set('fileUpload',audio,(item.source+' - '+title.replace(/[\r\n/\\]/g,' ').slice(0,160)+'.'+downloaded.extension));
    const r=await fetch('https://www.call2all.co.il/ym/api/UploadFile',{method:'POST',body:form,signal:AbortSignal.timeout(60000)});const j=await r.json();if(j.responseStatus!=='OK'||!Number(j.duration))throw Error('audio_conversion_unverified');
   }
@@ -258,7 +260,7 @@ export async function processItem(env,item){
   await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,uploaded_at=?,file=?,title=? WHERE id=?").bind(Date.now(),name,decode(title).replace(/\s+/g,' ').trim(),item.id).run();
   await syncIntros(env);
   if(item.source==='i24'&&clipIndex===0&&media.length>1){const writes=media.slice(1).map((_,i)=>{const u=new URL(item.url);u.hash='media='+String(i+1);return env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,?,?,'queued',?)").bind(u.href,item.source,title+' — קטע '+String(i+2),Date.now());});await env.DB.batch(writes);}
- }catch(e){const retry=/http_5|http_429|timeout|fetch failed|upload_not_verified|yemot_/.test(e.message)&&item.attempts<3;await env.DB.prepare("UPDATE items SET status=?,error=?,attempts=attempts+1 WHERE id=?").bind(e.message==='needs_source_adapter'?'no_media':retry?'queued':'blocked',e.message,item.id).run();}
+ }catch(e){const retry=/http_5|http_429|timeout|fetch failed|upload_not_verified|yemot_/.test(e.message)&&item.attempts<3;await env.DB.prepare("UPDATE items SET status=?,error=?,attempts=attempts+1 WHERE id=? AND status!='uploaded'").bind(e.message==='needs_source_adapter'?'no_media':retry?'queued':'blocked',e.message,item.id).run();}
 }
 export async function archiveExpired(env){
  const expired=await env.DB.prepare("SELECT i.url,i.file FROM items i JOIN article_dates d ON d.url=i.url WHERE i.status='uploaded' AND d.published_at<? LIMIT 10").bind(Date.now()-7*86400000).all();
@@ -272,14 +274,14 @@ export async function archiveExpired(env){
 export async function run(env,sourceId){
  const now=Date.now();const lease=await env.DB.prepare('UPDATE locks SET until=? WHERE id=1 AND until<?').bind(now+600000,now).run();if(!lease.meta.changes)return {busy:true};
  try{
-  await archiveExpired(env);
+  try{await archiveExpired(env);}catch(e){await env.DB.prepare("INSERT INTO sources(id,last_ok,error) VALUES('archive',NULL,?) ON CONFLICT(id) DO UPDATE SET error=excluded.error").bind(e.message).run();}
   const stats=[];
   // Rotate through channels, staying below platform subrequest limits.
   const index=Math.floor(Date.now()/600000)%SOURCES.length;const source=SOURCES.find(s=>s.id===sourceId)||SOURCES[index];
   try{stats.push({source:source.id,found:await scanSource(env,source)});}catch(e){await env.DB.prepare('INSERT INTO sources(id,last_ok,error) VALUES(?,NULL,?) ON CONFLICT(id) DO UPDATE SET error=excluded.error').bind(source.id,e.message).run();stats.push({source:source.id,error:e.message});}
   const items=await env.DB.prepare("SELECT * FROM (SELECT i.*,ROW_NUMBER() OVER(PARTITION BY source ORDER BY created_at DESC) source_rank,COALESCE((SELECT MAX(d.uploaded_at) FROM items d WHERE d.source=i.source),0) source_last_upload FROM items i WHERE status='queued') WHERE source_rank<=2 ORDER BY source_rank,source_last_upload,created_at DESC LIMIT 2").all();for(const item of items.results)await processItem(env,item);
   return {stats,processed:items.results.length};
- }finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
+ }finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1 AND until=?').bind(now+600000).run();}
 }
 async function collectorRoute(request,env,path){
  if(path==='/collector/state'){
@@ -291,7 +293,7 @@ async function collectorRoute(request,env,path){
  if(path==='/collector/source'&&request.method==='GET'){
   let target;try{target=new URL(new URL(request.url).searchParams.get('url'));}catch{return Response.json({error:'invalid_source'},{status:400});}
   const source=SOURCES.find(s=>target.hostname===s.host||target.hostname.endsWith('.'+s.host));
-  const allowed=source&&(source.article.test(target.pathname)||['/','/news','/news/','/news-israel-elections','/content/kan-news/','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp'));
+  const allowed=source&&(source.article.test(target.pathname)||['/','/news','/news/','/news-israel-elections','/content/kan-news/','/content/kan-news/politic/','/tags/survey/','/news/politics/politics/'].includes(target.pathname)||(source.id==='reshet'&&/^\/qdata\/(tags\/survey|news|news\/politics\/politics|item\/news\/[^?#]+)\//.test(target.pathname))||(source.id==='n12'&&target.pathname==='/AjaxPage'&&target.searchParams.get('jspName')==='playlist12.jsp')||(source.id==='i24'&&target.hostname==='api.i24news.tv'&&/^\/v2\/he\/contents(?:\/artc-[a-f0-9]+)?$/.test(target.pathname)));
   if(target.protocol!=='https:'||target.username||target.password||!allowed)return Response.json({error:'unsupported_source'},{status:400});
   const headers={};
   if(source.id==='n12'&&target.pathname==='/AjaxPage'){
@@ -299,7 +301,7 @@ async function collectorRoute(request,env,path){
    if(![video,channel,gallery].every(x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,120}$/.test(x)))return Response.json({error:'invalid_player_ids'},{status:400});
    Object.assign(headers,makoPlayerHeaders(video,channel,gallery));
   }
-  try{const upstream=await get(target.href,headers);const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
+  try{const upstream=await get(target.href,headers,u=>u.hostname===source.host||u.hostname.endsWith('.'+source.host));const body=await bounded(upstream,4*1024*1024);return new Response(body,{headers:{'Content-Type':upstream.headers.get('Content-Type')||'text/html; charset=utf-8','Cache-Control':'no-store'}});}catch(e){return Response.json({error:e.message},{status:502});}
  }
  if(path==='/collector/state'&&request.method==='GET'){
   const uploaded=await env.DB.prepare("SELECT url FROM items WHERE status IN ('uploaded','archived')").all();
@@ -331,6 +333,7 @@ async function collectorRoute(request,env,path){
    const existing=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});const name=recordingName(meta.publishedAt,existing.files||[],item.file||String(item.id).padStart(6,'0')+'.wav');
    let file=(existing.files||[]).find(f=>f.name===name&&Number(f.duration)>0);
    if(!file){
+    await env.DB.prepare('UPDATE items SET file=? WHERE id=?').bind(name,item.id).run();
     const form=new FormData();form.set('token',env.YEMOT_TOKEN);form.set('path','ivr2:1/'+name);form.set('convertAudio','1');form.set('fileUpload',blob,source.id+' - '+cleanSpokenTitle(meta.title).replace(/[\r\n/\\]/g,' ').slice(0,120)+'.mp3');
     const r=await fetch('https://www.call2all.co.il/ym/api/UploadFile',{method:'POST',body:form,signal:AbortSignal.timeout(60000)});const j=await r.json();if(j.responseStatus!=='OK'||!Number(j.duration))throw Error('audio_conversion_unverified');
     const verify=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});file=(verify.files||[]).find(f=>f.name===name&&Number(f.duration)>0);
@@ -341,7 +344,7 @@ async function collectorRoute(request,env,path){
    await env.DB.prepare("UPDATE items SET status='uploaded',error=NULL,title=?,file=?,uploaded_at=? WHERE id=?").bind(cleanSpokenTitle(meta.title),name,Date.now(),item.id).run();
    await syncIntros(env);
    return Response.json({ok:true,file:name,duration:file.duration});
-  }catch(e){await env.DB.prepare("UPDATE items SET status='blocked',error=? WHERE url=? AND status!='uploaded'").bind(e.message,meta.url).run();return Response.json({error:e.message},{status:502});}finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1').run();}
+  }catch(e){await env.DB.prepare("UPDATE items SET status='blocked',error=? WHERE url=? AND status!='uploaded'").bind(e.message,meta.url).run();return Response.json({error:e.message},{status:502});}finally{await env.DB.prepare('UPDATE locks SET until=0 WHERE id=1 AND until=?').bind(now+600000).run();}
  }
  return new Response('Not found',{status:404});
 }
@@ -386,10 +389,10 @@ async function activeNewsRecovery(env) {
  if(!delivery.ok)return {delivery};
  const dir=await yemot(env,'GetIVR2Dir',{path:'ivr2:1'});
  if(dir.extIni?.type!=='playfile')throw Error('active_news_folder_not_playfile');
- const rows=await env.DB.prepare("SELECT i.id,i.file,i.status FROM items i LEFT JOIN article_dates d ON d.url=i.url WHERE (d.published_at>=? OR (d.published_at IS NULL AND i.created_at>=?)) AND (i.status='uploaded' OR i.error LIKE 'yemot_%' OR i.error LIKE '%upload%' OR i.error='not_election_article')").bind(Date.now()-7*86400000,Date.now()-7*86400000).all();
+ const rows=await env.DB.prepare("SELECT i.id,i.file,i.status,i.attempts FROM items i LEFT JOIN article_dates d ON d.url=i.url WHERE (d.published_at>=? OR (d.published_at IS NULL AND i.created_at>=?)) AND (i.status='uploaded' OR i.error LIKE 'yemot_%' OR i.error LIKE '%upload%' OR i.error='not_election_article')").bind(Date.now()-7*86400000,Date.now()-7*86400000).all();
  const present=new Set((dir.files||[]).filter(f=>Number(f.duration)>0&&Number(f.size)>0).map(f=>f.name));
- const retry=rows.results.filter(x=>x.status!=='uploaded'||!present.has(x.file));
- if(retry.length)await env.DB.batch(retry.map(x=>env.DB.prepare("UPDATE items SET status='queued',error=NULL,attempts=0 WHERE id=?").bind(x.id)));
+ const retry=rows.results.filter(x=>x.status==='uploaded'?!present.has(x.file):Number(x.attempts||0)<3);
+ if(retry.length)await env.DB.batch(retry.map(x=>env.DB.prepare("UPDATE items SET status='queued',error=NULL,attempts=CASE WHEN status='uploaded' THEN 0 ELSE attempts END WHERE id=?").bind(x.id)));
  const repaired=await env.DB.prepare("SELECT last_ok FROM sources WHERE id='active-folder-repair-v2'").first();
  if(!repaired) {
   const backup='_before_news_repair_'+Date.now();await yemot(env,'UpdateExtension',{path:'ivr2:'+backup});

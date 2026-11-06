@@ -75,7 +75,7 @@ class VideoDigestTests(unittest.TestCase):
             if path == '/news-video/start': return {'id': 'batch', 'parts': 1, 'sent': []}
             delivered.append(path)
             return {'ok': True, 'gmailId': 'sent'}
-        def video(url, dest):
+        def video(url, dest, deadline=None):
             dest.write_bytes(b'test')
             return 1
         with patch.object(v.os.sys, 'argv', ['video_mail.py', '--endpoint', 'https://news.example', '--mail-endpoint', 'https://mail.example']), patch.object(v.c, 'worker', side_effect=worker), patch.object(v.c, 'discover', return_value=candidates), patch.object(v.c, 'article', side_effect=article), patch.object(v, 'make_video', side_effect=video), patch.object(v, 'split_digest', side_effect=lambda clips, folder: clips):
