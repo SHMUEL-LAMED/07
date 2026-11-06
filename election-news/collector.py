@@ -510,9 +510,7 @@ def main():
                         reports.append({'url':key,'status':'blocked','error':error_code(error)})
                         print('clip_failed',source(url),error_code(error),canonical(url),index,flush=True)
             except Exception as e:
-                # Old or not-yet-listed items are expected rejections, not source failures.
-                if error_code(e) not in {'stale_or_missing_publication_date','not_public_or_old','publisher_item_not_in_feed'}:
-                    failures[source(url)]=failures.get(source(url),0)+1
+                failures[source(url)]=failures.get(source(url),0)+1
                 reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
     if reports and not args.dry_run:worker(endpoint,'/collector/report',json.dumps({'items':reports[:100]}).encode(),{'Content-Type':'application/json'})
     print('complete',count,'uploads',len(reports),'reports',flush=True)
