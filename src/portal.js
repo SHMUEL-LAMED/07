@@ -53,26 +53,39 @@ async function syncClientLines(env, lines, email, slugs) {
   for (const line of lines) {
     if (!line.kv) continue;
     const old = await env.KV.get("portal_synced:" + email + ":" + line.slug);
+    const want = slugs.includes(line.slug);
+    if (!want && !old) continue; // לא שויך ולא סונכרן מכאן – אין מה לשנות בקו הזה, וחוסכים פניות
     const endpoint = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/storage/kv/namespaces/" + line.kv + "/values/dash_emails";
     const headers = { Authorization: "Bearer " + env.CF_FACTORY_TOKEN };
     const current = await fetch(endpoint, { headers });
     if (!current.ok && current.status !== 404) throw new Error("לא ניתן לקרוא הרשאות קו");
     let managers = current.status === 404 ? [] : await current.json().catch(() => []);
     if (!Array.isArray(managers)) managers = [];
-    if (slugs.includes(line.slug) || old) {
-      managers = managers.filter(m => (typeof m === "string" ? m : m.e) !== email);
-      if (slugs.includes(line.slug)) managers.push({ e: email, role: "admin" });
+    const isMe = m => normalize(typeof m === "string" ? m : m && m.e) === email;
+    const hits = managers.filter(isMe);
+    // כותבים רק כשהרשימה באמת משתנה – כדי לא לדרוס שינוי שמנהל הקו עשה בינתיים ולא לבזבז כתיבות
+    const change = want ? !(hits.length === 1 && (typeof hits[0] === "string" || hits[0].role !== "viewer")) : hits.length > 0;
+    if (change) {
+      managers = managers.filter(m => !isMe(m));
+      if (want) managers.push({ e: email, role: "admin" });
+      const saved = await fetch(endpoint, { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(managers) });
+      if (!saved.ok) throw new Error("לא ניתן לעדכן הרשאות קו");
     }
-    const saved = await fetch(endpoint, { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(managers) });
-    if (!saved.ok) throw new Error("לא ניתן לעדכן הרשאות קו");
-    if (slugs.includes(line.slug)) await env.KV.put("portal_synced:" + email + ":" + line.slug, "1");
-    else if (old) await env.KV.delete("portal_synced:" + email + ":" + line.slug);
+    if (want) { if (!old) await env.KV.put("portal_synced:" + email + ":" + line.slug, "1"); }
+    else await env.KV.delete("portal_synced:" + email + ":" + line.slug);
   }
 }
 async function syncClientBlock(env, lines, email, blocked) {
   const headers = { Authorization: "Bearer " + env.CF_FACTORY_TOKEN };
-  for (const line of lines) {
-    if (!line.kv) continue;
+  const targets = lines.filter(l => l.kv).map(l => ({ name: l.name, kv: l.kv }));
+  // גם הקווים הוותיקים (דעת תורה): שם החסימה נבדקת רק ב-KV של הקו עצמו
+  if (cfReady(env)) for (const l of LEGACY) {
+    if (!l.script) continue;
+    const kv = await legacyKv(env, l.script);
+    if (!kv) throw new Error("לא ניתן לעדכן חסימת גישה בקו " + l.name);
+    targets.push({ name: l.name, kv });
+  }
+  for (const line of targets) {
     const url = "https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT_ID + "/storage/kv/namespaces/" + line.kv + "/values/" + encodeURIComponent("portal_blocked:" + email);
     const r = await fetch(url, blocked ? { method: "PUT", headers: { ...headers, "Content-Type": "text/plain" }, body: "1" } : { method: "DELETE", headers });
     if (!r.ok) throw new Error("לא ניתן לעדכן חסימת גישה בקו " + line.name);
@@ -140,9 +153,16 @@ export async function portal(req, env, verifyGoogle) {
   if (action === "me") {
     // The service owner must be recognized by every independent line Worker too,
     // so the same Google credential can open each line dashboard.
+    // רק קווים שעוד לא סונכרנו (בדרך כלל קו חדש), ועד 15 בכל טעינה – כדי לא לעבור את מגבלת הפניות.
+    // תקלה בסנכרון לא חוסמת את הכניסה: בעל השירות מורשה בכל קו גם דרך OWNER_EMAIL של הקו
+    let syncError;
     if (isOwner) {
-      try { await syncClientLines(env, lines, owner, lines.map(l => l.slug)); }
-      catch (e) { return reply({ error: String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים") }, 502); }
+      const pending = [];
+      for (const l of lines) if (l.kv && pending.length < 15 && !(await env.KV.get("portal_synced:" + owner + ":" + l.slug))) pending.push(l);
+      if (pending.length) {
+        try { await syncClientLines(env, pending, owner, pending.map(l => l.slug)); }
+        catch (e) { syncError = String(e.message || "לא ניתן לסנכרן את הרשאות בעל השירות לקווים"); }
+      }
     }
     // קווים ששויכו במרכז אבל החשבון עוד לא רשום בהם – כדי שהדף יוכל להסביר למה הקו חסר
     if (!isOwner) return reply({ email: session.email, isOwner, lines: allowed.map(publicLine),
@@ -154,7 +174,7 @@ export async function portal(req, env, verifyGoogle) {
       clients.push({ email, lines: await env.KV.get("portal_memberships:" + email, "json") || [],
         blocked: !!(await env.KV.get("portal_blocked:" + email)) });
     }
-    return reply({ email: session.email, isOwner, lines: allowed.map(publicLine), clients });
+    return reply({ email: session.email, isOwner, lines: allowed.map(publicLine), clients, ...(syncError ? { syncError } : {}) });
   }
   // All service-level operations enforce owner permission server-side.
   if (!isOwner) return reply({ error: "אין הרשאה למרכז הבעלים" }, 403);
@@ -227,10 +247,19 @@ async function copySettings(env, lines, body) {
   let src, dst; try { [src, dst] = await Promise.all([kvOfLine(env, lines, from), kvOfLine(env, lines, to)]); } catch (e) { return { error: e.message }; }
   const out = [];
   for (const k of keys) {
-    let v = await src.get(k), old = await dst.get(k);
-    if (k === "scheduled" && v) { try { v = JSON.stringify(JSON.parse(v).filter(j => !j.done && !j.phone)); } catch {} } // בלי משימות שבוצעו ובלי הודעות אישיות לטלפון מסוים
+    let v = await src.get(k), old = await dst.get(k), kept = 0;
+    if (k === "scheduled" && v) { try {
+      // בלי משימות שבוצעו ובלי הודעות אישיות לטלפון מסוים מהמקור. המשימות האישיות של קו היעד עצמו נשמרות
+      const gen = JSON.parse(v).filter(j => j && !j.done && !j.phone);
+      let mineDst = []; try { const o = JSON.parse(old || "[]"); if (Array.isArray(o)) mineDst = o.filter(j => j && j.phone); } catch {}
+      const ids = new Set(gen.map(j => j.id).filter(Boolean));
+      mineDst = mineDst.filter(j => !j.id || !ids.has(j.id)); kept = mineDst.length;
+      v = JSON.stringify([...mineDst, ...gen]);
+    } catch {} }
     const n = s => { try { const j = JSON.parse(s); return Array.isArray(j) ? j.length + " פריטים" : j ? "יש" : "ריק"; } catch { return s ? "יש" : "ריק"; } };
-    out.push({ k, label: COPY_KEYS[k], from: n(v), to: n(old), same: v === old, _v: v, _old: old });
+    // אין ערך במקור – לא נכתב כלום ביעד, ולכן גם בתצוגה המקדימה זה לא "יוחלף"
+    const skip = v == null;
+    out.push({ k, label: COPY_KEYS[k], from: skip ? "אין במקור – לא ישתנה" : n(v) + (kept ? ` (כולל ${kept} אישיים של היעד שנשמרים)` : ""), to: n(old), same: skip || v === old, skip, _v: v, _old: old });
   }
   if (body.preview !== false) return { preview: true, items: out.map(({ _v, _old, ...x }) => x) };
   if (String(body.confirm || "") !== to) return { error: "לאישור יש להקליד את השם הקצר של קו היעד" };

@@ -220,11 +220,13 @@ async function readIni(call, dirCall) {
   return { ok: false, text: "" };
 }
 const dirOf = path => "ivr2:" + path;
-async function templateTree(env, D, bud) {
-  const out = [], queue = [["/", 0]], seen = new Set();
+// start: מאיפה להמשיך את הסריקה (תור שנשמר בסבב הקודם). שומרים פנייה לכל קובץ שנמצא, כדי שיהיה תקציב להשוות אותו ליעד.
+// next: מה שנשאר לסרוק; deep: תיקיות עמוקות מ-MAX_DEPTH שלא נסרקו
+async function templateTree(env, D, bud, start) {
+  const out = [], queue = Array.isArray(start) && start.length ? start.slice() : [["/", 0]], seen = new Set(), deep = [];
   let cut = false;
   while (queue.length && out.length < MAX_DIRS) {
-    if (!bud.take(2)) { cut = true; break; }
+    if (bud.left < 2 + out.length || !bud.take(2)) break; // התקציב נגמר – ממשיכים בסבב הבא מ-next
     const [path, depth] = queue.shift();
     if (seen.has(path)) continue; seen.add(path);
     const d = await D.ym(env, "GetIVR2Dir", { path: "ivr2:" + path }).catch(() => null);
@@ -232,14 +234,27 @@ async function templateTree(env, D, bud) {
     const ini = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
     if (!ini.ok) cut = true;
     else if (ini.text.trim()) out.push({ path, contents: ini.text });
-    if (depth >= MAX_DEPTH) continue;
     for (const s of d.dirs || []) {
       const n = String(s.name || s.what || "").replace(/^ivr2:/, "").split("/").filter(Boolean).pop();
       if (!n || /^(personalMessages|Log|ApiLog|Sounds?|\.)/i.test(n)) continue;
-      queue.push([(path === "/" ? "" : path) + "/" + n, depth + 1]);
+      const sub = (path === "/" ? "" : path) + "/" + n;
+      if (depth >= MAX_DEPTH) deep.push(sub); else queue.push([sub, depth + 1]);
     }
   }
-  return { files: out, truncated: cut || queue.length > 0 };
+  // תיקיות עמוקות לא נחשבות "רק חלק": לחיצה נוספת לא תסרוק אותן (הן מסומנות כאזהרה בשורה של התיקייה שמעליהן)
+  return { files: out, truncated: cut || queue.length > 0, next: queue, deep };
+}
+// המשך סריקת העץ בין לחיצות על "חיבור שלוחות": start – מאיפה הסבב הנוכחי התחיל, next – מאיפה הסבב הבא יתחיל.
+// מתקדמים רק אחרי כתיבה שלמה (או כשאין בסבב מה לכתוב), כדי שלחיצה חוזרת אחרי "ממתינות" תציג את אותן שלוחות
+const planKey = slug => "factory_plan:" + slug;
+const cursorOk = q => Array.isArray(q) && q.length <= 20000 && q.every(x => Array.isArray(x) && typeof x[0] === "string" && x[0].startsWith("/") && !x[0].includes("..") && Number.isInteger(x[1]) && x[1] >= 0 && x[1] <= MAX_DEPTH);
+async function planCursor(env, slug) {
+  const c = await env.KV.get(planKey(slug), "json").catch(() => null);
+  return c && typeof c === "object" ? { start: cursorOk(c.start) ? c.start : null, next: cursorOk(c.next) ? c.next : [] } : { start: null, next: [] };
+}
+async function savePlanCursor(env, slug, start, next) {
+  if ((!start || !start.length) && (!next || !next.length)) return env.KV.delete(planKey(slug));
+  return env.KV.put(planKey(slug), JSON.stringify({ start: start && start.length ? start : null, next: next || [] }), { expirationTtl: 7 * 86400 });
 }
 function rewriteIni(text, from, to) {
   let t = text;
@@ -261,7 +276,9 @@ async function lineToken(env, body, D) {
 async function ivrPlan(env, body, origin, D) {
   const { line, token } = await lineToken(env, body, D);
   const bud = budget();
-  const { files, truncated: treeCut } = await templateTree(env, D, bud);
+  const cur0 = body.restart === true ? { start: null, next: [] } : await planCursor(env, line.slug);
+  const start = cursorOk(body.from) && body.from.length ? body.from : cur0.start;
+  const { files, truncated: treeCut, next, deep } = await templateTree(env, D, bud, start);
   const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
   const flagPhones = [D.LINE_PHONE, D.OWNER].filter(Boolean);
   const plan = [];
@@ -273,7 +290,15 @@ async function ivrPlan(env, body, origin, D) {
     const cur = await readIni(() => ymT(token, "GetTextFile", { what: iniPath(f.path) }), () => bud.take() ? ymT(token, "GetIVR2Dir", { path: dirOf(f.path) }) : null);
     plan.push({ ...base, before: cur.text, unknown: !cur.ok, same: cur.ok && cur.text.trim() === after.trim() });
   }
-  return { slug: line.slug, url: line.url, count: plan.length, truncated, plan };
+  // תיקיות עמוקות מדי לא נסרקות – מסמנים בשורה של התיקייה שמעליהן (אם יש לה ext.ini)
+  for (const p of deep) {
+    const parent = p.slice(0, p.lastIndexOf("/")) || "/", row = plan.find(x => x.path === parent);
+    if (row) row.warn = [...row.warn, `תת-שלוחה עמוקה שלא נסרקה ולא תועתק: ${p}`];
+  }
+  // אין בסבב הזה מה לכתוב – מתקדמים מיד לסבב הבא (ובסוף העץ חוזרים להתחלה); אחרת מתקדמים רק אחרי הכתיבה
+  if (plan.every(p => p.same)) await savePlanCursor(env, line.slug, next, []);
+  else await savePlanCursor(env, line.slug, start, next);
+  return { slug: line.slug, url: line.url, count: plan.length, truncated, plan, next, deep, resumed: !!(start && start.length) };
 }
 // כתיבה: רק לשלוחות שנבחרו. קוראים מחדש את המקור ואת היעד של כל אחת (בלי לסרוק את כל העץ),
 // לא כותבים על קובץ שלא הצלחנו לקרוא, ושומרים גיבוי של מה שהיה לפני כל כתיבה
@@ -300,6 +325,8 @@ async function ivrApply(env, body, origin, D) {
     const r = await ymT(token, "UploadTextFile", { what: iniPath(p.path), contents: p.after }).catch(e => ({ message: e.message }));
     if (ymOk(r)) done.push(p.path); else failed.push(`${p.path}: ${r && r.message || "שגיאה"}`);
   }
+  // הסבב נכתב במלואו – לחיצה הבאה על "חיבור שלוחות" ממשיכה מהמקום שבו הסריקה נעצרה (ובסוף העץ חוזרת להתחלה)
+  if (!skipped.length) { const c = await planCursor(env, line.slug); await savePlanCursor(env, line.slug, c.next, []); }
   line.ivr = { at: Date.now(), written: (line.ivr && line.ivr.written || 0) + done.length, backup: ready.length ? backup.at : (line.ivr && line.ivr.backup) || null };
   await saveReg(env, reg);
   await D.log(env, `מפעל הקווים: נכתבו ${done.length} קובצי שלוחות לקו "${line.name}"${failed.length ? ` (${failed.length} נכשלו)` : ""}${skipped.length ? ` (${skipped.length} ממתינים לסבב נוסף)` : ""}`).catch(() => {});
