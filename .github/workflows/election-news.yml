@@ -39,7 +39,7 @@ permissions:
   contents: read
 concurrency:
   group: ${{ inputs.blur_existing && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))) && 'election-news-video-mail' || 'election-news-collector' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]') }}
 jobs:
   test:
     runs-on: ubuntu-latest
