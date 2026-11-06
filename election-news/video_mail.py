@@ -181,6 +181,21 @@ def split_digest(clips, folder):
     return parts
 
 
+def part_titles(parts, items):
+    titles = []
+    for number, part in enumerate(parts):
+        match = re.fullmatch(r'part-(\d+)-(\d+)\.mp4', part.name)
+        index = int(match[1]) if match else number
+        if index >= len(items):
+            raise ValueError('part_article_mapping_missing')
+        title = items[index]['title']
+        siblings = [x for x in parts if x.name.startswith('part-%03d-' % index)]
+        if len(siblings) > 1:
+            title += ' — חלק %d מתוך %d' % (int(match[2])+1, len(siblings))
+        titles.append(title)
+    return titles
+
+
 def eligible(date, state, now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     value = c.publication_time(date)
@@ -329,7 +344,7 @@ def main():
             print('no_new_videos', flush=True)
             return
         parts = split_digest(clips, folder)
-        batch = c.worker(mail, '/news-video/start', json.dumps({'items': items, 'parts': len(parts)}, ensure_ascii=False).encode(), {'Content-Type': 'application/json'})
+        batch = c.worker(mail, '/news-video/start', json.dumps({'items': items, 'parts': len(parts), 'partTitles': part_titles(parts, items)}, ensure_ascii=False).encode(), {'Content-Type': 'application/json'})
         for number, part in enumerate(parts, 1):
             if number in batch.get('sent', []):
                 continue
