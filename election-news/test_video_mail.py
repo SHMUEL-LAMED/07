@@ -6,6 +6,10 @@ import video_mail as v
 
 
 class VideoDigestTests(unittest.TestCase):
+    def test_split_parts_keep_correct_original_article_title(self):
+        parts = [Path('part-000-000.mp4'), Path('part-000-001.mp4'), Path('part-001-000.mp4')]
+        self.assertEqual(v.part_titles(parts, [{'title':'כתבה א'}, {'title':'כתבה ב'}]), ['כתבה א — חלק 1 מתוך 2', 'כתבה א — חלק 2 מתוך 2', 'כתבה ב'])
+
     def test_processing_retries_transient_failure_then_returns_processed_result(self):
         calls = []
         def process(remaining):
