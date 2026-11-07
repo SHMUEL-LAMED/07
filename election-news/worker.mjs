@@ -376,7 +376,7 @@ const originalNewsWorker = {
 };
 
 
-const ACTIVE_NEWS_LINE='0737061119';
+const ACTIVE_NEWS_LINE='0779710785';
 async function activeDeliveryHealth(env) {
  try {
   const session=await yemot(env,'GetSession',{});
@@ -425,7 +425,7 @@ const activeNewsWorker={
    return Response.json({delivery:await activeDeliveryHealth(env),sources:(await env.DB.prepare('SELECT * FROM sources').all()).results});
   }
   // All existing collector, source-hook and administrative routes now use only
-  // the original active line. The additional number receives no scheduled job.
+  // the owner-selected active line.
   return originalNewsWorker.fetch(request,env,ctx);
  }
 };

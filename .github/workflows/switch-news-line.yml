@@ -1,0 +1,26 @@
+name: Switch news destination to 0779710785
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/switch-news-line-0779710785.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: news-line-migration
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s election-news -p 'test_*.py'
+      - run: node --test election-news/*.test.mjs
+      - name: Update live destination guard
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python scripts/switch-news-line-0779710785.py
