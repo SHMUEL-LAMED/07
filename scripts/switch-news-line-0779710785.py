@@ -45,6 +45,10 @@ for name, mime, payload in modules:
                 subprocess.run(["node", "--check", str(path)], check=True)
     patched.append((name, mime, payload))
 if changed != 1:
+    print("Module metadata:", [(name, mime, len(payload)) for name, mime, payload in modules])
+    for name, mime, payload in modules:
+        if name and name.endswith((".js", ".mjs")):
+            print("Line guard declarations:", re.findall(r"(?:const|let|var)\\s+ACTIVE_NEWS_LINE\\s*=\\s*['\"][0-9]+['\"]", payload.decode()))
     raise SystemExit("Expected exactly one old line guard; no deployment performed")
 _, raw_settings = call("/settings")
 settings_response = json.loads(raw_settings)
