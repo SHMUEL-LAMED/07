@@ -48,7 +48,7 @@ if changed != 1:
     print("Module metadata:", [(name, mime, len(payload)) for name, mime, payload in modules])
     for name, mime, payload in modules:
         if name and name.endswith((".js", ".mjs")):
-            print("Line guard declarations:", re.findall(r"(?:const|let|var)\\s+ACTIVE_NEWS_LINE\\s*=\\s*['\"][0-9]+['\"]", payload.decode()))
+            print("Line guard declarations:", re.findall(r"(?:const|let|var)\s+ACTIVE_NEWS_LINE\s*=\s*['\"][0-9]+['\"]", payload.decode()))
     raise SystemExit("Expected exactly one old line guard; no deployment performed")
 _, raw_settings = call("/settings")
 settings_response = json.loads(raw_settings)
@@ -59,7 +59,7 @@ main_module = settings.get("main_module")
 if not main_module:
     javascript = [name for name, _, payload in patched
                   if name and name.endswith((".js", ".mjs"))
-                  and re.search(r"export\\s+default\\s|\\bas\\s+default\\b", payload.decode())]
+                  and re.search(r"export\s+default\s|\bas\s+default\b", payload.decode())]
     if len(javascript) != 1:
         raise SystemExit("Cannot safely determine main module")
     main_module = javascript[0]
