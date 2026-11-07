@@ -30,7 +30,7 @@ if "multipart" in content_type:
                for part in message.walk() if not part.is_multipart()]
 else:
     modules = [("worker.js", "application/javascript+module", raw)]
-pattern = r"""((?:const|let|var)\s+ACTIVE_NEWS_LINE\s*=\s*['"])0737061119(['"])"""
+pattern = r"""((?:const|let|var)\s+ACTIVE_NEWS_LINE\s*=\s*['"])0772246687(['"])"""
 changed = 0
 patched = []
 for name, mime, payload in modules:
