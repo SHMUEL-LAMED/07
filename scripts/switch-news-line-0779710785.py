@@ -57,7 +57,9 @@ if not settings_response.get("success"):
 settings = settings_response["result"]
 main_module = settings.get("main_module")
 if not main_module:
-    javascript = [name for name, _, _ in patched if name and name.endswith((".js", ".mjs"))]
+    javascript = [name for name, _, payload in patched
+                  if name and name.endswith((".js", ".mjs"))
+                  and re.search(r"export\\s+default\\s|\\bas\\s+default\\b", payload.decode())]
     if len(javascript) != 1:
         raise SystemExit("Cannot safely determine main module")
     main_module = javascript[0]
