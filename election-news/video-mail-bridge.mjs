@@ -127,12 +127,16 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
     if(!fileGone)return json({items:queue});
     // The owner may delete archived files or their folder. A task for a file that no longer
     // exists can never finish, so it leaves the queue instead of being retried on every run.
+    // KV reads can be up to a minute old, so a later write of this list may bring a removed
+    // task back; the mark on the file's own record keeps it out without asking Drive again.
     const keep=[];let checked=0;
     for(const item of queue){
+     const file=await get(env,'file:'+item.key);
+     if(!file?.id||file.gone)continue;
      if(checked>=40){keep.push(item);continue;}
      checked++;
-     const file=await get(env,'file:'+item.key);
-     if(file?.id&&!(await fileGone(env,file.id)))keep.push(item);
+     if(await fileGone(env,file.id))await put(env,'file:'+item.key,{...file,gone:true});
+     else keep.push(item);
     }
     if(keep.length!==queue.length)await put(env,'post-blur',keep);
     return json({items:keep});
