@@ -116,6 +116,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: python scripts/deploy-news-archive.py
+      - name: החזרת גשר הווידאו אם נמחק בפריסה אחרת של שרת הדואר
+        if: ${{ !inputs.repair_archive && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://yemot-mail.smwlyqswkwt232.workers.dev/news-video/state || true)
+          echo "bridge_state_http $code"
+          # 404 means the routes are gone; any other answer leaves the live worker untouched.
+          if [ "$code" = "404" ]; then python scripts/deploy-news-archive.py; fi
       - name: כלי טשטוש וידאו
         run: python -m pip install 'opencv-python-headless==4.10.0.84'
       - name: כלי וידאו
