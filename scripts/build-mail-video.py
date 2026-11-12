@@ -11,6 +11,8 @@ wrapper='''
 const newsVideoAuth=(()=>{AUTH;return verifyCollectorToken;})();
 MAINTENANCE
 const newsVideoBridgeFactory=(()=>{BRIDGE;return createVideoMailBridge;})();
+const selectedEpisodeFiles=["1jOaK1Qf9iwTx2xf0qb0QUsEJpZNNu0RL", "1Uca0MYjykTL5ozeSy9HqkSaTKgp8M1bD", "18odiR4or56Kg6H3bS4FjwLOvj4nMFjq5", "1CqkkKAtiMaVNSKxwJff0FBh-pHB-sqFJ"];
+const selectedFolder=id=>selectedEpisodeFiles.includes(id)?'1kSl08R_HZAPAmYNQ8Xp6avw0omgwElPr':'1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW';
 const newsDriveBlur=createDriveBlurMaintenance({
  verify:(token,env,audience)=>newsVideoAuth(token,{COLLECTOR_REPO:'SHMUEL-LAMED/07',COLLECTOR_REPO_ID:'1390638770'},audience),
  read:async(env,id)=>{
@@ -20,15 +22,15 @@ const newsDriveBlur=createDriveBlurMaintenance({
   const info=await meta.json(),etag=String(info.version||'');
   if(!etag)throw Error('drive_version_missing');
   if(info.mimeType!=='video/mp4')throw Error('unexpected_video_type');
-  if(Number(info.size)>50*1024*1024)throw Error('source_too_large');
-  if(!info.parents?.includes('1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW'))throw Error('source_folder_changed');
+  if(Number(info.size)>100*1024*1024)throw Error('source_too_large');
+  if(!info.parents?.includes(selectedFolder(id)))throw Error('source_folder_changed');
   const response=await fetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers});
   if(!response.ok)throw Error('drive_download_'+response.status);
-  return {bytes:new Uint8Array(await response.arrayBuffer()),etag};
+  return {bytes:response.body,etag};
  },
  replace:async(env,id,bytes,etag)=>{
   const metadata=await gapi(env,'https://www.googleapis.com/drive/v3/files/'+id+'?fields=version,parents');
-  if(String(metadata.version)!==etag||!metadata.parents?.includes('1mq-Xv3ej0UFNbMkF6R4Hk_d1jG4FKWzW'))throw Error('original_version_changed');
+  if(String(metadata.version)!==etag||!metadata.parents?.includes(selectedFolder(id)))throw Error('original_version_changed');
   const response=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media&fields=id,version,size',{method:'PATCH',headers:{Authorization:'Bearer '+await accessToken(env),'Content-Type':'video/mp4'},body:bytes});
   if(!response.ok)throw Error('drive_replace_'+response.status);
   return response.json();
