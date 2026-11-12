@@ -3,6 +3,7 @@
 import email
 import json
 import os
+import posixpath
 import re
 from pathlib import Path
 import subprocess
@@ -37,10 +38,20 @@ def split_modules(content_type, raw):
 
 
 def find_mail_module(modules):
-    """The one module holding the mail line itself: the Google helpers the bridge calls."""
-    helpers = ('async function accessToken(', 'async function gapi(', 'async function driveFolder(', 'async function driveUpload(')
-    found = [index for index, (name, _, payload) in enumerate(modules)
-             if is_js(name) and all(helper in payload.decode('utf-8') for helper in helpers)]
+    """The one module holding the mail line itself: the Google helpers the bridge calls are in its scope."""
+    helpers = ('accessToken', 'gapi', 'driveFolder', 'driveUpload')
+
+    def in_scope(code, name):
+        # Defined in the module, or imported into it since the line was split into lib/ modules.
+        return bool(re.search(r'async function %s\(|import\s*\{[^}]*\b%s\b[^}]*\}\s*from' % (name, name), code))
+
+    found = []
+    for index, (name, _, payload) in enumerate(modules):
+        if not is_js(name):
+            continue
+        code = payload.decode('utf-8')
+        if code.count(MARKER) == 1 or (code.count('export default {') == 1 and all(in_scope(code, helper) for helper in helpers)):
+            found.append(index)
     if len(found) != 1:
         raise SystemExit('Refusing deployment: expected exactly one mail module with the Google helpers')
     return found[0]
@@ -70,8 +81,10 @@ def find_main_module(headers, modules):
     if len(names) == 1:
         return names[0]
     imported = set()
-    for _, _, payload in [m for m in modules if is_js(m[0])]:
-        imported.update(Path(target).name for target in re.findall(r"""(?:from|import)\s*\(?\s*['"]\./([^'"]+)['"]""", payload.decode('utf-8')))
+    for importer, _, payload in [m for m in modules if is_js(m[0])]:
+        # Module names are paths (lib/google.js), and a specifier is relative to the importing module.
+        for target in re.findall(r"""(?:from|import)\s*\(?\s*['"](\.{1,2}/[^'"]+)['"]""", payload.decode('utf-8')):
+            imported.add(posixpath.normpath(posixpath.join(posixpath.dirname(importer), target)))
     roots = [name for name in names if name not in imported]
     if len(roots) != 1:
         raise SystemExit('Cannot safely determine the main module; deployment stopped')
