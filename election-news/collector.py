@@ -467,9 +467,18 @@ def authorization(endpoint):
     if os.environ.get('COLLECTOR_ADMIN_TOKEN'):return os.environ['COLLECTOR_ADMIN_TOKEN']
     request_url=os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience='+urllib.parse.quote(endpoint,safe='')
     return get_json(request_url,{'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})['value']
+def worker_error_detail(error):
+    """The server's own short error code, reduced to safe characters for the log."""
+    try:detail=json.loads(error.read(4096)).get('error','')
+    except Exception:return ''
+    return re.sub(r'[^A-Za-z0-9_:. -]','',str(detail))[:160]
 def worker(endpoint,path,body=None,headers=None):
     auth=authorization(endpoint)
-    return json.loads(fetch(endpoint+path,{'Authorization':'Bearer '+auth,**(headers or {})},body,timeout=100))
+    try:return json.loads(fetch(endpoint+path,{'Authorization':'Bearer '+auth,**(headers or {})},body,timeout=100))
+    except urllib.error.HTTPError as error:
+        # Name the route and the server's reason; without them a failed run cannot be diagnosed.
+        print('worker_request_failed','/'.join(path.split('/')[:3]),error.code,worker_error_detail(error),flush=True)
+        raise
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--endpoint',required=True);parser.add_argument('--max-files',type=int,default=16);parser.add_argument('--deadline-seconds',type=int,default=540);parser.add_argument('--dry-run',action='store_true');args=parser.parse_args()
