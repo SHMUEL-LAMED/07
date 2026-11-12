@@ -55,6 +55,18 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
  }
  async function recordPart(env,pending,part,gmailId){
   await put(env,`receipt:${pending.id}:${part}`,{gmailId,at:Date.now()});
+  return settle(env,pending,part,gmailId);
+ }
+ // KV allows one write per second to a key. Recording a whole batch part by part rewrote
+ // 'pending' once per part and was refused with 429, on every retry.
+ async function recordAll(env,pending,idFor){
+  for(let part=1;part<=pending.parts;part++){
+   const id=idFor(part),old=await get(env,`receipt:${pending.id}:${part}`);
+   if(old?.gmailId!==id)await put(env,`receipt:${pending.id}:${part}`,{gmailId:id,at:Date.now()});
+  }
+  return settle(env,pending,pending.parts,idFor(pending.parts));
+ }
+ async function settle(env,pending,part,gmailId){
   const receipts=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`receipt:${pending.id}:${i+1}`)));
   pending.sent=[...new Set([...(pending.sent||[]),part,...receipts.flatMap((x,i)=>x?.gmailId?[i+1]:[])])];
   if(pending.sent.length===pending.parts){
@@ -69,8 +81,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
   const files=await Promise.all(Array.from({length:pending.parts},(_,i)=>get(env,`file:${pending.id}:${i+1}`)));
   if(files.some(x=>!x))return {ok:true,staged:true,complete:false};
   if(!sendMail){
-   let result;
-   for(let part=1;part<=pending.parts;part++)result=await recordPart(env,pending,part,'drive:'+files[part-1].id);
+   const result=await recordAll(env,pending,part=>'drive:'+files[part-1].id);
    return {...result,gmailId:undefined,archived:true,emails:0};
   }
   const messageId=`news-video-${pending.id}-all@yemot-mail.smwlyqswkwt232.workers.dev`;
@@ -101,8 +112,7 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
    if(!result.id)throw Error('send_not_confirmed');gmailId=result.id;
   }
   // A single confirmation covers every attachment; partial completion is recoverable.
-  let result;
-  for(let part=1;part<=pending.parts;part++)result=await recordPart(env,pending,part,gmailId);
+  const result=await recordAll(env,pending,()=>gmailId);
   return {...result,emails:1};
  }
  return async function videoMailRoute(request,env){

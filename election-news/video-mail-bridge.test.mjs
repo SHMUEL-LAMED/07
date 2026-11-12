@@ -96,6 +96,20 @@ test('Drive-only mode archives every file without sending any email',async()=>{
  assert.equal(s.values.has('news-video:pending'),false);
 });
 
+test('completing a batch writes each KV key once, also when a refused attempt is retried',async()=>{
+ // Cloudflare KV refuses a second write to one key within a second (429).
+ const s=setup(false);const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:3})),s.env)).json();
+ await upload(s,b,1);await upload(s,b,2);
+ const writes=new Map(),original=s.env.KV.put;let refuse=true;
+ s.env.KV.put=async(k,v)=>{writes.set(k,(writes.get(k)||0)+1);if(refuse&&k==='news-video:state')throw Error('KV PUT failed: 429 Too Many Requests');return original(k,v);};
+ assert.equal((await upload(s,b,3)).status,502);
+ assert.equal(Math.max(...writes.values()),1);
+ writes.clear();refuse=false;
+ const result=await(await upload(s,b,3)).json();
+ assert.equal(result.ok,true);assert.equal(result.complete,true);
+ assert.equal(Math.max(...writes.values()),1);
+ assert.equal(s.values.has('news-video:pending'),false);
+});
 test('backfill recovers only this service MP4 attachments into the correct day without mail or duplicates',async()=>{
  const encoded=Buffer.from(tinyVideo).toString('base64url');
  const s=setup(false,async(e,url)=>{
