@@ -161,6 +161,17 @@ test('raw file is archived first; only a validated processed replacement removes
  assert.equal(s.calls.some(x=>x.url.endsWith('/send')),false);
 });
 
+test('blur tasks for files the owner deleted leave the queue; the rest stay',async()=>{
+ const gone=new Set();
+ const s=setup(false,()=>null,{fileGone:async(e,id)=>gone.has(id)});
+ const b=await(await s.route(s.request('/news-video/start',JSON.stringify({items:[s.item],parts:2})),s.env)).json();
+ await upload(s,b,1);await upload(s,b,2);
+ const list=async()=>(await(await s.route(s.request('/news-video/post-blur'),s.env)).json()).items;
+ assert.equal((await list()).length,2);
+ gone.add(JSON.parse(s.values.get(`news-video:file:${b.id}:1`)).id);
+ assert.deepEqual((await list()).map(x=>x.part),[2]);
+ assert.deepEqual(JSON.parse(s.values.get('news-video:post-blur')).map(x=>x.part),[2]);
+});
 test('archive names preserve Hebrew article titles and remove unsafe filename characters',()=>{
  assert.equal(archiveFilename('כותרת מקורית: כתבה/חדשה', 'abcdef123456', 2),'כותרת מקורית כתבה חדשה — abcdef12-2.mp4');
  const s=setup();assert.throws(()=>validateVideoManifest({items:[s.item],parts:2,partTitles:['one']}));
