@@ -73,14 +73,19 @@ const newsVideoMail=newsVideoBridgeFactory({
   return driveUpload(env,{name,mime:'video/mp4',bytes,folder});
  },
  replaceVideo:async(env,id,bytes,expectedHash)=>{
+  // Drive v3 sends no ETag with file content, so the old ETag guard refused every replacement.
+  // The file's version before and after reading it shows whether it changed in between.
+  const meta=()=>gapi(env,'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?fields=version,trashed');
   const headers={Authorization:'Bearer '+await accessToken(env)};
+  const before=await meta();
+  if(before.trashed)throw Error('archive_file_deleted');
   const current=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers});
   if(!current.ok)throw Error('drive_read_'+current.status);
-  const etag=current.headers.get('etag');
   const raw=new Uint8Array(await current.arrayBuffer());
   const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',raw))].map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(!etag||hash!==expectedHash)throw Error('archive_source_changed');
-  const response=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(id)+'?uploadType=media&fields=id,size',{method:'PATCH',headers:{...headers,'Content-Type':'video/mp4','If-Match':etag},body:bytes});
+  if(!before.version||hash!==expectedHash)throw Error('archive_source_changed');
+  if(String((await meta()).version)!==String(before.version))throw Error('archive_source_changed');
+  const response=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(id)+'?uploadType=media&fields=id,size',{method:'PATCH',headers:{...headers,'Content-Type':'video/mp4'},body:bytes});
   if(!response.ok)throw Error('drive_replace_'+response.status);
   return response.json();
  },

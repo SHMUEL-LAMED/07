@@ -171,6 +171,11 @@ test('blur tasks for files the owner deleted leave the queue; the rest stay',asy
  gone.add(JSON.parse(s.values.get(`news-video:file:${b.id}:1`)).id);
  assert.deepEqual((await list()).map(x=>x.part),[2]);
  assert.deepEqual(JSON.parse(s.values.get('news-video:post-blur')).map(x=>x.part),[2]);
+ // A stale writer puts the removed task back; it stays out without Drive being asked again.
+ const first=JSON.parse(s.values.get('news-video:post-blur'))[0];
+ s.values.set('news-video:post-blur',JSON.stringify([{...first,key:`${b.id}:1`,part:1},first]));
+ gone.clear();
+ assert.deepEqual((await list()).map(x=>x.part),[2]);
 });
 test('archive names preserve Hebrew article titles and remove unsafe filename characters',()=>{
  assert.equal(archiveFilename('כותרת מקורית: כתבה/חדשה', 'abcdef123456', 2),'כותרת מקורית כתבה חדשה — abcdef12-2.mp4');

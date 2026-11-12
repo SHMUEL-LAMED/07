@@ -353,6 +353,7 @@ def main():
             return
         parts = split_digest(clips, folder)
         batch = c.worker(mail, '/news-video/start', json.dumps({'items': items, 'parts': len(parts), 'partTitles': part_titles(parts, items)}, ensure_ascii=False).encode(), {'Content-Type': 'application/json'})
+        result = {}
         for number, part in enumerate(parts, 1):
             if number in batch.get('sent', []):
                 continue
@@ -368,6 +369,15 @@ def main():
                     if attempt == 2:
                         raise
                     time.sleep(5)
+        # The server reads its own records back with up to a minute's delay, so the last part can
+        # be answered "staged" although every file is stored. Asking again settles the batch now
+        # instead of leaving it for a later run, which would need every source to be reachable again.
+        for _ in range(2):
+            if not parts or not result.get('staged'):
+                break
+            time.sleep(65)
+            result = c.worker(mail, '/news-video/part/%s/%d' % (batch['id'], len(parts)), parts[-1].read_bytes(), {'Content-Type': 'video/mp4', **({'X-News-Filter': 'women-body-v1'} if os.environ.get('BLUR_WOMEN') == '1' else {})})
+            print('video_archived' if result.get('archived') else 'video_staged', len(parts), len(parts), flush=True)
         if os.environ.get('POST_BLUR') == '1':
             postprocess_archive(mail)
         print('video_digest_complete', len(items), 'clips', 0 if batch.get('delivery') == 'drive-only' else (1 if batch.get('delivery') == 'single-email' else len(parts)), 'emails', len(parts), 'attachments', failures, 'source_failures', flush=True)
