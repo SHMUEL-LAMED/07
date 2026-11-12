@@ -84,6 +84,11 @@ const newsVideoMail=newsVideoBridgeFactory({
   if(!response.ok)throw Error('drive_replace_'+response.status);
   return response.json();
  },
+ fileGone:async(env,id)=>{
+  // Gone means deleted or in the trash; any other failure keeps the task for a later run.
+  try{return (await gapi(env,'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?fields=id,trashed')).trashed===true;}
+  catch(error){return error.status===404;}
+ },
  loadVideo:async(env,id)=>{
   const response=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+await accessToken(env)}});
   if(!response.ok)throw Error('drive_download_'+response.status);

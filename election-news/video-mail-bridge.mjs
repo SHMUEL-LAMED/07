@@ -45,7 +45,7 @@ export function parseWomenFrameResult(value,count){
  return {policy:'women-body-v1',frames:parsed.frames};
 }
 
-export function createVideoMailBridge({verify, google, storeVideo, loadVideo, replaceVideo, sendMail=false, analyzeFrames, requireWomenBlur=false}) {
+export function createVideoMailBridge({verify, google, storeVideo, loadVideo, replaceVideo, fileGone, sendMail=false, analyzeFrames, requireWomenBlur=false}) {
  async function mailbox(env){
   const recipient=String(env.BUSINESS_EMAIL||'').toLowerCase();
   if(!/^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$/.test(recipient))throw Error('owner_not_configured');
@@ -122,7 +122,21 @@ export function createVideoMailBridge({verify, google, storeVideo, loadVideo, re
   try{
    const recipient=await mailbox(env);
    // Only files created by this authenticated archive may be post-processed.
-   if(path==='/news-video/post-blur'&&request.method==='GET')return json({items:await get(env,'post-blur',[])});
+   if(path==='/news-video/post-blur'&&request.method==='GET'){
+    const queue=await get(env,'post-blur',[]);
+    if(!fileGone)return json({items:queue});
+    // The owner may delete archived files or their folder. A task for a file that no longer
+    // exists can never finish, so it leaves the queue instead of being retried on every run.
+    const keep=[];let checked=0;
+    for(const item of queue){
+     if(checked>=40){keep.push(item);continue;}
+     checked++;
+     const file=await get(env,'file:'+item.key);
+     if(file?.id&&!(await fileGone(env,file.id)))keep.push(item);
+    }
+    if(keep.length!==queue.length)await put(env,'post-blur',keep);
+    return json({items:keep});
+   }
    if(path==='/news-video/post-blur/defer'&&request.method==='POST'){
     const length=Number(request.headers.get('Content-Length'));if(!length||length>512)return json({error:'invalid_task'},400);
     const {key}=await request.json(),queue=await get(env,'post-blur',[]),item=queue.find(x=>x.key===key);
