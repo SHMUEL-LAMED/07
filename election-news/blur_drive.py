@@ -12,7 +12,7 @@ import collector as c
 from video_mail import probe
 from women_blur import sanitize_video
 
-FILES = {'1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn','15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT','1Y15dd7yvUerMTQprpvSMmUl64lBksg3O','1Owz-STPGGUEAqbmtUR522TlpympTx2PT','1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq'}
+FILES = {'1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn','15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT','1Y15dd7yvUerMTQprpvSMmUl64lBksg3O','1Owz-STPGGUEAqbmtUR522TlpympTx2PT','1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq','1jOaK1Qf9iwTx2xf0qb0QUsEJpZNNu0RL','1Uca0MYjykTL5ozeSy9HqkSaTKgp8M1bD','18odiR4or56Kg6H3bS4FjwLOvj4nMFjq5','1CqkkKAtiMaVNSKxwJff0FBh-pHB-sqFJ'}
 
 def call(endpoint, path, body=None, headers=None):
     req = urllib.request.Request(endpoint+path, data=body, headers={'User-Agent':c.UA,'Authorization':'Bearer '+c.authorization(endpoint), **(headers or {})})
@@ -42,7 +42,7 @@ def main():
             with original.open('wb') as output:
                 while block:=response.read(1024*1024):
                     size+=len(block)
-                    if size>50*1024*1024:raise ValueError('source_too_large')
+                    if size>100*1024*1024:raise ValueError('source_too_large')
                     output.write(block)
         duration=probe(original)
         print('original_downloaded',args.file_id,round(duration),flush=True)
