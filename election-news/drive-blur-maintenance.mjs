@@ -1,5 +1,5 @@
 // Authenticated, one-time replacement limited to the five owner-selected videos.
-export const driveBlurFiles = ['1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn','15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT','1Y15dd7yvUerMTQprpvSMmUl64lBksg3O','1Owz-STPGGUEAqbmtUR522TlpympTx2PT','1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq'];
+export const driveBlurFiles = ['1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn','15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT','1Y15dd7yvUerMTQprpvSMmUl64lBksg3O','1Owz-STPGGUEAqbmtUR522TlpympTx2PT','1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq','1jOaK1Qf9iwTx2xf0qb0QUsEJpZNNu0RL','1Uca0MYjykTL5ozeSy9HqkSaTKgp8M1bD','18odiR4or56Kg6H3bS4FjwLOvj4nMFjq5','1CqkkKAtiMaVNSKxwJff0FBh-pHB-sqFJ'];
 export function createDriveBlurMaintenance({verify,read,replace}) {
  return async(request,env)=>{
   const url=new URL(request.url),id=url.pathname.split('/').pop();
