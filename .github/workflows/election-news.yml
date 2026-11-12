@@ -38,7 +38,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('election-news-pr-{0}', github.ref) || inputs.blur_existing && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.video_mail_check_only || inputs.blur_check_only || inputs.repair_archive || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))) && 'election-news-video-mail' || 'election-news-collector' }}
+  group: ${{ github.event_name == 'pull_request' && format('election-news-pr-{0}', github.ref) || (inputs.blur_existing || (github.event_name == 'push' && contains(github.event.head_commit.message, '[blur-now]'))) && 'drive-blur-maintenance' || (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.video_mail_check_only || inputs.blur_check_only || inputs.repair_archive || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]'))) && 'election-news-video-mail' || 'election-news-collector' }}
   cancel-in-progress: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]') }}
 jobs:
   test:
@@ -53,7 +53,7 @@ jobs:
       - run: node --test election-news/*.test.mjs
   collect:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && github.event.schedule != '7 * * * *' && !inputs.video_email && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) && !inputs.eretz_latest && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')) && !inputs.blur_existing && !inputs.video_mail_check_only && !inputs.blur_check_only && !inputs.repair_archive
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event.schedule != '37 * * * *' && github.event.schedule != '7 * * * *' && !inputs.video_email && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) && !inputs.eretz_latest && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')) && !inputs.blur_existing && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[blur-now]')) && !inputs.video_mail_check_only && !inputs.blur_check_only && !inputs.repair_archive
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -99,7 +99,7 @@ jobs:
           --max-files 16 --deadline-seconds 540
   video-mail:
     needs: test
-    if: github.ref == 'refs/heads/main' && !inputs.blur_existing && (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.video_mail_check_only || inputs.blur_check_only || inputs.repair_archive || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')))
+    if: github.ref == 'refs/heads/main' && !inputs.blur_existing && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[blur-now]')) && (github.event.schedule == '37 * * * *' || github.event.schedule == '7 * * * *' || inputs.video_email || inputs.video_mail_check_only || inputs.blur_check_only || inputs.repair_archive || (github.event_name == 'push' && contains(github.event.head_commit.message, '[video-now]')) || inputs.eretz_latest || (github.event_name == 'push' && contains(github.event.head_commit.message, '[eretz-now]')))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -167,7 +167,7 @@ jobs:
 
   deploy-drive-blur:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.blur_existing
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.blur_existing) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[blur-now]')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -190,11 +190,10 @@ jobs:
       fail-fast: false
       matrix:
         file:
-          - 1rDhBSHYbgYhX43oApu7XW9Q2Zb2fGqYn
-          - 15kq6-aPWIJE4rYoLQ5GgDBEPDUtZACQT
-          - 1Y15dd7yvUerMTQprpvSMmUl64lBksg3O
-          - 1Owz-STPGGUEAqbmtUR522TlpympTx2PT
-          - 1sV_kL2chdt5UUM6qILTWHOYvAQGFrKNq
+          - 1jOaK1Qf9iwTx2xf0qb0QUsEJpZNNu0RL
+          - 1Uca0MYjykTL5ozeSy9HqkSaTKgp8M1bD
+          - 18odiR4or56Kg6H3bS4FjwLOvj4nMFjq5
+          - 1CqkkKAtiMaVNSKxwJff0FBh-pHB-sqFJ
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
