@@ -148,7 +148,7 @@ async function patchReg(env, slug, fn) {
   if (!l) return null;
   fn(l); await saveReg(env, reg); return l;
 }
-const view = l => ({ slug: l.slug, script: l.script, url: l.url, name: l.name, line: l.line, owner: l.owner, manager: l.ownerEmail || "", created: l.created, ivr: l.ivr || null, test: l.test !== false, enabled: l.enabled !== false });
+const view = l => ({ slug: l.slug, script: l.script, url: l.url, name: l.name, line: l.line, owner: l.owner, manager: l.ownerEmail || "", created: l.created, ivr: l.ivr || null, test: l.test !== false, enabled: l.enabled !== false, hasTok: !!l.tokEnc });
 
 // ---------- בדיקת טוקן ----------
 async function checkToken(token) {
@@ -227,7 +227,7 @@ async function createLine(env, body, origin, D) {
     await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה הכתובת של הקו");
     const sub = (await cf(env, "GET", "/{acc}/workers/subdomain")).subdomain;
     const url = `https://${script}.${sub}.workers.dev`;
-    const line = { slug, script, url, name, line: linePhone, phones, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, kv: kv.id, template: origin, test: true };
+    const line = { slug, script, url, name, line: linePhone, phones, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, tokEnc: await sealTok(env, token), kv: kv.id, template: origin, test: true };
     // הבנייה לוקחת זמן: קוראים שוב את הרשימה, בודקים שוב שלא נבנה בינתיים קו באותו שם או על אותה מערכת, ומוסיפים לרשימה העדכנית
     const cur = await loadReg(env), clash = cur.find(l => l.slug === slug) || twinOf(cur);
     if (clash) throw new Error(`בינתיים נבנה הקו "${clash.name}" (${clash.slug}) באותו שם או על אותה מערכת`);
@@ -314,14 +314,41 @@ function rewriteIni(text, from, to) {
   return t;
 }
 // הטוקן חייב להיות של המערכת שהקו נבנה עליה (נשמרה טביעת SHA-256 שלו ביצירה), ולא של קו המקור
+// הטוקן של כל קו נשמר מוצפן (AES-GCM) ברשימת הקווים של קו המקור, כדי שלא יצטרכו להקליד אותו בכל פעולה.
+// המפתח נגזר מסוד של קו המקור (RUN_KEY) שלא נמצא ב-KV, ולכן גם גיבוי של ה-KV לא חושף את הטוקן
+const b64 = u => btoa(String.fromCharCode(...new Uint8Array(u)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function tokKey(env) {
+  const seed = env.RUN_KEY || env.ADMIN_PASS;
+  if (!seed) return null;
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("factory-ym-token:" + seed));
+  return crypto.subtle.importKey("raw", h, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function sealTok(env, token) {
+  const k = await tokKey(env); if (!k) return "";
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  return b64(iv) + "." + b64(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, new TextEncoder().encode(token)));
+}
+async function openTok(env, sealed) {
+  try { const k = await tokKey(env), [iv, ct] = String(sealed || "").split("."); if (!k || !ct) return "";
+    return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(iv) }, k, unb64(ct))); }
+  catch { return ""; }
+}
+export const NEED_TOKEN = "צריך את הטוקן של המערכת בימות של הקו הזה (פעם אחת – אחר כך הוא נשמר)";
 async function lineToken(env, body, D) {
   const reg = await loadReg(env), line = reg.find(l => l.slug === body.slug);
   if (!line) throw new Error("הקו לא נמצא ברשימה");
-  const token = String(body.ymToken || "").trim();
+  let token = String(body.ymToken || "").trim(), stored = false;
+  if (!token && line.tokEnc) { token = await openTok(env, line.tokEnc); stored = !!token; }
+  if (!token) throw new Error(NEED_TOKEN);
   notSource(env, token, D);
-  const info = await checkToken(token);
-  if (line.tokHash ? (await sha(token)) !== line.tokHash : info.linePhone !== line.line)
+  // יש טביעה של הטוקן מהבנייה – משווים בלי לפנות לימות; קו ישן בלי טביעה – לפי המספר שימות מחזירים
+  const ok = line.tokHash ? (await sha(token)) === line.tokHash : (await checkToken(token)).linePhone === line.line;
+  if (!ok) {
+    if (stored) { await patchReg(env, line.slug, l => { delete l.tokEnc; }); throw new Error(NEED_TOKEN); }
     throw new Error(`הטוקן הזה לא שייך לקו "${line.name}" (${line.line}). צריך את הטוקן של המערכת שהקו נבנה עליה`);
+  }
+  if (!stored) { const enc = await sealTok(env, token), h = line.tokHash || await sha(token); if (enc) await patchReg(env, line.slug, l => { l.tokEnc = enc; l.tokHash = h; }); }
   return { reg, line, token };
 }
 async function ivrPlan(env, body, origin, D) {
@@ -692,6 +719,7 @@ export async function factory(req, env, body, D, origin) {
   if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "restore") return await restoreStep(env, body, origin, D);
   if (op === "names") return await namesStep(env, body, origin, D);
+  if (op === "tokcheck") { const { line } = await lineToken(env, body, D); return { ok: true, slug: line.slug }; }
   if (op === "vfix_scan") return await vfixScan(env, body, origin, D);
   if (op === "vfix_apply") return await vfixApply(env, body, origin, D);
   if (op === "suspend" || op === "resume") {

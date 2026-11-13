@@ -167,3 +167,21 @@ test("ניקוי: סריקה מחזירה פרטים, וההעברה לתיקי�
   assert.deepEqual(tree["/1/2"].sort(), ["000.wav", "ext.ini"]);
   assert.deepEqual(tree["/DeletedByAdmin"].sort(), ["004.wav", "005.wav", "006.wav"]);
 });
+
+test("טוקן: נשמר מוצפן בפעם הראשונה, ואחר כך לא צריך לשלוח אותו", async () => {
+  const tree = { "/1": ["ext.ini"] };
+  fakeYemot(tree);
+  const E = env(); E.RUN_KEY = "secret-run-key";
+  await assert.rejects(factory(req, E, { op: "tokcheck", slug: "nn", ymToken: "" }, D, "https://x.y"), /פעם אחת/);
+  await factory(req, E, { op: "tokcheck", slug: "nn", ymToken: "0771111111:1234" }, D, "https://x.y");
+  const reg = JSON.parse(await E.KV.get("factory_lines"));
+  assert.ok(reg[0].tokEnc && !reg[0].tokEnc.includes("0771111111"), "נשמר מוצפן");
+  const r = await factory(req, E, { op: "tokcheck", slug: "nn", ymToken: "" }, D, "https://x.y");
+  assert.equal(r.ok, true);
+  // מפתח אחר (RUN_KEY הוחלף) – השמור לא נפתח ומבקשים שוב
+  E.RUN_KEY = "other";
+  await assert.rejects(factory(req, E, { op: "tokcheck", slug: "nn", ymToken: "" }, D, "https://x.y"), /פעם אחת/);
+  // טוקן של מערכת אחרת נדחה
+  E.RUN_KEY = "secret-run-key";
+  await assert.rejects(factory(req, E, { op: "tokcheck", slug: "nn", ymToken: "0779999999:1" }, D, "https://x.y"), /לא שייך/);
+});
