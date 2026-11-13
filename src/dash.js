@@ -753,7 +753,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         p, n: nm[p] || "", person, admin: admins.includes(p) || p === D.OWNER, general: general.includes(p), tz: mstat ? (mstat.active ? "on" : "off") : "none",
         muted: w && w.hold && (!w.until || w.until > now) ? (w.until ? D.ilAt(w.until).slice(0, 16) : "ללא הגבלה") : "", blocked: blocked.includes(p), retort: retort.includes(p), strict: strict.includes(p),
         rsvp: rsvp[p] || null, approved: approved[p] || null, ads: ads[p] || [], note: (notes.member || {})[p] || null,
-        msgs: msgs.slice(0, 100), msgTotal: msgs.length, conv: conv.filter(c => c.p === p).slice(-60).reverse(), profile: profiles[p] || null, memory: mem, talk: ((facts || {}).talk || {})[p] || "",
+        msgs: msgs.slice(0, 100), msgTotal: msgs.length, conv: conv.filter(c => c.p === p).slice(-60).reverse(), profile: profiles[p] || Object.values(profiles).find(x => x && (x.phones || []).includes(p)) || null, memory: mem, talk: ((facts || {}).talk || {})[p] || "",
         calls, callsMonth: new Set(lg.ents.filter(e => e.p === p && e.t.startsWith(D.nowIL().slice(0, 7))).map(e => e.id)).size, last: lg.last[p] || "", pm: pmFiles(pmDir), pmOld: pmFiles(pmOld).slice(-20), now: D.nowIL(),
       });
     }

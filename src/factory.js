@@ -581,6 +581,50 @@ async function audioStep(env, body, origin, D) {
   return { copied, failed, left, tts: tts.length };
 }
 
+// ---------- עדכון הקוד של הקו לגרסה של קו המקור ----------
+// קו שנבנה מקבל עותק של הקוד מאותו יום. כאן מעלים לו את הקוד הנוכחי של קו המקור – רק הקוד: המשתנים, הסודות, האחסון והתזמון נשארים
+async function codeStep(env, body, origin, D) {
+  const { line } = await lineToken(env, body, D);
+  if (!cfReady(env)) throw new Error("המפעל לא מחובר ל-Cloudflare");
+  const tpl = await templateModules(env);
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify({ main_module: tpl.main })], { type: "application/json" }));
+  for (const p of tpl.parts) form.append(p.name, new Blob([p.data], { type: p.type }), p.name);
+  await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/content`, form);
+  await patchReg(env, line.slug, l => { l.code = Date.now(); });
+  await D.log(env, `מפעל הקווים: הקוד של "${line.name}" עודכן לגרסה של קו המקור`).catch(() => {});
+  return { ok: true, files: tpl.parts.length };
+}
+
+// ---------- מאגר הנתונים של העוזר: תמלול ההודעות ובניית הפרופילים בקו החדש, מיד ----------
+// בקו עצמו התמלול רץ בלילה. כאן מפעילים אותו עכשיו דרך הנתיבים tb (תמלול 3 הודעות) ו-prof (פרופיל אחד), שדורשים
+// את הסוד DEBUG_KEY. אם אין לקו כזה – נוצר אחד אקראי, נשמר כסוד בקו ומוצפן ברשימת הקווים
+async function aiStep(env, body, origin, D) {
+  const { line } = await lineToken(env, body, D);
+  if (!line.url || !line.runKey) throw new Error("חסרים פרטי השרת של הקו");
+  let dk = line.dkEnc ? await openTok(env, line.dkEnc) : "";
+  if (!dk) {
+    dk = rnd(24);
+    await cf(env, "PUT", `/{acc}/workers/scripts/${line.script}/secrets`, { name: "DEBUG_KEY", text: dk, type: "secret_text" });
+    const enc = await sealTok(env, dk);
+    await patchReg(env, line.slug, l => { l.dkEnc = enc; });
+    return { warming: true }; // הסוד נקלט בשרת של הקו תוך כמה שניות
+  }
+  const what = body.what === "prof" ? "prof" : "tb";
+  const base = String(line.url).replace(/\/+$/, "");
+  const res = await fetch(`${base}/${what}/x/${encodeURIComponent(line.runKey)}?dk=${encodeURIComponent(dk)}`).then(r => r.text()).catch(e => "ERR " + e.message);
+  let r; try { r = JSON.parse(res); } catch { return { warming: true, raw: String(res).slice(0, 80) }; }
+  const st = await fetch(`${base}/status/x/${encodeURIComponent(line.runKey)}`).then(x => x.json()).catch(() => null);
+  return {
+    what,
+    done: what === "tb" ? +((r.r || {}).done) || 0 : +r.n || 0,
+    total: what === "tb" ? +((r.r || {}).total) || 0 : 0,
+    err: r.err || "",
+    transcribed: st ? +st.transcribed || 0 : null,
+    profiles: st ? +st.profiles || 0 : null,
+  };
+}
+
 // ---------- שמות החברים: העתקה חד-פעמית מהקווים האחרים ----------
 // לכל מספר שרשום ברשימות הצינתוקים של הקו החדש ויש לו שם בקו אחר (קו המקור, דעת תורה, קווי המפעל) – השם נכתב בקו החדש.
 // רק בחיבור או בלחיצה: שינוי שם אחר כך לא עובר בין הקווים. שם שכבר קיים בקו החדש לא נדרס, ומספרים שלא בקו לא נחשפים
@@ -679,6 +723,8 @@ export async function factory(req, env, body, D, origin) {
   if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "restore") return await restoreStep(env, body, origin, D);
   if (op === "names") return await namesStep(env, body, origin, D);
+  if (op === "code") return await codeStep(env, body, origin, D);
+  if (op === "ai") return await aiStep(env, body, origin, D);
   if (op === "tokcheck") { const { line } = await lineToken(env, body, D); return { ok: true, slug: line.slug }; }
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);

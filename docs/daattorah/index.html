@@ -5589,10 +5589,15 @@ ${fxIvrHtml(slug)}
 // חיבור מלא של קו בלחיצה אחת: קודם השלוחות (סבבים של תכנון וכתיבה עד שכל העץ הועתק), ואחר כך הקריינות
 // (העתקת קובצי הפתיח, ויצירה בקול העוזר לשלוחות שאין להן). השרת שומר על הכללים: קורא מחדש מקור ויעד,
 // לא כותב קובץ שלא נקרא, ושומר גיבוי לפני כתיבת הגדרות
-const ivrState = () => ({ t0: Date.now(), phase: "keep", round: 0, kept: 0, written: 0, same: 0, dirs: 0, names: 0, audio: 0, tts: 0, failed: [], warn: [], done: false, err: "" });
+const ivrState = () => ({ t0: Date.now(), phase: "code", code: false, ai: 0, prof: 0, round: 0, kept: 0, written: 0, same: 0, dirs: 0, names: 0, audio: 0, tts: 0, failed: [], warn: [], done: false, err: "" });
 async function lineSetupRun(slug, token, line, S, redraw, alive) {
 const paths = new Set(["/"]), dirs = new Set();
 try {
+// קודם: הקוד של הקו מתעדכן לגרסה הנוכחית של קו המקור (ההגדרות, הסודות והנתונים לא משתנים)
+S.phase = "code"; S.round = 1; redraw();
+await fxApi({ op: "code", slug, ymToken: token }, line);
+if (!alive()) return;
+S.code = true; S.phase = "keep"; S.round = 0;
 // קודם כול: הודעות שכבר היו בשלוחה 1 בקו החדש עוברות ל-1/2, כדי שלא ילכו לאיבוד כששלוחה 1 הופכת לתפריט
 for (let i = 0; i < 30; i++) {
 S.round = i + 1; redraw();
@@ -5655,6 +5660,24 @@ S.phase = "names"; S.round = 1; redraw();
 const rn = await fxApi({ op: "names", slug, ymToken: token }, line) || {};
 if (!alive()) return;
 S.names = +rn.added || 0;
+// מאגר הנתונים של העוזר: ההודעות שבקו (כולל אלה שהועברו משלוחה 1) מתומללות עכשיו, ואחר כך נבנים הפרופילים של החברים
+S.phase = "ai"; S.round = 0;
+for (let i = 0, idle = 0; i < 80; i++) {
+S.round = i + 1; redraw();
+const r = await fxApi({ op: "ai", slug, ymToken: token, what: "tb" }, line) || {};
+if (!alive()) return;
+if (r.warming) { await new Promise(x => setTimeout(x, 4000)); if (++idle > 6) break; continue; }
+S.ai = r.transcribed != null ? r.transcribed : S.ai + (r.done || 0); S.aiTotal = r.total || S.aiTotal || 0;
+if (!r.done) break;
+}
+for (let i = 0; i < 40; i++) {
+S.round = i + 1; redraw();
+const r = await fxApi({ op: "ai", slug, ymToken: token, what: "prof" }, line) || {};
+if (!alive()) return;
+if (r.warming) break;
+S.prof = r.profiles != null ? r.profiles : S.prof;
+if (!r.done) break;
+}
 } catch (e) { S.err = (e && e.message) || String(e); }
 S.done = true;
 toast(S.err ? "ההעתקה נעצרה באמצע" : S.failed.length ? "התבנית הועתקה, חלק מהפריטים לא" : "התבנית הועתקה במלואה", !!(S.err || S.failed.length));
@@ -5672,16 +5695,18 @@ Actions.register("fxIvrAuto", () => { if (FX.ivr && FX.ivr.done) FX.ivr = null; 
 // מצב החיבור (באשף ובחלון): רץ / סיכום
 function ivrStateHtml(S, slug) {
 if (!S.done) {
-const what = S.phase === "keep" ? h`מעביר הודעות שכבר היו בשלוחה 1 לשלוחה 1/2${S.kept ? " · הועברו " + S.kept : ""}`
+const what = S.phase === "code" ? h`מעדכן את השרת של הקו לגרסה הנוכחית`
+: S.phase === "ai" ? h`מתמלל את ההודעות ובונה פרופילים של החברים${S.ai ? " · תומללו " + S.ai + (S.aiTotal ? " מתוך " + S.aiTotal : "") : ""}${S.prof ? " · פרופילים " + S.prof : ""}`
+: S.phase === "keep" ? h`מעביר הודעות שכבר היו בשלוחה 1 לשלוחה 1/2${S.kept ? " · הועברו " + S.kept : ""}`
 : S.phase === "ivr" ? h`מעתיק את מבנה השלוחות מקו המקור · סבב ${String(S.round)}${S.written ? " · הועתקו " + S.written : ""}`
 : S.phase === "dirs" ? h`יוצר את התיקיות שהקו צריך כדי לעבוד${S.dirs ? " · נוצרו " + S.dirs : ""}`
 : S.phase === "names" ? h`מעתיק שמות של חברים שרשומים גם בקווים אחרים`
 : h`מעתיק את הקריינות של השלוחות${S.audio ? " · הועתקו " + S.audio + " קבצים" : ""}`;
-const pct = S.phase === "keep" ? Math.min(10, 3 + S.round * 2) : S.phase === "ivr" ? Math.min(45, 12 + S.round * 8) : S.phase === "dirs" ? Math.min(65, 50 + S.round * 5) : Math.min(92, 70 + S.round * 6);
-const cls = ph => { const o = ["keep", "ivr", "dirs", "audio", "names"], a = o.indexOf(S.phase), b = o.indexOf(ph); return b < a ? "done" : b === a ? "on" : ""; };
-return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>${S.phase === "audio" ? "מעתיק קריינות…" : S.phase === "names" ? "מעתיק שמות…" : "בונה את מבנה הקו…"}</b><div class="mut small">${what}</div></div></div>
+const pct = S.phase === "code" ? 3 : S.phase === "keep" ? Math.min(10, 4 + S.round * 2) : S.phase === "ivr" ? Math.min(40, 12 + S.round * 7) : S.phase === "dirs" ? Math.min(55, 42 + S.round * 4) : S.phase === "audio" ? Math.min(70, 56 + S.round * 4) : S.phase === "names" ? 72 : Math.min(95, 74 + S.round);
+const cls = ph => { const o = ["code", "keep", "ivr", "dirs", "audio", "names", "ai"], a = o.indexOf(S.phase), b = o.indexOf(ph); return b < a ? "done" : b === a ? "on" : ""; };
+return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>${S.phase === "audio" ? "מעתיק קריינות…" : S.phase === "names" ? "מעתיק שמות…" : S.phase === "ai" ? "ממלא את המאגר של העוזר…" : S.phase === "code" ? "מעדכן את השרת…" : "בונה את מבנה הקו…"}</b><div class="mut small">${what}</div></div></div>
 <div class="fx-bar run"><i style="width:${pct}%"></i></div>
-<ul class="fx-tasks"><li class="${cls("keep")}">שמירת ההודעות שכבר היו בשלוחה 1 – מועברות לשלוחה 1/2</li><li class="${cls("ivr")}">כל השלוחות וההגדרות שלהן, מחוברות לשרת של הקו החדש</li><li class="${cls("dirs")}">התיקיות שהקו צריך (חשובות / כל ההודעות, ממתינות, תורים…)</li><li class="${cls("audio")}">קריינות – העתקה מקו המקור, ויצירה בקול העוזר למה שחסר</li><li class="${cls("names")}">שמות החברים – למספרים שכבר רשומים בקווים אחרים</li></ul>
+<ul class="fx-tasks"><li class="${cls("code")}">עדכון השרת של הקו לגרסה הנוכחית</li><li class="${cls("keep")}">שמירת ההודעות שכבר היו בשלוחה 1 – מועברות לשלוחה 1/2</li><li class="${cls("ivr")}">כל השלוחות וההגדרות שלהן, מחוברות לשרת של הקו החדש</li><li class="${cls("dirs")}">התיקיות שהקו צריך (חשובות / כל ההודעות, ממתינות, תורים…)</li><li class="${cls("audio")}">קריינות – העתקה מקו המקור, ויצירה בקול העוזר למה שחסר</li><li class="${cls("names")}">שמות החברים – למספרים שכבר רשומים בקווים אחרים</li><li class="${cls("ai")}">המאגר של העוזר – תמלול כל ההודעות ופרופיל לכל בחור</li></ul>
 <p class="mut small">רק התבנית מועתקת – בלי הודעות, הקלטות אישיות ותוכן. מה שקיים בקו החדש נשמר בגיבוי לפני הכתיבה.</p></div>`;
 }
 const bad = S.err || S.failed.length;
@@ -5689,6 +5714,7 @@ return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check
 <ul class="small fx-sumlist">${S.kept ? h`<li>הודעות שהיו בשלוחה 1: הועברו ${String(S.kept)} לשלוחה 1/2 (לא נמחקו)</li>` : ""}<li>שלוחות: הועתקו ${String(S.written)}${S.same ? h`, ${String(S.same)} כבר היו מוכנות` : ""}</li>
 <li>תיקיות: נוצרו ${String(S.dirs)}</li>
 <li>שמות: הועתקו ${String(S.names)} שמות של חברים מהקווים האחרים</li>
+<li>המאגר של העוזר: ${String(S.ai)} הודעות מתומללות${S.aiTotal ? " מתוך " + S.aiTotal : ""}, ${String(S.prof)} פרופילים של חברים${S.aiTotal && S.ai < S.aiTotal ? " (השאר יתומללו בלילה)" : ""}</li>
 <li>קריינות: הועתקו ${String(S.audio)} קבצים${S.tts ? h`, ו-${String(S.tts)} פתיחים נוצרים עכשיו בקול העוזר (יהיו מוכנים תוך כמה דקות)` : ""}</li></ul>
 ${S.err ? h`<div>${S.err}</div>` : ""}
 ${S.failed.length ? h`<details class="fx-more" open><summary>לא הועתקו (${String(S.failed.length)})</summary><ul class="small">${S.failed.map(f => h`<li>${f}</li>`)}</ul></details>` : ""}

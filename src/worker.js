@@ -1151,16 +1151,34 @@ async function aiAudio(env, { system, contents, models = AUDIO_MODELS, deadline 
   throw err;
 }
 const sortable = d => { const m = /(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/.exec(d || ""); return m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : ""; };
+// חבר אחד לפי השם: מספרים שונים עם אותו שם בקו (בחור עם שני טלפונים) הם פרופיל אחד, עם כל ההודעות של כולם.
+// מזהה הפרופיל הוא המספר הראשון בסדר (קבוע), ובו נשמרת רשימת כל המספרים. מספר בלי שם – פרופיל משלו
+function profileGroups(archive, nm) {
+  const groups = {};
+  for (const e of Object.values(archive)) {
+    if (!e.p || !(e.s === "g" || e.s === "a") || !realText(e.t)) continue;
+    const n = String(nm[e.p] || "").trim(), k = n ? "n:" + n : "p:" + e.p;
+    const g = groups[k] = groups[k] || { phones: new Set(), msgs: [] };
+    g.phones.add(e.p); g.msgs.push(e);
+  }
+  const out = {};
+  for (const g of Object.values(groups)) { const phones = [...g.phones].sort(); out[phones[0]] = { phones, msgs: g.msgs }; }
+  return out;
+}
 async function buildProfiles(env, max = 2) {
   const archive = await kvGet(env, "archive", {}), profiles = await kvGet(env, "profiles", {});
-  const byPhone = {};
-  for (const e of Object.values(archive)) if (e.p && (e.s === "g" || e.s === "a") && realText(e.t)) (byPhone[e.p] = byPhone[e.p] || []).push(e);
-  for (const p of Object.keys(byPhone)) if (byPhone[p].length < 3) delete byPhone[p];
+  const byId = profileGroups(archive, names(env));
+  // פרופילים כפולים ממספרים שאוחדו (אותו שם) נמחקים – נשאר רק הפרופיל המאוחד
+  let merged = false;
+  for (const g of Object.values(byId)) for (const p of g.phones.slice(1)) if (profiles[p]) { delete profiles[p]; merged = true; }
+  for (const p of Object.keys(byId)) if (byId[p].msgs.length < 3) delete byId[p];
   const week = Date.now() - 7 * 864e5;
-  const todo = Object.keys(byPhone).filter(p => !profiles[p] || profiles[p].ts < week || (profiles[p].count || 0) + 10 <= byPhone[p].length).slice(0, max);
+  const todo = Object.keys(byId).filter(p => !profiles[p] || profiles[p].ts < week || (profiles[p].count || 0) + 10 <= byId[p].msgs.length
+    || (byId[p].phones.length > 1 && (profiles[p].phones || []).length !== byId[p].phones.length)).slice(0, max);
   for (const p of todo) {
-    const msgs = byPhone[p].filter(e => realText(e.t)).sort((a, b) => sortable(a.d) < sortable(b.d) ? -1 : 1);
-    if (!msgs.length) { profiles[p] = { n: names(env)[p] || "", style: "", quotes: [], ts: Date.now(), count: byPhone[p].length }; continue; }
+    const { phones } = byId[p], all = byId[p].msgs;
+    const msgs = all.filter(e => realText(e.t)).sort((a, b) => sortable(a.d) < sortable(b.d) ? -1 : 1);
+    if (!msgs.length) { profiles[p] = { n: names(env)[p] || "", style: "", quotes: [], ts: Date.now(), count: all.length, phones }; continue; }
     const name = names(env)[p] || msgs[0].n || "חבר";
     const text = msgs.map(e => `[${e.d}] ${e.t}`).join("\n").slice(-20000);
     const corpusP = msgs.filter(e => e.s === "g").map(e => normHe(e.t)).join("|");
@@ -1169,15 +1187,15 @@ async function buildProfiles(env, max = 2) {
         system: `אתה מקבל את כל ההודעות ש${name} השאיר בקו הטלפוני של השיעור שלו (תמלול אוטומטי). כתוב פרופיל קצר עליו כפי שעולה מההודעות בלבד: סגנון הדיבור, ביטויים אופייניים, נושאים שהוא מרבה לדבר עליהם, ואופי ההודעות. בנוסף בחר עד 4 ציטוטים קצרים ומאפיינים שלו. כל ציטוט חייב להיות מועתק מילה במילה מתוך ההודעות, בלי שום שינוי, ולפניו התאריך בסוגריים מרובעים. כתוב בכבוד ובלי שיפוטיות. החזר JSON בלבד: {"style":"...","quotes":["[תאריך] ציטוט"]}`,
         contents: [{ role: "user", parts: [{ text }] }] });
       const quotes = (r.quotes || []).filter(q => { const body = normHe(String(q).replace(/^\s*\[[^\]]*\]\s*/, "")).trim(); return body.split(" ").length >= 2 && corpusP.includes(body); });
-      profiles[p] = { n: name, style: r.style || "", quotes, ts: Date.now(), count: byPhone[p].length };
+      profiles[p] = { n: name, style: r.style || "", quotes, ts: Date.now(), count: all.length, phones };
     } catch (e) {
       aiTrace.push("profile error: " + e.message);
       // השהיה אחרי כישלון: גם count מתעדכן, אחרת החבר הזה נבחר שוב בכל ריצה וחוסם את הפרופילים של כל השאר (ניסיון חוזר אחרי שבוע או 10 הודעות חדשות)
-      profiles[p] = { ...(profiles[p] || { n: name, style: "", quotes: [] }), ts: Date.now(), count: byPhone[p].length, fail: Date.now() };
+      profiles[p] = { ...(profiles[p] || { n: name, style: "", quotes: [] }), ts: Date.now(), count: all.length, phones, fail: Date.now() };
       break;
     }
   }
-  if (todo.length) await env.KV.put("profiles", JSON.stringify(profiles));
+  if (todo.length || merged) await env.KV.put("profiles", JSON.stringify(profiles));
   return todo.length;
 }
 // פרומו על העוזר החכם: כל חבר שומע אותו פעם אחת בכניסה לקו
