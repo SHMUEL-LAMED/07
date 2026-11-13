@@ -5046,7 +5046,7 @@ let cssDone = false;
 // נתונים מכל הקווים (60 שניות)
 const cache = { rows: null, at: 0, key: "", p: null };
 // מפעל הקווים: בזיכרון בלבד – טוקני ימות לא נשמרים לעולם
-const FX = { token: "", tokenSlug: "", slug: "", check: null, created: null, plan: null, status: null, building: null, err: "", form: null, ivrDone: false };
+const FX = { token: "", tokenSlug: "", slug: "", check: null, created: null, plan: null, status: null, building: null, err: "", form: null, ivrDone: false, ivr: null };
 // שם קצר אקראי לקו חדש: אות ועוד 7 אותיות/ספרות (מתאים לבדיקה בשרת – 3–20 תווים)
 function fxRandSlug() {
 const abc = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(7));
@@ -5533,6 +5533,20 @@ return h`<div class="banner bad">${ico("alert")}<div><b>${cf.msg || "Cloudflare 
 <li>ללחוץ על "בדיקה חוזרת".</li></ol></details>
 <div class="btns"><button type="button" class="btn s" data-x="fxRecheck">${ico("refresh")} בדיקה חוזרת</button></div></div></div>`;
 }
+// מצב חיבור השלוחות האוטומטי (שלב 4)
+function fxIvrHtml(slug) {
+const S = FX.ivr;
+if (!S) return h`<div class="banner info">${ico("info")}<div><b>חיבור השלוחות</b> מתחיל אוטומטית עם הטוקן שכבר הוזן.${slug && FX.token ? h` <button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} התחלה</button>` : ""}</div></div>`;
+if (!S.done) return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>מחבר את השלוחות…</b><div class="mut small">מעתיק את קובצי ext.ini מקו המקור עם הכתובת של הקו החדש · סבב ${String(S.round)}${S.written ? " · נכתבו " + S.written : ""}</div></div></div>
+<div class="fx-bar run"><i style="width:${Math.min(90, 20 + S.round * 15)}%"></i></div>
+<p class="mut small">מה שקיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות לא מועתקים.</p></div>`;
+const bad = S.err || S.failed.length;
+return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check")}<div><b>${S.err ? "חיבור השלוחות נעצר" : "השלוחות חוברו"}</b> – נכתבו ${String(S.written)} קבצים${S.same ? h`, ${String(S.same)} כבר היו זהים` : ""}.
+${S.err ? h`<div>${S.err}</div>` : ""}
+${S.failed.length ? h`<details class="fx-more" open><summary>לא נכתבו (${String(S.failed.length)})</summary><ul class="small">${S.failed.map(f => h`<li class="ltr">${f}</li>`)}</ul></details>` : ""}
+${S.warn.length ? h`<details class="fx-more"><summary>לבדוק (${String(S.warn.length)})</summary><ul class="small">${S.warn.map(w => h`<li>${w}</li>`)}</ul></details>` : ""}
+${bad && FX.token ? h`<div class="btns"><button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} ניסיון חוזר</button></div>` : ""}</div></div>`;
+}
 const fxCanBuild = status => !!(status && status.ready && (!status.cf || status.cf.ok));
 function fxBody(status, st) {
 if (status && status.missing && st < 3) return empty({ icon: "alert", title: "מפעל הקווים", text: "לא זמין בשרת של הקו הזה" });
@@ -5576,9 +5590,44 @@ return h`<div class="stack"><div class="fx-done"><span class="fx-ok" aria-hidden
 ${steps.length ? h`<details class="fx-more"><summary>מה נעשה (${steps.length})</summary><ul class="fx-tasks">${steps.map(x => h`<li class="done">${typeof x === "string" ? x : JSON.stringify(x)}</li>`)}</ul></details>` : ""}
 ${r.adminPass ? h`<div class="fld"><span>סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</span><div class="secret fx-pw"><code>${r.adminPass}</code><button type="button" class="btn s" data-x="hubFxCopy">${ico("copy")} העתקה</button></div></div>` : ""}
 <div class="row">${adm ? h`<a class="link" href="${adm}" target="_blank" rel="noopener">דף הניהול (workers.dev)</a>` : ""}${slug ? h`<a class="link" href="${PAGES + "line/?l=" + enc(slug)}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a>` : ""}</div>
-${FX.ivrDone ? "" : h`<div class="banner info">${ico("info")}<div><b>השלב האחרון: חיבור השלוחות.</b> מעתיקים את קובצי ext.ini מקו המקור למערכת החדשה, עם הכתובת של הקו החדש. החיבור נעשה עם הטוקן של ימות שכבר הוזן – אין צורך להקליד אותו שוב. לפני הכתיבה מוצגת תצוגה מקדימה, ומה שקיים נשמר בגיבוי.</div></div>`}
-<div class="btns">${slug && !FX.ivrDone ? h`<button type="button" class="btn p" data-x="hubIvr" data-slug="${slug}">חיבור השלוחות ←</button>` : ""}${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug && FX.ivrDone ? h`<button type="button" class="btn" data-x="hubIvr" data-slug="${slug}">חיבור שלוחות נוספות</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
+${fxIvrHtml(slug)}
+<div class="btns">${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug && FX.ivr && FX.ivr.done ? h`<button type="button" class="btn" data-x="hubIvr" data-slug="${slug}">בחירה ידנית של שלוחות</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
 }
+// חיבור שלוחות אוטומטי אחרי בניית קו: סבבים של תכנון וכתיבה עד שכל העץ הועתק.
+// השרת שומר על הכללים: קורא מחדש מקור ויעד, לא כותב קובץ שלא נקרא, ושומר גיבוי לפני כל כתיבה
+async function fxAutoIvr() {
+const slug = FX.tokenSlug, token = FX.token, line = fxLine();
+if (!slug || !token || (FX.ivr && !FX.ivr.done)) return;
+const S = FX.ivr = { t0: Date.now(), round: 0, written: 0, same: 0, failed: [], warn: [], done: false, err: "" };
+const redraw = () => { if (FX.ivr === S) reNew(); };
+redraw();
+try {
+for (let i = 0; i < 12; i++) {
+S.round = i + 1; redraw();
+const p = await fxApi({ op: "ivr_plan", slug, ymToken: token, restart: i === 0 }, line) || {};
+if (FX.ivr !== S) return;
+const plan = p.plan || [];
+S.same += plan.filter(x => x.same).length;
+plan.forEach(x => (x.warn || []).forEach(w => { const t = x.path + ": " + w; if (S.warn.indexOf(t) < 0) S.warn.push(t); }));
+const todo = plan.filter(x => !x.same).map(x => x.path);
+let r = null;
+if (todo.length) {
+r = await fxApi({ op: "ivr_apply", slug, ymToken: token, paths: todo, confirm: slug }, line) || {};
+if (FX.ivr !== S) return;
+S.written += (r.done || []).length;
+(r.failed || []).forEach(f => S.failed.push(typeof f === "string" ? f : JSON.stringify(f)));
+}
+const more = (r && (r.skipped || []).length) || (Array.isArray(p.next) && p.next.length);
+if (!more) break;
+}
+} catch (e) { S.err = (e && e.message) || String(e); }
+S.done = true;
+if (!S.err && !S.failed.length) FX.ivrDone = true;
+FX.status = null;
+toast(S.err ? "חיבור השלוחות נעצר" : S.failed.length ? "השלוחות חוברו, חלקן נכשלו" : "השלוחות חוברו", !!(S.err || S.failed.length));
+redraw();
+}
+Actions.register("fxIvrAuto", () => { if (FX.ivr && FX.ivr.done) FX.ivr = null; return fxAutoIvr(); }, { write: true });
 // חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
 async function ivrStart(slug) {
 const line = fxLine();
@@ -5720,7 +5769,7 @@ const reNew = () => reFx(false);
 F("hubFxCheck", async (f, d) => {
 const t = String(d.t || "").trim(), line = fxLine();
 if (!t) { toast("כתבו טוקן", true); return; }
-FX.token = t; FX.tokenSlug = ""; FX.slug = ""; FX.err = ""; FX.form = null; FX.ivrDone = false;
+FX.token = t; FX.tokenSlug = ""; FX.slug = ""; FX.err = ""; FX.form = null; FX.ivrDone = false; FX.ivr = null;
 const r = await fxApi({ op: "check", ymToken: t }, line);
 FX.check = r || {}; FX.created = null; FX.plan = null;
 toast("הטוקן תקין");
@@ -5757,8 +5806,10 @@ FX.building = null; clearInterval(fxTimer); FX.err = (e && e.message) || String(
 reNew(); throw e;
 }
 FX.building = null; clearInterval(fxTimer);
-FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.form = null; FX.status = null; FX.ivrDone = false;
-toast("הקו נבנה");
+FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.form = null; FX.status = null; FX.ivrDone = false; FX.ivr = null;
+toast("הקו נבנה – מחבר את השלוחות");
+// השלב האחרון רץ לבד, עם אותו טוקן
+setTimeout(() => { fxAutoIvr().catch(() => {}); }, 0);
 // במרכז: רשימת הקווים מתעדכנת (reloadMe מצייר מחדש רק תצוגת מרכז, ושומר על הקו הפתוח)
 if (inHub() && await reloadMe()) return;
 reFx(true);
@@ -5766,7 +5817,7 @@ reFx(true);
 Actions.register("hubFxCopy", () => copyText((FX.created && FX.created.adminPass) || ""), { write: false });
 Actions.register("hubFxAgain", async () => {
 if (!await Dlg.confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")) return;
-FX.token = ""; FX.tokenSlug = ""; FX.slug = ""; FX.check = null; FX.created = null; FX.plan = null; FX.err = ""; FX.form = null; FX.ivrDone = false;
+FX.token = ""; FX.tokenSlug = ""; FX.slug = ""; FX.check = null; FX.created = null; FX.plan = null; FX.err = ""; FX.form = null; FX.ivrDone = false; FX.ivr = null;
 reNew();
 }, { write: false });
 // חשבונות
@@ -5886,7 +5937,7 @@ register({ id: "accounts", label: "חשבונות", icon: "users", owner: true, 
 register({ id: "all", label: "כל הקווים", icon: "grid", owner: true, render: allRender });
 
 // הגנה מרענון אוטומטי באמצע אשף המפעל
-Busy.add(() => !!(FX.check || FX.created || FX.plan));
+Busy.add(() => !!(FX.check || FX.created || FX.plan || FX.building || (FX.ivr && !FX.ivr.done)));
 
 // ================= לשונית "קווים" (מחוץ למרכז): מפעל הקווים בקו המקור =================
 // כמו בדף הישן: רק לבעלים בקו המקור (Worker /admin, או /07/source/ בסיסמה). במרכז – תצוגות "קו חדש" ו"קווים"
