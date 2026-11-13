@@ -1,0 +1,1 @@
+import './globals.css';export const metadata={title:'מייל פלוס — סביבת העבודה שלך',description:'ניהול המייל, משימות וכתיבה בעברית מכל מחשב'};export default function Layout({children}:{children:React.ReactNode}){return <html lang="he" dir="rtl"><body>{children}</body></html>;}

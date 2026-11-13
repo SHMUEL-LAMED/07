@@ -1,0 +1,3 @@
+import {sqliteTable,text,integer} from 'drizzle-orm/sqlite-core';
+export const tasks=sqliteTable('mail_tasks',{id:text('id').primaryKey(),owner:text('owner').notNull(),title:text('title').notNull(),url:text('url'),due:text('due'),done:integer('done').notNull().default(0),created:text('created').notNull()});
+export const settings=sqliteTable('mail_settings',{owner:text('owner').primaryKey(),clientId:text('client_id').notNull().default('')});

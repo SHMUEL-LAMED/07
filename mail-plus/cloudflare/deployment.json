@@ -1,0 +1,12 @@
+{
+  "account_id": "7c5ecc8cc6dc99838cfbf1b3a1086b74",
+  "worker_name": "mail-plus-cloud",
+  "worker_tag": "f1188732daa248d388d709f3e9c6cb72",
+  "database_id": "55626022-0bb9-408c-8622-9bd5ba2142fa",
+  "access_app_id": "e347e2e9-c5b4-4353-b5d5-0355d2c629cb",
+  "url": "https://mail-plus-cloud.smwlyqswkwt232.workers.dev",
+  "access_owner_email": "smwlyqswkwt232@gmail.com",
+  "supabase_project": "ydcfafijktzasrkkxyux",
+  "bridge_function": "mail-plus-bridge",
+  "frontend_url": "https://shmuel-lamed.github.io/07/mail-plus/"
+}
