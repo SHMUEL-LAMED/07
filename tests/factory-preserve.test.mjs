@@ -130,3 +130,27 @@ test("סנכרון שמות: רק מספרים שבקו החדש, בלי לדר�
   const out = JSON.parse(remote.kvn.names_over);
   assert.deepEqual(out, { "0501111111": "שם קיים בקו החדש", "0502222222": "יוסי מקו אחר", "0503333333": "דוד מקו המקור" });
 });
+
+test("קריינות בשלוחה הראשית: נתיב בלי // כפול", async () => {
+  const uploads = [];
+  globalThis.fetch = async (input, init) => {
+    const u = new URL(String(input instanceof Request ? input.url : input));
+    const method = u.pathname.split("/").pop();
+    const json = o => new Response(JSON.stringify(o));
+    if (method === "GetSession") return json({ responseStatus: "OK", username: "0771111111" });
+    if (method === "GetIVR2Dir") return json({ responseStatus: "OK", dirs: [], files: [{ name: "ext.ini" }] });
+    if (method === "UploadFile") { uploads.push(init.body.get("path")); return json({ responseStatus: "OK" }); }
+    return json({ responseStatus: "OK" });
+  };
+  const downloads = [];
+  const Dsrc = { log: async () => {}, ym: async (env, method, q) => {
+    if (method === "GetIVR2Dir") return { responseStatus: "OK", dirs: [], files: [{ name: "M1000.wav" }, { name: "PlayfileMessageCheck-NImportant.wav" }, { name: "000.wav" }] };
+    if (method === "DownloadFile") { downloads.push(q.path); return new Uint8Array([1, 2, 3]); }
+    return { responseStatus: "OK", contents: "" };
+  } };
+  const r = await factory({ method: "POST" }, env(), { op: "audio", slug: "nn", ymToken: "0771111111:1234", paths: ["/"] }, Dsrc, "https://x.y");
+  assert.deepEqual(r.failed, []);
+  assert.deepEqual(r.copied.sort(), ["/M1000.wav", "/PlayfileMessageCheck-NImportant.wav"]);
+  assert.deepEqual(downloads.sort(), ["ivr2:/M1000.wav", "ivr2:/PlayfileMessageCheck-NImportant.wav"]);
+  assert.deepEqual(uploads.sort(), ["ivr2:/M1000.wav", "ivr2:/PlayfileMessageCheck-NImportant.wav"]);
+});
