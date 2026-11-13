@@ -201,8 +201,8 @@ async function createLine(env, body, origin, D) {
   const steps = [], created = { kv: null, script: false };
   const step = t => steps.push(t);
   try {
-    const tpl = await templateModules(env); step(`הקוד הועתק מ-${env.FACTORY_TEMPLATE || "yemot-ai"} (${tpl.parts.length} קבצים)`);
-    const kv = await cf(env, "POST", "/{acc}/storage/kv/namespaces", { title: script }); created.kv = kv.id; step("נוצר אחסון KV");
+    const tpl = await templateModules(env); step("הקוד של קו המקור הועתק");
+    const kv = await cf(env, "POST", "/{acc}/storage/kv/namespaces", { title: script }); created.kv = kv.id; step("נוצר אחסון נתונים לקו");
     const adminPass = rnd(12), runKey = rnd(18);
     const bindings = [
       { type: "kv_namespace", name: "KV", namespace_id: kv.id },
@@ -221,10 +221,10 @@ async function createLine(env, body, origin, D) {
     const form = new FormData();
     form.append("metadata", new Blob([JSON.stringify({ main_module: tpl.main, compatibility_date: "2025-09-01", bindings })], { type: "application/json" }));
     for (const p of tpl.parts) form.append(p.name, new Blob([p.data], { type: p.type }), p.name);
-    await cf(env, "PUT", `/{acc}/workers/scripts/${script}`, form); created.script = true; step("השרת החדש הועלה עם המשתנים והסודות");
+    await cf(env, "PUT", `/{acc}/workers/scripts/${script}`, form); created.script = true; step("השרת החדש הועלה עם ההגדרות והמפתחות");
     if (ownerEmail && ownerEmail !== superEmail) { await kvPut(env, kv.id, "dash_emails", JSON.stringify([{ e: ownerEmail, role: "admin" }])); step(`${ownerEmail} נוסף כמנהל הקו`); }
-    await cf(env, "PUT", `/{acc}/workers/scripts/${script}/schedules`, [{ cron: CRON }]); step("הוגדר תזמון כל דקה");
-    await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה כתובת workers.dev");
+    await cf(env, "PUT", `/{acc}/workers/scripts/${script}/schedules`, [{ cron: CRON }]); step("הופעלה בדיקה אוטומטית כל דקה");
+    await cf(env, "POST", `/{acc}/workers/scripts/${script}/subdomain`, { enabled: true, previews_enabled: false }); step("הופעלה הכתובת של הקו");
     const sub = (await cf(env, "GET", "/{acc}/workers/subdomain")).subdomain;
     const url = `https://${script}.${sub}.workers.dev`;
     const line = { slug, script, url, name, line: linePhone, phones, owner: ownerPhone, ownerEmail, created: Date.now(), runKey, tokHash, kv: kv.id, template: origin, test: true };
@@ -233,7 +233,7 @@ async function createLine(env, body, origin, D) {
     if (clash) throw new Error(`בינתיים נבנה הקו "${clash.name}" (${clash.slug}) באותו שם או על אותה מערכת`);
     await saveReg(env, [...cur, line]);
     await D.log(env, `מפעל הקווים: נבנה קו חדש "${name}" (${linePhone}) – ${script}`).catch(() => {});
-    return { ok: true, steps, line: view(line), adminPass, adminUrl: url + "/admin", note: "הסיסמה מוצגת פעם אחת. הקו נוצר במצב בדיקה (TEST_MODE=1): צינתוקים יוצאים רק למנהלים עד שתשנו ל-0." };
+    return { ok: true, steps, line: view(line), adminPass, adminUrl: url + "/admin", note: "הסיסמה מוצגת פעם אחת. הקו נוצר במצב בדיקה: צינתוקים יוצאים רק למנהלים, עד שמעבירים אותו לפעולה רגילה." };
   } catch (e) {
     // ביטול חלקי: מוחקים רק מה שנוצר בהרצה הזאת
     if (created.script) await cf(env, "DELETE", `/{acc}/workers/scripts/${script}?force=true`).catch(() => {});
