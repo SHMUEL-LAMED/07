@@ -57,6 +57,20 @@ const ymOk = r => r && (r.responseStatus === "OK" || r.responseStatus === "ok");
 
 // ---------- Cloudflare ----------
 function cfReady(env) { return !!(env.CF_FACTORY_TOKEN && env.CF_ACCOUNT_ID); }
+// הודעה ברורה כש-Cloudflare דוחה את הטוקן של המפעל (401) או כשחסרה לו הרשאה (403)
+function cfAuthMsg(status) {
+  if (status === 401) return "Cloudflare דחה את הטוקן של המפעל (CF_FACTORY_TOKEN): הוא לא תקין, בוטל או שפג תוקפו. צריך ליצור טוקן חדש ולעדכן את הסוד בקו המקור";
+  if (status === 403) return "לטוקן של המפעל (CF_FACTORY_TOKEN) חסרה הרשאה, או שהוא שייך לחשבון אחר מ-CF_ACCOUNT_ID. דרושות: Workers Scripts:Edit, Workers KV Storage:Edit, Account Settings:Read";
+  return "";
+}
+// בדיקה שהטוקן של המפעל עובד (קריאה בלבד): { ok } או { ok:false, status, msg }
+async function cfAuth(env) {
+  if (!cfReady(env)) return { ok: false, status: 0, msg: "חסרים CF_FACTORY_TOKEN / CF_ACCOUNT_ID בקו המקור" };
+  const r = await cf(env, "GET", "/{acc}/workers/subdomain", undefined, true).catch(() => null);
+  if (!r) return { ok: false, status: 0, msg: "אין חיבור ל-Cloudflare כרגע" };
+  if (r.ok) return { ok: true };
+  return { ok: false, status: r.status, msg: cfAuthMsg(r.status) || `Cloudflare החזיר שגיאה ${r.status}` };
+}
 async function cf(env, method, path, body, raw = false, rawBody) {
   const init = { method, headers: { Authorization: "Bearer " + env.CF_FACTORY_TOKEN } };
   if (rawBody !== undefined) { init.body = rawBody; init.headers["Content-Type"] = "text/plain"; }
@@ -64,6 +78,7 @@ async function cf(env, method, path, body, raw = false, rawBody) {
   else if (body !== undefined) { init.body = JSON.stringify(body); init.headers["Content-Type"] = "application/json"; }
   const r = await fetch(CF_API + path.replace("{acc}", "accounts/" + env.CF_ACCOUNT_ID), init);
   if (raw) return r;
+  if (r.status === 401 || r.status === 403) throw new Error(cfAuthMsg(r.status));
   const j = await r.json().catch(() => ({}));
   if (!j.success) throw new Error("Cloudflare: " + ((j.errors || []).map(e => e.message).join("; ") || "שגיאה " + r.status));
   return j.result;
@@ -73,7 +88,7 @@ async function cf(env, method, path, body, raw = false, rawBody) {
 async function templateModules(env) {
   const tpl = env.FACTORY_TEMPLATE || "yemot-ai";
   const r = await cf(env, "GET", `/{acc}/workers/scripts/${tpl}/content/v2`, undefined, true);
-  if (!r.ok) throw new Error(`לא ניתן לקרוא את הקוד של ${tpl} (${r.status})`);
+  if (!r.ok) throw new Error(cfAuthMsg(r.status) || `לא ניתן לקרוא את הקוד של ${tpl} (${r.status})`);
   const ct = r.headers.get("content-type") || "";
   if (!ct.includes("multipart")) return { main: "worker.js", parts: [{ name: "worker.js", type: "application/javascript+module", data: await r.arrayBuffer() }] };
   const form = await new Response(await r.arrayBuffer(), { headers: { "content-type": ct } }).formData();
@@ -181,7 +196,7 @@ async function createLine(env, body, origin, D) {
   if (twin) throw new Error(`על המערכת הזו כבר נבנה הקו "${twin.name}" (${twin.slug})`);
   const exists = await cf(env, "GET", `/{acc}/workers/scripts/${script}/settings`, undefined, true);
   if (exists.ok) throw new Error(`כבר קיים Worker בשם ${script} ב-Cloudflare`);
-  if (exists.status !== 404) throw new Error(`Cloudflare לא אישר את הבדיקה אם ${script} קיים (${exists.status})`);
+  if (exists.status !== 404) throw new Error(cfAuthMsg(exists.status) || `Cloudflare לא אישר את הבדיקה אם ${script} קיים (${exists.status})`);
 
   const steps = [], created = { kv: null, script: false };
   const step = t => steps.push(t);
@@ -368,7 +383,7 @@ export async function factory(req, env, body, D, origin) {
   const op = req.method === "POST" ? String(body.op || "") : "status";
   if (op === "status") {
     const reg = await loadReg(env);
-    return { ready: cfReady(env), template: env.FACTORY_TEMPLATE || "yemot-ai", copies: COPY_SECRETS.filter(k => env[k]).length, lines: reg.map(view) };
+    return { ready: cfReady(env), cf: cfReady(env) ? await cfAuth(env) : null, template: env.FACTORY_TEMPLATE || "yemot-ai", copies: COPY_SECRETS.filter(k => env[k]).length, lines: reg.map(view) };
   }
   if (op === "check") return await checkToken(body.ymToken);
   if (op === "create") return await createLine(env, body, origin, D);
