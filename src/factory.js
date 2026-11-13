@@ -378,6 +378,76 @@ async function ivrApply(env, body, origin, D) {
   return { ok: !failed.length && !skipped.length, done, failed, skipped, backup: ready.length ? backup.at : null };
 }
 
+// ---------- קריינות: העתקת קבצי הפתיח של השלוחות + יצירה בקול העוזר למה שאין לו קריינות ----------
+// קבצי פתיח וקריינות של שלוחה (M1000.wav וכד'). קבצים ממוספרים (000.wav...) הם תוכן – הודעות, השמעות – ולא מועתקים
+const VOICE_FILE = /^M\d{4}\.(wav|mp3|tts)$/i;
+const fileName = f => String((f && (f.name || f.what)) || "").split("/").pop();
+async function ymUploadT(token, path, bytes, name) {
+  const fd = new FormData();
+  fd.append("token", token); fd.append("path", "ivr2:" + path); fd.append("convertAudio", "1");
+  fd.append("file", new Blob([bytes], { type: /\.mp3$/i.test(name) ? "audio/mpeg" : "audio/wav" }), name);
+  const r = await fetch(YM_API + "UploadFile", { method: "POST", body: fd });
+  return r.json().catch(() => ({}));
+}
+const iniVal = (ini, k) => { const m = String(ini || "").match(new RegExp("^\\s*" + k + "\\s*=\\s*(.*)$", "mi")); return m ? m[1].trim() : ""; };
+// טקסט לפתיח בקול העוזר: כותרת השלוחה, ובתפריט – גם האפשרויות (לפי הכותרות של תתי השלוחות)
+function voiceText(ini, dirs) {
+  const title = iniVal(ini, "title").replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+  const type = iniVal(ini, "type").toLowerCase();
+  if (!title || type === "api") return "";
+  if (type !== "menu") return title + ".";
+  const opts = (dirs || []).map(d => ({ n: fileName(d), t: String(d.extTitle || d.title || "").replace(/[()]/g, " ").replace(/\s+/g, " ").trim() }))
+    .filter(o => /^\d$/.test(o.n) && o.t).sort((a, b) => a.n - b.n).map(o => `ל${o.t} הקישו ${o.n}.`);
+  return [title + ".", ...opts].join(" ");
+}
+async function audioStep(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const okPath = p => /^\/[\w\/.\- ֐-׿]*$/.test(p) && !p.includes("..") && !p.includes("//");
+  const paths = [...new Set((Array.isArray(body.paths) ? body.paths : []).map(String))].filter(okPath).slice(0, 300);
+  const bud = budget(), copied = [], failed = [], left = [], tts = [];
+  for (let i = 0; i < paths.length; i++) {
+    const path = paths[i];
+    if (!bud.take(3)) { left.push(...paths.slice(i)); break; }
+    const [src, dst] = await Promise.all([
+      D.ym(env, "GetIVR2Dir", { path: dirOf(path) }).catch(() => null),
+      ymT(token, "GetIVR2Dir", { path: dirOf(path) }).catch(() => null),
+    ]);
+    if (!src || !Array.isArray(src.files)) { failed.push(`${path}: לא נקרא מקו המקור`); continue; }
+    const have = new Set(((dst && dst.files) || []).map(f => fileName(f).toLowerCase()));
+    const voice = src.files.map(fileName).filter(n => VOICE_FILE.test(n));
+    let cut = false;
+    for (const n of voice.filter(n => !have.has(n.toLowerCase()))) {
+      if (!bud.take(2)) { cut = true; break; }
+      try {
+        if (/\.tts$/i.test(n)) {
+          const t = await D.ym(env, "GetTextFile", { what: "ivr2:" + path + "/" + n });
+          const r = await ymT(token, "UploadTextFile", { what: "ivr2:" + path + "/" + n, contents: (t && t.contents) || "" });
+          if (ymOk(r)) copied.push(path + "/" + n); else failed.push(`${path}/${n}: ${(r && r.message) || "שגיאה"}`);
+        } else {
+          const bytes = await D.ym(env, "DownloadFile", { path: "ivr2:" + path + "/" + n });
+          const r = await ymUploadT(token, path, bytes, n);
+          if (ymOk(r)) copied.push(path + "/" + n); else failed.push(`${path}/${n}: ${(r && r.message) || "שגיאה"}`);
+        }
+      } catch (e) { failed.push(`${path}/${n}: ${e.message}`); }
+    }
+    if (cut) { left.push(...paths.slice(i)); break; }
+    // אין קריינות בכלל – לא במקור ולא בקו החדש: יוצרים פתיח בקול העוזר (רץ ברקע בשרת של הקו החדש)
+    const hasVoice = voice.some(n => /^M1000\./i.test(n)) || [...have].some(n => /^m1000\./.test(n));
+    if (!hasVoice) {
+      const ini = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
+      const text = ini.ok ? voiceText(ini.text, src.dirs) : "";
+      if (text) tts.push({ k: "tts", path: path === "/" ? "" : path, name: "M1000", text, id2: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) });
+    }
+  }
+  if (tts.length && line.kv) {
+    const cur = JSON.parse(await kvGetRemote(env, line.kv, "bgjobs").catch(() => null) || "[]");
+    const fresh = tts.filter(t => !cur.some(c => c && c.k === "tts" && c.path === t.path && c.name === t.name));
+    if (fresh.length) await kvPut(env, line.kv, "bgjobs", JSON.stringify([...cur, ...fresh]));
+  }
+  if (copied.length || tts.length) await D.log(env, `מפעל הקווים: קריינות לקו "${line.name}" – הועתקו ${copied.length}, נוצרים בקול העוזר ${tts.length}`).catch(() => {});
+  return { copied, failed, left, tts: tts.length };
+}
+
 // ---------- נקודת הכניסה מ-dash.js ----------
 export async function factory(req, env, body, D, origin) {
   const op = req.method === "POST" ? String(body.op || "") : "status";
@@ -389,6 +459,7 @@ export async function factory(req, env, body, D, origin) {
   if (op === "create") return await createLine(env, body, origin, D);
   if (op === "ivr_plan") return await ivrPlan(env, body, origin, D);
   if (op === "ivr_apply") return await ivrApply(env, body, origin, D);
+  if (op === "audio") return await audioStep(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");

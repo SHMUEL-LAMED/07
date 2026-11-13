@@ -5089,6 +5089,7 @@ const HUB_CSS = ".hub-cmp{display:grid;gap:16px}.hub-cmp-l{display:grid;gap:6px;
 + ".fx-tasks>li.done{color:var(--goodt)}.fx-tasks>li.done::before{content:'✓';display:grid;place-items:center;border:0;background:var(--good);color:#fff;font-size:.66rem;font-weight:800}"
 + ".fx-done{display:flex;align-items:center;gap:14px}.fx-ok{flex:none;display:grid;place-items:center;width:50px;height:50px;border-radius:50%;background:var(--good);color:#fff;font-size:1.5rem;font-weight:800;animation:fxpop .4s ease}"
 + ".fx-pw{display:flex;flex-wrap:wrap;align-items:center;gap:8px}"
++ ".fx-sumlist{margin:6px 0 0;padding-inline-start:18px}"
 + "@media (prefers-reduced-motion:reduce){.fx-spin,.fx-tasks>li.on::before,.fx-bar.run>i::after,.fx-ok{animation:none}}"
 + ":root[data-motion=off] .fx-spin,:root[data-motion=off] .fx-tasks>li.on::before,:root[data-motion=off] .fx-bar.run>i::after,:root[data-motion=off] .fx-ok{animation:none}"
 + ".fx-regs .li-main .meta{overflow-wrap:anywhere}";
@@ -5474,7 +5475,7 @@ body: h`<p class="mut small">החשבון יוכל להיכנס עם גוגל ו
 // ================= קו חדש: מפעל הקווים (בעלים) =================
 // שלבי האשף: 1 טוקן · 2 פרטים · 3 בנייה (רצה עכשיו) · 4 חיבור שלוחות · 5 הכול הסתיים
 function fxStep() { return FX.created ? (FX.ivrDone ? 5 : 4) : FX.building ? 3 : FX.check ? 2 : 1; }
-const FX_STEPS = [["טוקן ימות", "בדיקת המערכת"], ["פרטי הקו", "שם ומנהל"], ["בנייה", "שרת ואחסון"], ["חיבור שלוחות", "העתקת התפריטים"]];
+const FX_STEPS = [["טוקן ימות", "בדיקת המערכת"], ["פרטי הקו", "שם ומנהל"], ["בנייה", "שרת ואחסון"], ["חיבור שלוחות", "תפריטים וקריינות"]];
 function stepsHtml(st) {
 const pct = Math.round(Math.min(st - 1, 4) / 4 * 100);
 return h`<div class="fx-prog"><div class="fx-bar" role="progressbar" aria-label="התקדמות בניית הקו" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
@@ -5536,16 +5537,8 @@ return h`<div class="banner bad">${ico("alert")}<div><b>${cf.msg || "Cloudflare 
 // מצב חיבור השלוחות האוטומטי (שלב 4)
 function fxIvrHtml(slug) {
 const S = FX.ivr;
-if (!S) return h`<div class="banner info">${ico("info")}<div><b>חיבור השלוחות</b> מתחיל אוטומטית עם הטוקן שכבר הוזן.${slug && FX.token ? h` <button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} התחלה</button>` : ""}</div></div>`;
-if (!S.done) return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>מחבר את השלוחות…</b><div class="mut small">מעתיק את הגדרות השלוחות מקו המקור לקו החדש · סבב ${String(S.round)}${S.written ? " · נכתבו " + S.written : ""}</div></div></div>
-<div class="fx-bar run"><i style="width:${Math.min(90, 20 + S.round * 15)}%"></i></div>
-<p class="mut small">מה שקיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות לא מועתקים.</p></div>`;
-const bad = S.err || S.failed.length;
-return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check")}<div><b>${S.err ? "חיבור השלוחות נעצר" : "השלוחות חוברו"}</b> – הועתקו ${String(S.written)} שלוחות${S.same ? h`, ${String(S.same)} כבר היו מוכנות` : ""}.
-${S.err ? h`<div>${S.err}</div>` : ""}
-${S.failed.length ? h`<details class="fx-more" open><summary>לא נכתבו (${String(S.failed.length)})</summary><ul class="small">${S.failed.map(f => h`<li class="ltr">${f}</li>`)}</ul></details>` : ""}
-${S.warn.length ? h`<details class="fx-more"><summary>לבדוק (${String(S.warn.length)})</summary><ul class="small">${S.warn.map(w => h`<li>${w}</li>`)}</ul></details>` : ""}
-${bad && FX.token ? h`<div class="btns"><button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} ניסיון חוזר</button></div>` : ""}</div></div>`;
+if (!S) return h`<div class="banner info">${ico("info")}<div><b>חיבור השלוחות והקריינות</b> מתחיל אוטומטית עם הטוקן שכבר הוזן.${slug && FX.token ? h` <button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} התחלה</button>` : ""}</div></div>`;
+return ivrStateHtml(S, slug);
 }
 const fxCanBuild = status => !!(status && status.ready && (!status.cf || status.cf.ok));
 function fxBody(status, st) {
@@ -5591,55 +5584,92 @@ ${steps.length ? h`<details class="fx-more"><summary>מה נעשה (${steps.leng
 ${r.adminPass ? h`<div class="fld"><span>סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</span><div class="secret fx-pw"><code>${r.adminPass}</code><button type="button" class="btn s" data-x="hubFxCopy">${ico("copy")} העתקה</button></div></div>` : ""}
 <div class="row">${adm ? h`<a class="link" href="${adm}" target="_blank" rel="noopener">דף הניהול (כתובת ישירה)</a>` : ""}${slug ? h`<a class="link" href="${PAGES + "line/?l=" + enc(slug)}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a>` : ""}</div>
 ${fxIvrHtml(slug)}
-<div class="btns">${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug && FX.ivr && FX.ivr.done ? h`<button type="button" class="btn" data-x="hubIvr" data-slug="${slug}">בחירה ידנית של שלוחות</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
+<div class="btns">${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
 }
-// חיבור שלוחות אוטומטי אחרי בניית קו: סבבים של תכנון וכתיבה עד שכל העץ הועתק.
-// השרת שומר על הכללים: קורא מחדש מקור ויעד, לא כותב קובץ שלא נקרא, ושומר גיבוי לפני כל כתיבה
-async function fxAutoIvr() {
-const slug = FX.tokenSlug, token = FX.token, line = fxLine();
-if (!slug || !token || (FX.ivr && !FX.ivr.done)) return;
-const S = FX.ivr = { t0: Date.now(), round: 0, written: 0, same: 0, failed: [], warn: [], done: false, err: "" };
-const redraw = () => { if (FX.ivr === S) reNew(); };
-redraw();
+// חיבור מלא של קו בלחיצה אחת: קודם השלוחות (סבבים של תכנון וכתיבה עד שכל העץ הועתק), ואחר כך הקריינות
+// (העתקת קובצי הפתיח, ויצירה בקול העוזר לשלוחות שאין להן). השרת שומר על הכללים: קורא מחדש מקור ויעד,
+// לא כותב קובץ שלא נקרא, ושומר גיבוי לפני כתיבת הגדרות
+const ivrState = () => ({ t0: Date.now(), phase: "ivr", round: 0, written: 0, same: 0, audio: 0, tts: 0, failed: [], warn: [], done: false, err: "" });
+async function lineSetupRun(slug, token, line, S, redraw, alive) {
+const paths = new Set(["/"]);
 try {
-for (let i = 0; i < 12; i++) {
+for (let i = 0; i < 15; i++) {
 S.round = i + 1; redraw();
 const p = await fxApi({ op: "ivr_plan", slug, ymToken: token, restart: i === 0 }, line) || {};
-if (FX.ivr !== S) return;
+if (!alive()) return;
 const plan = p.plan || [];
+plan.forEach(x => paths.add(x.path));
 S.same += plan.filter(x => x.same).length;
-plan.forEach(x => (x.warn || []).forEach(w => { const t = x.path + ": " + w; if (S.warn.indexOf(t) < 0) S.warn.push(t); }));
+plan.forEach(x => (x.warn || []).forEach(w => { const t = (x.path === "/" ? "ראשית" : x.path) + ": " + w; if (S.warn.indexOf(t) < 0) S.warn.push(t); }));
 const todo = plan.filter(x => !x.same).map(x => x.path);
 let r = null;
 if (todo.length) {
 r = await fxApi({ op: "ivr_apply", slug, ymToken: token, paths: todo, confirm: slug }, line) || {};
-if (FX.ivr !== S) return;
+if (!alive()) return;
 S.written += (r.done || []).length;
 (r.failed || []).forEach(f => S.failed.push(typeof f === "string" ? f : JSON.stringify(f)));
 }
 const more = (r && (r.skipped || []).length) || (Array.isArray(p.next) && p.next.length);
 if (!more) break;
 }
+S.phase = "audio"; S.round = 0;
+let todo = [...paths];
+for (let i = 0; i < 25 && todo.length; i++) {
+S.round = i + 1; redraw();
+const r = await fxApi({ op: "audio", slug, ymToken: token, paths: todo }, line) || {};
+if (!alive()) return;
+S.audio += (r.copied || []).length; S.tts += +r.tts || 0;
+(r.failed || []).forEach(f => S.failed.push(typeof f === "string" ? f : JSON.stringify(f)));
+const left = r.left || [];
+if (left.length >= todo.length) break; // אין התקדמות – לא נתקעים בלולאה
+todo = left;
+}
 } catch (e) { S.err = (e && e.message) || String(e); }
 S.done = true;
-if (!S.err && !S.failed.length) FX.ivrDone = true;
-FX.status = null;
-toast(S.err ? "חיבור השלוחות נעצר" : S.failed.length ? "השלוחות חוברו, חלקן נכשלו" : "השלוחות חוברו", !!(S.err || S.failed.length));
+toast(S.err ? "החיבור נעצר באמצע" : S.failed.length ? "הקו חובר, חלק מהקבצים לא הועתקו" : "הקו חובר במלואו", !!(S.err || S.failed.length));
 redraw();
 }
+// באשף: אחרי בניית הקו, עם אותו טוקן
+async function fxAutoIvr() {
+const slug = FX.tokenSlug, token = FX.token, line = fxLine();
+if (!slug || !token || (FX.ivr && !FX.ivr.done)) return;
+const S = FX.ivr = ivrState();
+await lineSetupRun(slug, token, line, S, () => { if (FX.ivr === S) reNew(); }, () => FX.ivr === S);
+if (FX.ivr === S && !S.err && !S.failed.length) { FX.ivrDone = true; FX.status = null; reNew(); }
+}
 Actions.register("fxIvrAuto", () => { if (FX.ivr && FX.ivr.done) FX.ivr = null; return fxAutoIvr(); }, { write: true });
+// מצב החיבור (באשף ובחלון): רץ / סיכום
+function ivrStateHtml(S, slug) {
+if (!S.done) {
+const what = S.phase === "ivr" ? h`מעתיק את הגדרות השלוחות מקו המקור · סבב ${String(S.round)}${S.written ? " · הועתקו " + S.written : ""}` : h`מעתיק את הקריינות של השלוחות${S.audio ? " · הועתקו " + S.audio + " קבצים" : ""}`;
+const pct = S.phase === "ivr" ? Math.min(55, 10 + S.round * 12) : Math.min(92, 60 + S.round * 8);
+return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>${S.phase === "ivr" ? "מחבר את השלוחות…" : "מעתיק קריינות…"}</b><div class="mut small">${what}</div></div></div>
+<div class="fx-bar run"><i style="width:${pct}%"></i></div>
+<ul class="fx-tasks"><li class="${S.phase === "ivr" ? "on" : "done"}">הגדרות השלוחות</li><li class="${S.phase === "audio" ? "on" : ""}">קריינות – העתקה מקו המקור, ויצירה בקול העוזר למה שחסר</li></ul>
+<p class="mut small">מה שקיים בקו החדש נשמר בגיבוי לפני הכתיבה. הודעות של חברים והקלטות אישיות לא מועתקות.</p></div>`;
+}
+const bad = S.err || S.failed.length;
+return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check")}<div><b>${S.err ? "החיבור נעצר באמצע" : "הקו חובר"}</b>
+<ul class="small fx-sumlist"><li>שלוחות: הועתקו ${String(S.written)}${S.same ? h`, ${String(S.same)} כבר היו מוכנות` : ""}</li>
+<li>קריינות: הועתקו ${String(S.audio)} קבצים${S.tts ? h`, ו-${String(S.tts)} פתיחים נוצרים עכשיו בקול העוזר (יהיו מוכנים תוך כמה דקות)` : ""}</li></ul>
+${S.err ? h`<div>${S.err}</div>` : ""}
+${S.failed.length ? h`<details class="fx-more" open><summary>לא הועתקו (${String(S.failed.length)})</summary><ul class="small">${S.failed.map(f => h`<li>${f}</li>`)}</ul></details>` : ""}
+${S.warn.length ? h`<details class="fx-more"><summary>לבדוק (${String(S.warn.length)})</summary><ul class="small">${S.warn.map(w => h`<li>${w}</li>`)}</ul></details>` : ""}
+${bad && slug ? h`<div class="btns"><button type="button" class="btn s" data-x="hubIvr" data-slug="${slug}">${ico("refresh")} להמשיך מאיפה שנעצר</button></div>` : ""}</div></div>`;
+}
 // חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
 async function ivrStart(slug) {
+// הקו שנבנה עכשיו באשף – ממשיכים שם, עם אותו טוקן
+if (FX.token && FX.tokenSlug === slug && FX.created && fxStep() >= 4) { if (FX.ivr && FX.ivr.done) FX.ivr = null; return fxAutoIvr(); }
 const line = fxLine();
-let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('הטוקן של המערכת בימות של הקו "' + slug + '" (לא נשמר):', "", { type: "password" });
+let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('הטוקן של המערכת בימות של "' + fxName(slug) + '" (לא נשמר):', "", { type: "password" });
 token = String(token || "").trim(); if (!token) return;
-const at = where();
-toast("קורא את מבנה השלוחות…");
-const p = await fxApi({ op: "ivr_plan", slug, ymToken: token }, line);
-// עברו למסך אחר בזמן הקריאה – לא קופצים מעליו (התכנון רק קרא, אפשר לבקש שוב)
-if (where() !== at) { toast('חיבור השלוחות של "' + slug + '" בוטל כי עברתם למסך אחר'); return; }
-FX.plan = Object.assign({}, p || {}, { slug: (p && p.slug) || slug, token, line });
-ivrModal(FX.plan);
+// בלחיצה אחת: חלון שמראה את ההתקדמות, והכול רץ עד הסוף (סגירת החלון לא עוצרת)
+const S = ivrState(), draw = () => { const b = $("#fx-run"); if (b) put(b, ivrStateHtml(S, slug)); };
+Modal.open({ title: 'חיבור "' + fxName(slug) + '"', body: h`<div id="fx-run">${ivrStateHtml(S, slug)}</div><div class="btns"><button type="button" class="btn" data-x="close">סגירה</button></div>` });
+await lineSetupRun(slug, token, line, S, draw, () => true);
+FX.status = null;
+if (state.view === "hub" && state.hub === "lines") linesLoad(seq, false);
 }
 function planState(x) {
 const st = x.same ? pill("זהה", "ok") : x.unknown ? pill("לא נקרא – לבדוק", "warn") : x.before ? pill("יוחלף", "warn") : pill("חדש", "acc");
@@ -5812,7 +5842,7 @@ reNew(); throw e;
 }
 FX.building = null; clearInterval(fxTimer);
 FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.form = null; FX.status = null; FX.ivrDone = false; FX.ivr = null;
-toast("הקו נבנה – מחבר את השלוחות");
+toast("הקו נבנה – מחבר את השלוחות והקריינות");
 // השלב האחרון רץ לבד, עם אותו טוקן
 setTimeout(() => { fxAutoIvr().catch(() => {}); }, 0);
 // במרכז: רשימת הקווים מתעדכנת (reloadMe מצייר מחדש רק תצוגת מרכז, ושומר על הקו הפתוח)
