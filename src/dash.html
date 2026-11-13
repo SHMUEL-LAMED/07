@@ -5268,7 +5268,7 @@ const ext = withExt ? h`<a class="btn s icon g" href="${extBase(l)}" target="_bl
 if (!own() || !Line.isFactory(l)) return ext;
 return h`${ext}${l.enabled === false
 ? h`<button type="button" class="btn s p" data-x="hubResume" data-slug="${l.slug}">${ico("play")} החזרה לפעולה</button>`
-: h`<button type="button" class="btn s d" data-x="hubSuspend" data-slug="${l.slug}">${ico("pause")} השהיה</button>`}<button type="button" class="btn s" data-x="hubIvr" data-slug="${l.slug}" title="העתקת כל השלוחות, התיקיות והקריינות מקו המקור (בלי הודעות)">העתקת התבנית</button><button type="button" class="btn s" data-x="hubNames" data-slug="${l.slug}" title="שמות למספרים שכבר רשומים בקווים אחרים (פעם אחת)">סנכרון שמות</button>${regOf(l.slug) ? h`<button type="button" class="btn s g d" data-x="hubForget" data-slug="${l.slug}">הסרה מהרשימה</button>` : ""}`;
+: h`<button type="button" class="btn s d" data-x="hubSuspend" data-slug="${l.slug}">${ico("pause")} השהיה</button>`}<button type="button" class="btn s" data-x="hubIvr" data-slug="${l.slug}" title="העתקת כל השלוחות, התיקיות והקריינות מקו המקור (בלי הודעות)">העתקת התבנית</button><button type="button" class="btn s" data-x="hubNames" data-slug="${l.slug}" title="שמות למספרים שכבר רשומים בקווים אחרים (פעם אחת)">סנכרון שמות</button><button type="button" class="btn s" data-x="hubVfix" data-slug="${l.slug}" title="העברת קבצי קריינות שנכנסו בטעות כהודעות בשלוחה 1/2 לתיקיית המחוקות">ניקוי הודעות</button>${regOf(l.slug) ? h`<button type="button" class="btn s g d" data-x="hubForget" data-slug="${l.slug}">הסרה מהרשימה</button>` : ""}`;
 }
 // השוואה בין הקווים: שיחות והודעות ב-7 הימים האחרונים
 function compareCard(rows) {
@@ -5824,6 +5824,44 @@ FX.status = null;
 if (state.view === "hub" && state.hub === "lines") linesLoad(seq, false);
 else reFx(true);
 });
+// ניקוי: קריינות שנכנסה בטעות כהודעות בשלוחת ההודעות הכלליות (1/2). מסומנות מראש: בלי מספר מתקשר ומהיום
+let VF = null;
+const isToday = d => { const t = new Date(), dd = String(t.getDate()).padStart(2, "0"), mm = String(t.getMonth() + 1).padStart(2, "0"), y = String(t.getFullYear());
+  return [`${dd}/${mm}/${y}`, `${y}-${mm}-${dd}`, `${dd}/${mm}/${y.slice(2)}`, `${dd}.${mm}.${y}`].some(x => String(d || "").includes(x)); };
+R("hubVfix", async el => {
+const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
+let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('ניקוי שלוחת ההודעות הכלליות (1/2) של "' + name + '": מציג את ההודעות שם, כדי להעביר לתיקיית המחוקות קבצי קריינות שנכנסו בטעות כהודעות.\\nהטוקן של המערכת בימות (לא נשמר):', "", { type: "password", ok: "סריקה" });
+token = String(token || "").trim(); if (!token) return;
+toast("קורא את שלוחה 1/2…");
+const r = await fxApi({ op: "vfix_scan", slug, ymToken: token }, line) || {};
+const files = (r.files || []).map(f => Object.assign(f, { pick: !f.phone && isToday(f.date) })).sort((a, b) => (b.pick - a.pick) || (parseInt(b.name) - parseInt(a.name)));
+if (!files.length) { toast("אין הודעות בשלוחה 1/2"); return; }
+VF = { slug, token, line, name };
+const n = files.filter(f => f.pick).length;
+Modal.open({ wide: true, title: 'ניקוי שלוחת ההודעות הכלליות – "' + name + '"', small: files.length + " הודעות · " + n + " מסומנות",
+body: h`<p class="small">מסומנות מראש <b>${String(n)}</b> הודעות שאין להן מספר מתקשר ונוצרו היום – כנראה קבצי קריינות שנכנסו בטעות. כדאי לעבור על הרשימה לפני ההעברה. הקבצים <b>לא נמחקים</b>: הם עוברים לתיקיית המחוקות, ואפשר להחזיר אותם משם.</p>
+<form class="form" data-xf="hubVfixApply" novalidate><div class="tw" style="max-height:50vh;overflow:auto"><table class="tbl small"><thead><tr><th><span class="sr-only">בחירה</span></th><th>הודעה</th><th>מתקשר</th><th>תאריך</th><th>אורך</th></tr></thead><tbody>
+${files.map(f => h`<tr><td><input type="checkbox" name="f" value="${f.name}" aria-label="${f.name}"${f.pick ? raw(" checked") : ""}></td><td class="ltr">${f.name}</td><td class="ltr">${f.phone ? f.phone : h`<span class="mut">ללא</span>`}</td><td class="ltr nowrap">${f.date || "—"}</td><td class="ltr">${f.duration ? f.duration.toFixed(1) + " שנ׳" : "—"}</td></tr>`)}
+</tbody></table></div>
+<div class="row"><button type="submit" class="btn p">העברת המסומנות לתיקיית המחוקות</button><button type="button" class="btn" data-x="close">סגירה</button></div></form>` });
+});
+F("hubVfixApply", async (f, d) => {
+const v = VF; if (!v) return;
+let names = d.$all("f");
+if (!names.length) { toast("לא נבחרו הודעות", true); return; }
+if (!await Dlg.confirm("להעביר " + names.length + ' הודעות משלוחה 1/2 של "' + v.name + '" לתיקיית המחוקות? אפשר להחזיר אותן משם.', { ok: "העברה" })) return;
+let moved = 0; const failed = [];
+for (let i = 0; i < 30 && names.length; i++) {
+const r = await fxApi({ op: "vfix_apply", slug: v.slug, ymToken: v.token, names }, v.line) || {};
+moved += (r.moved || []).length; failed.push(...(r.failed || []));
+if ((r.left || []).length >= names.length) break;
+names = r.left || [];
+}
+if (Modal.isOpen() && $('#mm form[data-xf="hubVfixApply"]')) Modal.close();
+VF = null;
+toast("הועברו " + moved + " הודעות לתיקיית המחוקות" + (failed.length ? ", " + failed.length + " לא הועברו" : ""), !!failed.length);
+if (failed.length) await Dlg.alert("לא הועברו:\\n" + failed.join("\\n"));
+});
 // סנכרון שמות חד-פעמי: מספרים בקו הזה שיש להם שם בקווים אחרים
 R("hubNames", async el => {
 const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
@@ -6052,7 +6090,7 @@ function regItem(x) {
 const ivr = x.ivr && typeof x.ivr === "object" ? x.ivr : null, adm = safeUrl(x.url);
 return h`<div class="li"><span class="dot ${x.enabled === false ? "off" : "on"}" aria-hidden="true"></span><div class="li-main"><b>${x.name || x.slug}</b><span class="meta"><span class="ltr">${fmtLine(x.line) || x.line || ""}</span> · <span class="ltr">${x.script || ""}</span>${x.created ? " · נבנה " + dateOf(x.created) : ""} · ${ivr ? "שלוחות חוברו " + dateOf(ivr.at) + " (" + (+ivr.written || 0) + ")" : "השלוחות עוד לא חוברו"}</span></div>
 <div class="li-side">${x.test ? pill("מצב בדיקה", "warn") : ""}${x.enabled === false ? h` ${pill("מושהה")}` : ""}</div>
-<div class="acts"><div class="btns">${adm ? h`<a class="btn s g" href="${adm.replace(/\/+$/, "") + "/admin"}" target="_blank" rel="noopener">דף ניהול</a>` : ""}<a class="btn s g" href="${PAGES + "line/?l=" + enc(x.slug)}" target="_blank" rel="noopener">דרך נטפרי</a><button type="button" class="btn s w-only" data-x="hubIvr" data-slug="${x.slug}" title="העתקת כל השלוחות, התיקיות והקריינות מקו המקור (בלי הודעות)">העתקת התבנית</button><button type="button" class="btn s w-only" data-x="hubNames" data-slug="${x.slug}" title="שמות למספרים שכבר רשומים בקווים אחרים (פעם אחת)">סנכרון שמות</button><button type="button" class="btn s g d w-only" data-x="hubForget" data-slug="${x.slug}">הסרה מהרשימה</button></div></div></div>`;
+<div class="acts"><div class="btns">${adm ? h`<a class="btn s g" href="${adm.replace(/\/+$/, "") + "/admin"}" target="_blank" rel="noopener">דף ניהול</a>` : ""}<a class="btn s g" href="${PAGES + "line/?l=" + enc(x.slug)}" target="_blank" rel="noopener">דרך נטפרי</a><button type="button" class="btn s w-only" data-x="hubIvr" data-slug="${x.slug}" title="העתקת כל השלוחות, התיקיות והקריינות מקו המקור (בלי הודעות)">העתקת התבנית</button><button type="button" class="btn s w-only" data-x="hubNames" data-slug="${x.slug}" title="שמות למספרים שכבר רשומים בקווים אחרים (פעם אחת)">סנכרון שמות</button><button type="button" class="btn s w-only" data-x="hubVfix" data-slug="${x.slug}" title="העברת קבצי קריינות שנכנסו בטעות כהודעות בשלוחה 1/2 לתיקיית המחוקות">ניקוי הודעות</button><button type="button" class="btn s g d w-only" data-x="hubForget" data-slug="${x.slug}">הסרה מהרשימה</button></div></div></div>`;
 }
 Tabs.register({
 id: "lines",
