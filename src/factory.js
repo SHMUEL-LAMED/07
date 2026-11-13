@@ -243,6 +243,15 @@ async function createLine(env, body, origin, D) {
 }
 
 // ---------- העתקת מבנה השלוחות (ext.ini) ----------
+// ---------- יומן ביטול: כל מה שנעשה במערכת של קו, כדי שבהסרה היא תחזור להיות כמו לפני החיבור ----------
+// ini {path, before} · dir {path, maybe} · mv {from, to} · file {path}. בביטול עוברים מהסוף להתחלה
+const undoKey = slug => "factory_undo:" + slug;
+async function journal(env, slug, items) {
+  if (!items.length) return;
+  const cur = await env.KV.get(undoKey(slug), "json").catch(() => null) || [];
+  cur.push(...items);
+  await env.KV.put(undoKey(slug), JSON.stringify(cur));
+}
 const iniPath = path => "ivr2:" + (path === "/" ? "" : path) + "/ext.ini";
 // קריאת ext.ini: { ok, text } כשנקרא (ריק = אין קובץ), או { ok:false } כשלא ידוע מה יש שם
 const NOT_FOUND = /not.?found|לא נמצא|לא קיים|אינו קיים|does not exist|no such/i;
@@ -368,13 +377,15 @@ async function ivrApply(env, body, origin, D) {
   }
   const backup = { at: Date.now(), files: ready.map(p => ({ path: p.path, before: p.before })) };
   if (ready.length) await env.KV.put(`factory_backup:${line.slug}:${backup.at}`, JSON.stringify(backup), { expirationTtl: 90 * 86400 });
-  const done = [];
+  const done = [], undo = [];
   for (const p of ready) {
     // שלוחה חדשה: קודם יוצרים את התיקייה (כתיבת ext.ini לתיקייה שלא קיימת עלולה להיכשל)
     if (p.fresh && p.path !== "/") await ymT(token, "UpdateExtension", { path: dirOf(p.path) }).catch(() => null);
     const r = await ymT(token, "UploadTextFile", { what: iniPath(p.path), contents: p.after }).catch(e => ({ message: e.message }));
-    if (ymOk(r)) done.push(p.path); else failed.push(`${p.path}: ${r && r.message || "שגיאה"}`);
+    if (ymOk(r)) { done.push(p.path); undo.push(...(p.fresh && p.path !== "/" ? [{ t: "dir", path: p.path, maybe: true }] : []), { t: "ini", path: p.path, before: p.before || "" }); }
+    else failed.push(`${p.path}: ${r && r.message || "שגיאה"}`);
   }
+  await journal(env, line.slug, undo);
   // הסבב נכתב במלואו – לחיצה הבאה על "חיבור שלוחות" ממשיכה מהמקום שבו הסריקה נעצרה (ובסוף העץ חוזרת להתחלה)
   if (!skipped.length) { const c = await planCursor(env, line.slug); await savePlanCursor(env, line.slug, c.next, []); }
   await patchReg(env, line.slug, l => { l.ivr = { at: Date.now(), written: (l.ivr && l.ivr.written || 0) + done.length, backup: ready.length ? backup.at : (l.ivr && l.ivr.backup) || null }; });
@@ -415,9 +426,10 @@ async function preserveStep(env, body, origin, D) {
     if (!ymOk(r)) return { moved: 0, left: nums.length, failed: [`${TO}: לא נוצרה – ההודעות נשארו בשלוחה 1`] };
     await ymT(token, "FileAction", { action: "delete", what: iniPath(TO) }).catch(() => null); bud.take();
     dst = { ok: true, files: [] };
+    await journal(env, line.slug, [{ t: "dir", path: TO }]);
   }
   let next = dst.files.reduce((mx, n) => { const m = n.match(MSG_FILE); return m ? Math.max(mx, +m[1]) : mx; }, -1);
-  const moved = [], failed = [];
+  const moved = [], failed = [], undo = [];
   for (const num of nums) {
     const fs = groups.get(num);
     if (!bud.take(fs.length)) break;
@@ -427,9 +439,11 @@ async function preserveStep(env, body, origin, D) {
       const ext = n.slice(n.indexOf(".") + 1);
       const r = await ymT(token, "FileAction", { action: "move", what: `ivr2:${FROM}/${n}`, target: `ivr2:${TO}/${to}.${ext}` }).catch(e => ({ message: e.message }));
       if (!ymOk(r)) { ok = false; failed.push(`${FROM}/${n}: ${(r && r.message) || "לא הועבר"}`); }
+      else undo.push({ t: "mv", from: `${FROM}/${n}`, to: `${TO}/${to}.${ext}` });
     }
     if (ok) moved.push(num);
   }
+  await journal(env, line.slug, undo);
   const left = nums.length - moved.length - new Set(failed.map(f => (f.match(/\/(\d+)\./) || [])[1])).size;
   if (moved.length) await D.log(env, `מפעל הקווים: ${moved.length} הודעות שהיו בשלוחה 1 בקו "${line.name}" הועברו ל-${TO}`).catch(() => {});
   return { moved: moved.length, left: Math.max(0, left), failed };
@@ -459,6 +473,7 @@ async function structureStep(env, body, origin, D) {
     await ymT(token, "FileAction", { action: "delete", what: iniPath(path) }).catch(() => null);
     made.push(path);
   }
+  await journal(env, line.slug, made.map(path => ({ t: "dir", path })));
   if (made.length) await D.log(env, `מפעל הקווים: נוצרו ${made.length} תיקיות בקו "${line.name}"`).catch(() => {});
   return { made, failed, left };
 }
@@ -526,6 +541,8 @@ async function audioStep(env, body, origin, D) {
       if (text) tts.push({ k: "tts", path: path === "/" ? "" : path, name: "M1000", text, id2: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) });
     }
   }
+  await journal(env, line.slug, [...copied.map(path => ({ t: "file", path })),
+    ...tts.flatMap(t => ["wav", "tts"].map(e => ({ t: "file", path: `${t.path}/M1000.${e}` })))]);
   if (tts.length && line.kv) {
     const cur = JSON.parse(await kvGetRemote(env, line.kv, "bgjobs").catch(() => null) || "[]");
     const fresh = tts.filter(t => !cur.some(c => c && c.k === "tts" && c.path === t.path && c.name === t.name));
@@ -533,6 +550,59 @@ async function audioStep(env, body, origin, D) {
   }
   if (copied.length || tts.length) await D.log(env, `מפעל הקווים: קריינות לקו "${line.name}" – הועתקו ${copied.length}, נוצרים בקול העוזר ${tts.length}`).catch(() => {});
   return { copied, failed, left, tts: tts.length };
+}
+
+// ---------- ביטול: החזרת המערכת של הקו למה שהייתה לפני החיבור ----------
+// קווים שחוברו לפני שהיה יומן: משחזרים לפחות את ההגדרות מהגיבויים של חיבור השלוחות
+async function undoFromBackups(env, slug) {
+  const items = [];
+  let cursor;
+  do {
+    const l = await env.KV.list({ prefix: `factory_backup:${slug}:`, cursor });
+    for (const k of l.keys.sort((a, b) => +a.name.split(":").pop() - +b.name.split(":").pop())) {
+      const b = await env.KV.get(k.name, "json").catch(() => null);
+      for (const f of (b && b.files) || []) items.push({ t: "ini", path: f.path, before: f.before || "" });
+    }
+    cursor = l.list_complete ? null : l.cursor;
+  } while (cursor);
+  return items;
+}
+// תיקייה שנוצרה בחיבור נמחקת רק אם אין בה תוכן (רק הגדרות או קריינות שהעתקנו). אחרת היא נשארת – לא מוחקים הודעות
+const removableFile = (n, path) => /^ext\.ini$/i.test(n) || VOICE_FILE.test(n) || (TEMPLATE_FILES[path] || []).includes(n);
+async function restoreStep(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  let j = await env.KV.get(undoKey(line.slug), "json").catch(() => null);
+  const legacy = !j;
+  if (!j) j = await undoFromBackups(env, line.slug);
+  const bud = budget(), notes = [];
+  let done = 0;
+  const del = what => ymT(token, "FileAction", { action: "delete", what }).catch(e => ({ message: e.message }));
+  while (j.length) {
+    const it = j[j.length - 1];
+    if (!bud.take(it.t === "dir" ? 2 : 1)) break;
+    if (it.t === "file") await del("ivr2:" + it.path);
+    else if (it.t === "ini") {
+      const r = String(it.before || "").trim()
+        ? await ymT(token, "UploadTextFile", { what: iniPath(it.path), contents: it.before }).catch(e => ({ message: e.message }))
+        : await del(iniPath(it.path));
+      if (String(it.before || "").trim() && !ymOk(r)) notes.push(`${it.path}: ההגדרות הקודמות לא הוחזרו (${(r && r.message) || "שגיאה"})`);
+    } else if (it.t === "mv") {
+      const r = await ymT(token, "FileAction", { action: "move", what: "ivr2:" + it.to, target: "ivr2:" + it.from }).catch(e => ({ message: e.message }));
+      if (!ymOk(r)) notes.push(`${it.to}: לא הוחזר ל-${it.from} (${(r && r.message) || "שגיאה"})`);
+    } else if (it.t === "dir") {
+      const d = await ymT(token, "GetIVR2Dir", { path: dirOf(it.path) }).catch(() => null);
+      if (d && ymOk(d)) {
+        const extra = (d.files || []).map(fileName).filter(n => !removableFile(n, it.path));
+        if (extra.length || (d.dirs || []).length) { if (!it.maybe) notes.push(`${it.path}: נשארה, כי יש בה תוכן שנוסף אחרי החיבור`); }
+        else { const r = await del(dirOf(it.path)); if (!ymOk(r) && !it.maybe) notes.push(`${it.path}: לא נמחקה (${(r && r.message) || "שגיאה"})`); }
+      }
+    }
+    j.pop(); done++;
+  }
+  if (j.length) await env.KV.put(undoKey(line.slug), JSON.stringify(j));
+  else await env.KV.delete(undoKey(line.slug));
+  if (done) await D.log(env, `מפעל הקווים: המערכת של "${line.name}" מוחזרת למה שהייתה לפני החיבור – ${done} פעולות בוטלו${j.length ? `, נשארו ${j.length}` : ""}`).catch(() => {});
+  return { done, left: j.length, notes, legacy };
 }
 
 // ---------- נקודת הכניסה מ-dash.js ----------
@@ -549,6 +619,7 @@ export async function factory(req, env, body, D, origin) {
   if (op === "audio") return await audioStep(env, body, origin, D);
   if (op === "structure") return await structureStep(env, body, origin, D);
   if (op === "preserve") return await preserveStep(env, body, origin, D);
+  if (op === "restore") return await restoreStep(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");

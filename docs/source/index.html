@@ -5817,9 +5817,31 @@ FX.status = null;
 if (state.view === "hub" && state.hub === "lines") linesLoad(seq, false);
 else reFx(true);
 });
+// הסרת קו: קודם מחזירים את המערכת שלו בימות למה שהייתה לפני החיבור (לפי יומן הפעולות), ורק אחר כך מוחקים מהרשימה
 R("hubForget", async el => {
-const slug = el.dataset.slug, line = fxLine();
-if (!await Dlg.typed('להסיר את "' + slug + '" מהרשימה? (ה-Worker עצמו לא יימחק)\nלאישור הקלידו את השם הקצר:', slug)) return;
+const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
+const token = await Dlg.prompt('הסרת "' + name + '".\nכדי להחזיר את המערכת בימות למה שהייתה לפני החיבור (הגדרות, תיקיות והודעות שהועברו), צריך את הטוקן שלה – הוא לא נשמר.\nבלי טוקן: הקו רק יוסר מהרשימה, והמערכת תישאר כמו שהיא עכשיו.', "", { type: "password", ok: "המשך" });
+if (token === null) return;
+if (String(token).trim()) {
+const S = { done: 0, left: 0, notes: [], end: false, err: "" };
+const draw = () => { const b = $("#fx-run"); if (b) put(b, S.end
+? h`<div class="banner ${S.err || S.notes.length ? "warn" : "ok"}">${ico(S.err || S.notes.length ? "alert" : "check")}<div><b>${S.err ? "ההחזרה נעצרה" : "המערכת הוחזרה למה שהייתה לפני החיבור"}</b> – בוטלו ${String(S.done)} פעולות.${S.err ? h`<div>${S.err}</div>` : ""}${S.notes.length ? h`<details class="fx-more" open><summary>לבדוק (${String(S.notes.length)})</summary><ul class="small">${S.notes.map(n => h`<li>${n}</li>`)}</ul></details>` : ""}</div></div>`
+: h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>מחזיר את המערכת למה שהייתה…</b><div class="mut small">מוחק את מה שהועתק, מחזיר הגדרות קודמות והודעות שהועברו · בוטלו ${String(S.done)}</div></div></div><div class="fx-bar run"><i style="width:${Math.min(90, 10 + S.done)}%"></i></div><p class="mut small">הודעות לא נמחקות: תיקייה שנוספו בה הודעות אחרי החיבור נשארת.</p></div>`); };
+Modal.open({ title: 'החזרת המערכת של "' + name + '"', body: h`<div id="fx-run"></div><div class="btns"><button type="button" class="btn" data-x="close">סגירה</button></div>` });
+draw();
+try {
+for (let i = 0; i < 40; i++) {
+const r = await fxApi({ op: "restore", slug, ymToken: String(token).trim() }, line) || {};
+S.done += +r.done || 0; S.left = +r.left || 0; S.notes.push(...(r.notes || []));
+draw();
+if (!S.left || !r.done) break;
+}
+if (S.left) S.err = "נשארו " + S.left + " פעולות שלא בוטלו – אפשר לנסות שוב";
+} catch (e) { S.err = (e && e.message) || String(e); }
+S.end = true; draw();
+if (S.err) { toast("ההחזרה נעצרה – הקו לא הוסר מהרשימה", true); return; }
+}
+if (!await Dlg.confirm('להסיר את "' + name + '" מהרשימה? (השרת שלו לא נמחק, ואפשר להוסיף אותו שוב)', { danger: true, ok: "הסרה" })) return;
 await fxApi({ op: "forget", slug, confirm: slug }, line);
 if (FX.plan && FX.plan.slug === slug) FX.plan = null;
 FX.status = null;
