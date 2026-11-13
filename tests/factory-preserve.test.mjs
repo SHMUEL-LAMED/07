@@ -16,12 +16,17 @@ function fakeYemot(tree) {
     if (method === "GetIVR2Dir") {
       const p = q.path.replace(/^ivr2:/, "") || "/";
       if (!(p in tree)) return json({ responseStatus: "ERROR", message: "not found" });
-      return json({ responseStatus: "OK", dirs: [], files: tree[p].map(name => ({ name })) });
+      const kids = Object.keys(tree).filter(k => k !== p && k.startsWith(p === "/" ? "/" : p + "/") && !k.slice(p === "/" ? 1 : p.length + 1).includes("/"));
+      return json({ responseStatus: "OK", dirs: kids.map(k => ({ name: k.split("/").pop() })), files: tree[p].map(name => ({ name })) });
     }
     if (method === "UpdateExtension") { tree[q.path.replace(/^ivr2:/, "")] = ["ext.ini"]; return json({ responseStatus: "OK" }); }
     if (method === "FileAction") {
       const what = q.what.replace(/^ivr2:/, ""), dir = what.slice(0, what.lastIndexOf("/")), name = what.split("/").pop();
-      if (q.action === "delete") { tree[dir] = (tree[dir] || []).filter(n => n !== name); return json({ responseStatus: "OK" }); }
+      if (q.action === "delete") {
+        if (what in tree) { for (const k of Object.keys(tree)) if (k === what || k.startsWith(what + "/")) delete tree[k]; return json({ responseStatus: "OK" }); }
+        if (!(tree[dir] || []).includes(name)) return json({ responseStatus: "ERROR", message: "not found" });
+        tree[dir] = tree[dir].filter(n => n !== name); return json({ responseStatus: "OK" });
+      }
       const to = q.target.replace(/^ivr2:/, ""), tdir = to.slice(0, to.lastIndexOf("/"));
       if (!(tree[dir] || []).includes(name)) return json({ responseStatus: "ERROR", message: "no file" });
       tree[dir] = tree[dir].filter(n => n !== name); tree[tdir].push(to.split("/").pop());
@@ -31,9 +36,9 @@ function fakeYemot(tree) {
   };
   return calls;
 }
-function env() {
-  const m = new Map([["factory_lines", JSON.stringify([{ slug: "nn", name: "קו חדש", line: "0771111111", url: "https://yemot-line-nn.x.workers.dev" }])]]);
-  return { KV: { async get(k, t) { const v = m.get(k) ?? null; return v && t === "json" ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); } } };
+function env(m0) {
+  const m = m0 || new Map([["factory_lines", JSON.stringify([{ slug: "nn", name: "קו חדש", line: "0771111111", url: "https://yemot-line-nn.x.workers.dev" }])]]);
+  return { KV: { async get(k, t) { const v = m.get(k) ?? null; return v && t === "json" ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); }, async list({ prefix }) { return { keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })), list_complete: true }; } } };
 }
 const D = { log: async () => {}, LINE_PHONE: "0733512880" };
 const req = { method: "POST" };
@@ -64,4 +69,36 @@ test("אין שלוחה 1 – לא קורה כלום", async () => {
   const r = await factory(req, env(), { op: "preserve", slug: "nn", ymToken: "0771111111:1234" }, D, "https://yemot-ai.x.workers.dev");
   assert.deepEqual(r, { moved: 0, left: 0, failed: [] });
   assert.equal(calls.filter(c => c.method === "FileAction").length, 0);
+});
+
+test("הסרה: אחרי העברת הודעות ויצירת תיקיות, המערכת חוזרת בדיוק למה שהייתה", async () => {
+  const tree = { "/": ["ext.ini"], "/1": ["ext.ini", "000.wav", "001.wav", "001.txt"], "/3": ["ext.ini"] };
+  const before = JSON.parse(JSON.stringify(tree));
+  fakeYemot(tree);
+  const E = env();
+  const tok = { slug: "nn", ymToken: "0771111111:1234" };
+  await factory(req, E, { op: "preserve", ...tok }, D, "https://yemot-ai.x.workers.dev");
+  for (let i = 0, r = { left: [1] }; i < 10 && (i === 0 || r.left.length); i++) r = await factory(req, E, { op: "structure", ...tok, paths: i ? r.left : [], required: i === 0 }, D, "https://yemot-ai.x.workers.dev");
+  assert.ok(tree["/1/1"] && tree["/AIQueue"], "התיקיות נוצרו");
+  assert.deepEqual(tree["/1/2"].sort(), ["000.wav", "001.txt", "001.wav"]);
+  let r;
+  for (let i = 0; i < 20; i++) { r = await factory(req, E, { op: "restore", ...tok }, D, "https://yemot-ai.x.workers.dev"); if (!r.left) break; }
+  assert.equal(r.left, 0);
+  assert.deepEqual(r.notes, []);
+  const norm = t => Object.fromEntries(Object.entries(t).map(([k, v]) => [k, [...v].sort()]).sort());
+  assert.deepEqual(norm(tree), norm(before));
+});
+
+test("הסרה: תיקייה שנוספו בה הודעות אחרי החיבור נשארת", async () => {
+  const tree = { "/": ["ext.ini"] };
+  fakeYemot(tree);
+  const E = env();
+  const tok = { slug: "nn", ymToken: "0771111111:1234" };
+  for (let i = 0, r = { left: [1] }; i < 10 && (i === 0 || r.left.length); i++) r = await factory(req, E, { op: "structure", ...tok, paths: i ? r.left : [], required: i === 0 }, D, "https://yemot-ai.x.workers.dev");
+  tree["/1/1"].push("000.wav"); // הודעה חשובה שהוקלטה בקו החדש
+  let r;
+  for (let i = 0; i < 20; i++) { r = await factory(req, E, { op: "restore", ...tok }, D, "https://yemot-ai.x.workers.dev"); if (!r.left) break; }
+  assert.ok(tree["/1/1"].includes("000.wav"), "ההודעה לא נמחקה");
+  assert.ok(r.notes.some(n => n.startsWith("/1/1")) || r.notes.some(n => n.startsWith("/1")));
+  assert.equal(tree["/AIQueue"], undefined, "תיקייה ריקה נמחקה");
 });
