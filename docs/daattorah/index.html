@@ -5474,14 +5474,14 @@ body: h`<p class="mut small">החשבון יוכל להיכנס עם גוגל ו
 // ================= קו חדש: מפעל הקווים (בעלים) =================
 // שלבי האשף: 1 טוקן · 2 פרטים · 3 בנייה (רצה עכשיו) · 4 חיבור שלוחות · 5 הכול הסתיים
 function fxStep() { return FX.created ? (FX.ivrDone ? 5 : 4) : FX.building ? 3 : FX.check ? 2 : 1; }
-const FX_STEPS = [["טוקן ימות", "בדיקת המערכת"], ["פרטי הקו", "שם ומנהל"], ["בנייה", "שרת ואחסון"], ["חיבור שלוחות", "העתקת ext.ini"]];
+const FX_STEPS = [["טוקן ימות", "בדיקת המערכת"], ["פרטי הקו", "שם ומנהל"], ["בנייה", "שרת ואחסון"], ["חיבור שלוחות", "העתקת התפריטים"]];
 function stepsHtml(st) {
 const pct = Math.round(Math.min(st - 1, 4) / 4 * 100);
 return h`<div class="fx-prog"><div class="fx-bar" role="progressbar" aria-label="התקדמות בניית הקו" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
 <ol class="fx-st">${FX_STEPS.map(([t, sub], i) => { const n = i + 1, c = n < st ? "done" : n === st ? "on" : ""; return h`<li class="${c}"${n === st ? raw(' aria-current="step"') : ""}><span class="fx-n" aria-hidden="true">${n < st ? "✓" : String(n)}</span><span class="fx-t"><b>${t}</b><small>${sub}</small></span></li>`; })}</ol></div>`;
 }
 // שלבי הבנייה בשרת וזמן משוער (בשניות) לתחילת כל אחד – לתצוגה בזמן ההמתנה בלבד; התוצאה האמיתית מגיעה מהשרת
-const FX_BUILD = [["בדיקת הטוקן והשם", 0], ["העתקת הקוד של קו המקור", 3], ["יצירת אחסון KV", 7], ["העלאת השרת עם המשתנים והסודות", 10], ["תזמון כל דקה", 18], ["הפעלת כתובת workers.dev", 21], ["רישום הקו ברשימה", 25]];
+const FX_BUILD = [["בדיקת הטוקן והשם", 0], ["העתקת הקוד של קו המקור", 3], ["יצירת אחסון נתונים", 7], ["העלאת השרת עם ההגדרות והמפתחות", 10], ["הפעלת הבדיקה האוטומטית כל דקה", 18], ["הפעלת כתובת הקו", 21], ["רישום הקו ברשימה", 25]];
 let fxTimer = 0;
 function fxTick() {
 const b = FX.building; if (!b) return;
@@ -5537,11 +5537,11 @@ return h`<div class="banner bad">${ico("alert")}<div><b>${cf.msg || "Cloudflare 
 function fxIvrHtml(slug) {
 const S = FX.ivr;
 if (!S) return h`<div class="banner info">${ico("info")}<div><b>חיבור השלוחות</b> מתחיל אוטומטית עם הטוקן שכבר הוזן.${slug && FX.token ? h` <button type="button" class="btn s" data-x="fxIvrAuto">${ico("refresh")} התחלה</button>` : ""}</div></div>`;
-if (!S.done) return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>מחבר את השלוחות…</b><div class="mut small">מעתיק את קובצי ext.ini מקו המקור עם הכתובת של הקו החדש · סבב ${String(S.round)}${S.written ? " · נכתבו " + S.written : ""}</div></div></div>
+if (!S.done) return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>מחבר את השלוחות…</b><div class="mut small">מעתיק את הגדרות השלוחות מקו המקור לקו החדש · סבב ${String(S.round)}${S.written ? " · נכתבו " + S.written : ""}</div></div></div>
 <div class="fx-bar run"><i style="width:${Math.min(90, 20 + S.round * 15)}%"></i></div>
 <p class="mut small">מה שקיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות לא מועתקים.</p></div>`;
 const bad = S.err || S.failed.length;
-return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check")}<div><b>${S.err ? "חיבור השלוחות נעצר" : "השלוחות חוברו"}</b> – נכתבו ${String(S.written)} קבצים${S.same ? h`, ${String(S.same)} כבר היו זהים` : ""}.
+return h`<div class="banner ${bad ? "warn" : "ok"}">${ico(bad ? "alert" : "check")}<div><b>${S.err ? "חיבור השלוחות נעצר" : "השלוחות חוברו"}</b> – הועתקו ${String(S.written)} שלוחות${S.same ? h`, ${String(S.same)} כבר היו מוכנות` : ""}.
 ${S.err ? h`<div>${S.err}</div>` : ""}
 ${S.failed.length ? h`<details class="fx-more" open><summary>לא נכתבו (${String(S.failed.length)})</summary><ul class="small">${S.failed.map(f => h`<li class="ltr">${f}</li>`)}</ul></details>` : ""}
 ${S.warn.length ? h`<details class="fx-more"><summary>לבדוק (${String(S.warn.length)})</summary><ul class="small">${S.warn.map(w => h`<li>${w}</li>`)}</ul></details>` : ""}
@@ -5553,7 +5553,7 @@ if (status && status.missing && st < 3) return empty({ icon: "alert", title: "מ
 const cfb = st < 3 ? fxCfBanner(status) : "";
 if (st === 1) {
 return h`<div class="stack">${cfb}<form class="form" data-xf="hubFxCheck" autocomplete="off">
-<label class="fld req"><span>טוקן של מערכת בימות המשיח</span><div class="fx-tok"><input class="inp ltr" name="t" type="password" required autocomplete="off" placeholder="0791234567:1234 או טוקן API" value="${FX.token}" spellcheck="false" autocapitalize="off"><button type="button" class="btn" data-x="fxEye" aria-pressed="false" aria-label="הצגת הטוקן">${ico("eye")}</button></div><small>הבדיקה רק קוראת מימות (פרטי מערכת ותיקיות). הטוקן לא נשמר בדפדפן.</small></label>
+<label class="fld req"><span>טוקן של מערכת בימות המשיח</span><div class="fx-tok"><input class="inp ltr" name="t" type="password" required autocomplete="off" placeholder="למשל 0791234567:1234" value="${FX.token}" spellcheck="false" autocapitalize="off"><button type="button" class="btn" data-x="fxEye" aria-pressed="false" aria-label="הצגת הטוקן">${ico("eye")}</button></div><small>הבדיקה רק קוראת מימות (פרטי מערכת ותיקיות). הטוקן לא נשמר בדפדפן.</small></label>
 <div class="btns"><button type="submit" class="btn p">${ico("check")} בדיקת הטוקן</button></div></form></div>`;
 }
 if (st === 2) {
@@ -5569,17 +5569,17 @@ return h`<div class="stack">${cfb}
 ${FX.err ? h`<div class="err"><b>הבנייה נכשלה:</b> ${FX.err}</div>` : ""}
 <form class="form" data-xf="hubFxCreate" autocomplete="off"><div class="grid">
 <label class="fld req"><span>שם הקו</span><input class="inp" name="name" required maxlength="40" placeholder="למשל: קו החברים" value="${fv.name || ""}"></label>
-<div class="fld"><span>שם קצר (נבחר אקראית)</span><input type="hidden" name="slug" value="${FX.slug}"><div class="inp ltr" aria-readonly="true">yemot-line-${FX.slug}</div><small>נקבע אוטומטית – משמש לכתובת השרת ולאישור חיבור השלוחות</small></div>
+<div class="fld"><span>קוד הקו (נבחר אוטומטית)</span><input type="hidden" name="slug" value="${FX.slug}"><div class="inp ltr" aria-readonly="true">yemot-line-${FX.slug}</div><small>משמש לכתובת של הקו – אין צורך לשנות</small></div>
 <label class="fld req"><span>מספר הקו</span><input class="inp ltr" name="linePhone" type="tel" inputmode="tel" value="${fv.linePhone || c.linePhone || ""}" required pattern="0[0-9]{8,9}"></label>
 <label class="fld"><span>טלפון מנהל הקו</span><input class="inp ltr" name="ownerPhone" type="tel" inputmode="tel" pattern="0[0-9]{8,9}" placeholder="05..." value="${fv.ownerPhone || ""}"><small>לא חובה – מנהל בפקודות הקוליות</small></label>
 </div>
 <label class="fld"><span>מייל גוגל של מנהל הקו</span><input class="inp ltr" name="ownerEmail" type="email" placeholder="name@gmail.com" value="${fv.ownerEmail || ""}" autocomplete="off" spellcheck="false" autocapitalize="off"><small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small></label>
-<p class="mut small">ייווצר Worker חדש בשם yemot-line-${FX.slug} עם אחסון משלו, כל ה-AI וכל מפתחות הקול של קו המקור, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</p>
+<p class="mut small">ייבנה שרת חדש לקו, עם אחסון משלו, העוזר החכם והקולות של קו המקור, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</p>
 <div class="btns"><button type="submit" class="btn p"${ok ? "" : raw(" disabled")}>${ico("plus")} בניית הקו</button><button type="button" class="btn" data-x="hubFxBack">חזרה</button></div></form></div>`;
 }
 if (st === 3) {
 const b = FX.building;
-return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>בונה את הקו "${b.name}"…</b><div class="mut small"><span class="ltr">yemot-line-${b.slug}</span> · <span id="fx-el">0 שניות</span></div></div></div>
+return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>בונה את הקו "${b.name}"…</b><div class="mut small">עברו <span id="fx-el">0 שניות</span></div></div></div>
 <div class="fx-bar run"><i id="fx-bbar" style="width:4%"></i></div>
 <ul class="fx-tasks" id="fx-tasks">${FX_BUILD.map(([t], i) => h`<li class="${i ? "" : "on"}">${t}</li>`)}</ul>
 <p class="mut small">זה לוקח בדרך כלל חצי דקה. אפשר לעבור למסך אחר – הבנייה תמשיך, והתוצאה תחכה כאן.</p></div>`;
@@ -5589,7 +5589,7 @@ const adm = safeUrl(r.adminUrl), inList = inHub() && !!Line.bySlug(slug), steps 
 return h`<div class="stack"><div class="fx-done"><span class="fx-ok" aria-hidden="true">✓</span><div><b>הקו "${l.name || slug}" נבנה${FX.ivrDone ? " והשלוחות חוברו" : ""}.</b><div class="mut small">${r.note || ""}</div></div></div>
 ${steps.length ? h`<details class="fx-more"><summary>מה נעשה (${steps.length})</summary><ul class="fx-tasks">${steps.map(x => h`<li class="done">${typeof x === "string" ? x : JSON.stringify(x)}</li>`)}</ul></details>` : ""}
 ${r.adminPass ? h`<div class="fld"><span>סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</span><div class="secret fx-pw"><code>${r.adminPass}</code><button type="button" class="btn s" data-x="hubFxCopy">${ico("copy")} העתקה</button></div></div>` : ""}
-<div class="row">${adm ? h`<a class="link" href="${adm}" target="_blank" rel="noopener">דף הניהול (workers.dev)</a>` : ""}${slug ? h`<a class="link" href="${PAGES + "line/?l=" + enc(slug)}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a>` : ""}</div>
+<div class="row">${adm ? h`<a class="link" href="${adm}" target="_blank" rel="noopener">דף הניהול (כתובת ישירה)</a>` : ""}${slug ? h`<a class="link" href="${PAGES + "line/?l=" + enc(slug)}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a>` : ""}</div>
 ${fxIvrHtml(slug)}
 <div class="btns">${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug && FX.ivr && FX.ivr.done ? h`<button type="button" class="btn" data-x="hubIvr" data-slug="${slug}">בחירה ידנית של שלוחות</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
 }
@@ -5643,20 +5643,25 @@ ivrModal(FX.plan);
 }
 function planState(x) {
 const st = x.same ? pill("זהה", "ok") : x.unknown ? pill("לא נקרא – לבדוק", "warn") : x.before ? pill("יוחלף", "warn") : pill("חדש", "acc");
-return h`${st}${x.api ? h` ${pill("API", "info")}` : ""}${(x.warn || []).map(w => h`<div class="note">${w}</div>`)}`;
+return h`${st}${x.api ? h` ${pill("מחובר לשרת", "info")}` : ""}${(x.warn || []).map(w => h`<div class="note">${w}</div>`)}`;
+}
+// שם הקו בעברית (מהרשימה, מהקו שנבנה עכשיו או מרשימת הקווים), ואם אין – הקוד שלו
+function fxName(slug) {
+const c = FX.created && FX.created.line && FX.created.line.slug === slug ? FX.created.line : null;
+return (c && c.name) || (regOf(slug) || {}).name || (Line.bySlug(slug) || {}).name || slug;
 }
 function ivrModal(p) {
 const plan = p.plan || [];
 Modal.open({
 wide: true,
-title: 'חיבור השלוחות של "' + p.slug + '"',
-small: (+p.count || plan.length) + " קובצי ext.ini מקו המקור",
+title: 'חיבור השלוחות של "' + fxName(p.slug) + '"',
+small: (+p.count || plan.length) + " שלוחות מקו המקור",
 onClose: () => { if (FX.plan === p) FX.plan = null; },
-body: h`<p class="mut small">כל קובץ מועתק מקו המקור, אחרי החלפת כתובת השרת ומפתח ההרצה בכתובת של הקו החדש. מה שכבר קיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות <b>לא</b> מועתקים.</p>
-${p.truncated ? h`<div class="banner warn">${ico("alert")}<div><b>זו רק חלק מהשלוחות.</b> בשרת החינמי יש מגבלת פניות לכל בקשה, ולא כל העץ נקרא. אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>` : ""}
-<form class="form" data-xf="hubIvrApply" autocomplete="off" novalidate>${plan.length ? h`<div class="tw" style="max-height:46vh;overflow:auto"><table class="tbl small hub-ivr"><thead><tr><th><span class="sr-only">בחירה</span></th><th>שלוחה</th><th>מצב</th><th>אחרי ההעתקה</th><th>קיים היום</th></tr></thead><tbody>
-${plan.map(x => h`<tr><td><input type="checkbox" name="p" value="${x.path}" aria-label="${x.path}"${x.same ? raw(" disabled") : x.unknown ? "" : raw(" checked")}></td><td class="ltr nowrap">${x.path}</td><td>${planState(x)}</td><td><pre class="hub-ini">${x.after || ""}</pre></td><td>${x.before ? h`<pre class="hub-ini">${x.before}</pre>` : DASH}</td></tr>`)}</tbody></table></div>` : empty("אין שלוחות להעתקה")}
-<div class="row"><input class="inp ltr" name="confirm" required placeholder="${"לאישור להקליד: " + p.slug}" aria-label="${"לאישור להקליד את השם הקצר " + p.slug}" autocomplete="off" spellcheck="false" autocapitalize="off" style="max-width:280px"><button type="submit" class="btn p d"${plan.length ? "" : raw(" disabled")}>כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-x="close">סגירה</button></div></form>`,
+body: h`<p class="mut small">ההגדרות של כל שלוחה מועתקות מקו המקור, ומכוונות אוטומטית לשרת של הקו החדש. מה שכבר קיים במערכת החדשה נשמר בגיבוי לפני הכתיבה. קבצי שמע והודעות <b>לא</b> מועתקים.</p>
+${p.truncated ? h`<div class="banner warn">${ico("alert")}<div><b>זו רק חלק מהשלוחות.</b> בשרת החינמי יש מגבלת פניות לכל בקשה, ולא כל העץ נקרא. אחרי ההעתקה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>` : ""}
+<form class="form" data-xf="hubIvrApply" autocomplete="off" novalidate>${plan.length ? h`<div class="tw" style="max-height:46vh;overflow:auto"><table class="tbl small hub-ivr"><thead><tr><th><span class="sr-only">בחירה</span></th><th>שלוחה</th><th>מצב</th><th>ההגדרות אחרי ההעתקה</th><th>קיים היום בקו החדש</th></tr></thead><tbody>
+${plan.map(x => h`<tr><td><input type="checkbox" name="p" value="${x.path}" aria-label="${x.path}"${x.same ? raw(" disabled") : x.unknown ? "" : raw(" checked")}></td><td class="nowrap">${x.path === "/" ? "ראשית" : h`<span class="ltr">${x.path.replace(/^\//, "")}</span>`}</td><td>${planState(x)}</td><td><pre class="hub-ini">${x.after || ""}</pre></td><td>${x.before ? h`<pre class="hub-ini">${x.before}</pre>` : DASH}</td></tr>`)}</tbody></table></div>` : empty("אין שלוחות להעתקה")}
+<div class="row"><button type="submit" class="btn p"${plan.length ? "" : raw(" disabled")}>העתקת השלוחות שנבחרו</button><button type="button" class="btn" data-x="close">סגירה</button></div></form>`,
 });
 }
 
@@ -5735,11 +5740,11 @@ try { window.open(extUrl(l), "_blank", "noopener"); } catch {}
 }, { write: false });
 F("hubIvrApply", async (f, d) => {
 const p = FX.plan; if (!p) return;
-const paths = d.$all("p"), conf = String(d.confirm || "").trim();
+const paths = d.$all("p");
 if (!paths.length) { toast("לא נבחרו שלוחות", true); return; }
-if (!conf) { try { f.elements.confirm.focus(); } catch {} toast("להקליד את השם הקצר לאישור", true); return; }
-if (!await Dlg.confirm("לכתוב " + paths.length + ' קובצי שלוחות למערכת של "' + p.slug + '"? מה שקיים שם יישמר בגיבוי.', { danger: true, ok: "כתיבה" })) return;
-const r = await fxApi({ op: "ivr_apply", slug: p.slug, ymToken: p.token, paths, confirm: conf }, p.line) || {};
+if (!await Dlg.confirm("להעתיק " + paths.length + " שלוחות לקו החדש? מה שקיים שם יישמר בגיבוי.", { ok: "העתקה" })) return;
+// השרת מבקש את השם הקצר כאישור – הוא נשלח אוטומטית (האישור הוא החלון שלמעלה)
+const r = await fxApi({ op: "ivr_apply", slug: p.slug, ymToken: p.token, paths, confirm: p.slug }, p.line) || {};
 if (FX.plan === p) FX.plan = null;
 if (Modal.isOpen() && $('#mm form[data-xf="hubIvrApply"]')) Modal.close();
 // האשף: הקו שנבנה עכשיו – השלב האחרון הושלם (רק כשהכול נכתב ולא נשארו שלוחות לסבב נוסף)
