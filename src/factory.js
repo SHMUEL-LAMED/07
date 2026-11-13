@@ -382,6 +382,59 @@ async function ivrApply(env, body, origin, D) {
   return { ok: !failed.length && !skipped.length, done, failed, skipped, backup: ready.length ? backup.at : null };
 }
 
+// ---------- שמירת הודעות שכבר היו בקו החדש ----------
+// לפני שהתבנית נכתבת, שלוחה 1 הופכת לתפריט (1/1 חשובות, 1/2 כל ההודעות). הודעות שהיו בה ישירות היו נעלמות מהשמיעה,
+// ולכן מעבירים אותן לסוף 1/2 לפי הסדר (כל הקבצים של אותו מספר יחד – wav, txt...). שום קובץ לא נמחק
+const MSG_FILE = /^(\d+)\.([\w-]+)$/;
+async function dirFiles(token, path, bud) {
+  const all = []; let ok = false;
+  for (let from = 0; from < 10000; from += 1000) {
+    if (!bud.take()) return { ok, files: all, cut: true };
+    const d = await ymT(token, "GetIVR2Dir", from ? { path: dirOf(path), filesFrom: from } : { path: dirOf(path) }).catch(() => null);
+    if (!d || !ymOk(d)) return { ok, files: all };
+    ok = true;
+    const f = (d.files || []).map(fileName);
+    all.push(...f);
+    if (f.length < 1000) break;
+  }
+  return { ok, files: all };
+}
+async function preserveStep(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const FROM = "/1", TO = "/1/2", bud = budget();
+  const src = await dirFiles(token, FROM, bud);
+  if (!src.ok) return { moved: 0, left: 0, failed: [] }; // אין שלוחה 1 – אין מה להעביר
+  const groups = new Map();
+  for (const n of src.files) { const m = n.match(MSG_FILE); if (m) (groups.get(m[1]) || groups.set(m[1], []).get(m[1])).push(n); }
+  const nums = [...groups.keys()].sort((a, b) => +a - +b);
+  if (!nums.length) return { moved: 0, left: 0, failed: [] };
+  let dst = await dirFiles(token, TO, bud);
+  if (dst.cut) return { moved: 0, left: nums.length, failed: [] };
+  if (!dst.ok) {
+    const r = await ymT(token, "UpdateExtension", { path: dirOf(TO) }).catch(e => ({ message: e.message })); bud.take();
+    if (!ymOk(r)) return { moved: 0, left: nums.length, failed: [`${TO}: לא נוצרה – ההודעות נשארו בשלוחה 1`] };
+    await ymT(token, "FileAction", { action: "delete", what: iniPath(TO) }).catch(() => null); bud.take();
+    dst = { ok: true, files: [] };
+  }
+  let next = dst.files.reduce((mx, n) => { const m = n.match(MSG_FILE); return m ? Math.max(mx, +m[1]) : mx; }, -1);
+  const moved = [], failed = [];
+  for (const num of nums) {
+    const fs = groups.get(num);
+    if (!bud.take(fs.length)) break;
+    const to = String(++next).padStart(3, "0");
+    let ok = true;
+    for (const n of fs) {
+      const ext = n.slice(n.indexOf(".") + 1);
+      const r = await ymT(token, "FileAction", { action: "move", what: `ivr2:${FROM}/${n}`, target: `ivr2:${TO}/${to}.${ext}` }).catch(e => ({ message: e.message }));
+      if (!ymOk(r)) { ok = false; failed.push(`${FROM}/${n}: ${(r && r.message) || "לא הועבר"}`); }
+    }
+    if (ok) moved.push(num);
+  }
+  const left = nums.length - moved.length - new Set(failed.map(f => (f.match(/\/(\d+)\./) || [])[1])).size;
+  if (moved.length) await D.log(env, `מפעל הקווים: ${moved.length} הודעות שהיו בשלוחה 1 בקו "${line.name}" הועברו ל-${TO}`).catch(() => {});
+  return { moved: moved.length, left: Math.max(0, left), failed };
+}
+
 // ---------- תיקיות שהשרת של הקו צריך (גם בלי הגדרות) ----------
 // מהקוד של worker.js: חלוקת שלוחה 1 (1/1 חשובות, 1/2 כל ההודעות), תורי הבדיקה, ממתינות, מחוקות, בקשות הצטרפות,
 // הקלטות שם, הודעות אישיות, דגלים והקול של העוזר. בלעדיהן הקו החדש לא יעבוד כמו קו המקור
@@ -495,6 +548,7 @@ export async function factory(req, env, body, D, origin) {
   if (op === "ivr_apply") return await ivrApply(env, body, origin, D);
   if (op === "audio") return await audioStep(env, body, origin, D);
   if (op === "structure") return await structureStep(env, body, origin, D);
+  if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");
