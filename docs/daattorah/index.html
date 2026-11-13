@@ -5037,6 +5037,8 @@ Busy.add(() => AI.busy());
 // מחוץ למרכז (Worker / קו יחיד) המפעל זמין לבעלים בלשונית "קווים" של קו המקור
 // (רשומה בסוף הקובץ), עם אותו אשף ואותן פעולות – מול הקו הנוכחי.
 // ===================================================================
+// מעבר ללשונית בקו (בתוך Hub השם show הוא מעבר בין תצוגות המרכז)
+const showTab = (...a) => show(...a);
 const Hub = (() => {
 const defs = {}, order = [];
 let seq = 0;                       // עולה בכל ציור תצוגה – תשובות ישנות נזרקות
@@ -5044,7 +5046,7 @@ let cssDone = false;
 // נתונים מכל הקווים (60 שניות)
 const cache = { rows: null, at: 0, key: "", p: null };
 // מפעל הקווים: בזיכרון בלבד – טוקני ימות לא נשמרים לעולם
-const FX = { token: "", tokenSlug: "", slug: "", check: null, created: null, plan: null, status: null };
+const FX = { token: "", tokenSlug: "", slug: "", check: null, created: null, plan: null, status: null, building: null, err: "", form: null, ivrDone: false };
 // שם קצר אקראי לקו חדש: אות ועוד 7 אותיות/ספרות (מתאים לבדיקה בשרת – 3–20 תווים)
 function fxRandSlug() {
 const abc = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(7));
@@ -5060,6 +5062,35 @@ const HUB_CSS = ".hub-cmp{display:grid;gap:16px}.hub-cmp-l{display:grid;gap:6px;
 + ".secret>code{-webkit-user-select:all;user-select:all;cursor:text}"
 + ".line-card[data-open]{cursor:pointer}.line-card[data-open]:hover{transform:translateY(-3px);border-color:var(--accsoft);box-shadow:var(--sh2)}"
 + "@media (prefers-reduced-motion:reduce){.line-card[data-open]:hover{transform:none}}:root[data-motion=off] .line-card[data-open]:hover{transform:none}"
+// אשף "קו חדש": פס התקדמות, שלבים, מסך בנייה
++ ".fx-prog{display:grid;gap:14px;margin-bottom:18px}"
++ ".fx-bar{position:relative;height:8px;border-radius:999px;background:var(--bg2);overflow:hidden}"
++ ".fx-bar>i{position:absolute;inset-block:0;inset-inline-start:0;border-radius:inherit;background:linear-gradient(90deg,var(--acc),var(--good));transition:width .6s ease;overflow:hidden}"
++ ".fx-bar.run>i::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:fxsh 1.4s linear infinite}"
++ "@keyframes fxsh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}@keyframes fxsp{to{transform:rotate(360deg)}}@keyframes fxpop{from{transform:scale(.4);opacity:0}}"
++ ".fx-st{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}"
++ ".fx-st>li{display:flex;align-items:center;gap:8px;min-width:0;color:var(--mut)}"
++ ".fx-n{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--bg2);font:800 .82rem/1 var(--sans);transition:background .3s,color .3s,box-shadow .3s}"
++ ".fx-t{display:grid;min-width:0}.fx-t b,.fx-t small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fx-t b{font-size:.88rem}.fx-t small{font-size:.74rem;opacity:.85}"
++ ".fx-st>.on{color:var(--ink)}.fx-st>.on .fx-n{background:var(--acc);color:var(--acc-ink);box-shadow:0 0 0 4px var(--ring)}"
++ ".fx-st>.done{color:var(--goodt)}.fx-st>.done .fx-n{background:var(--good);color:#fff}"
++ "@media (max-width:640px){.fx-t small{display:none}.fx-st>li:not(.on) .fx-t{display:none}.fx-st>li.on{grid-column:span 1}}"
++ ".fx-tok{display:flex;gap:8px}.fx-tok>.inp{flex:1 1 auto;min-width:0}"
++ ".fx-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0}"
++ ".fx-sum>div{min-width:0;padding:10px 12px;border-radius:var(--r3);background:var(--bg2)}.fx-sum dt{font-size:.75rem;color:var(--mut)}.fx-sum dd{margin:2px 0 0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
++ ".fx-more>summary{cursor:pointer;width:fit-content;color:var(--acc);font-weight:600;font-size:.88rem}.fx-more[open]>summary{margin-bottom:8px}.fx-more ol{margin:6px 0;padding-inline-start:20px}"
++ ".fx-build{display:grid;gap:14px;padding:18px;border-radius:var(--r3);background:var(--bg2)}.fx-build .fx-bar{background:var(--card)}"
++ ".fx-build-h{display:flex;align-items:center;gap:12px}"
++ ".fx-spin{flex:none;width:28px;height:28px;border-radius:50%;border:3px solid var(--accsoft);border-top-color:var(--acc);animation:fxsp .8s linear infinite}"
++ ".fx-tasks{display:grid;gap:7px;margin:0;padding:0;list-style:none;font-size:.88rem}"
++ ".fx-tasks>li{display:flex;align-items:center;gap:9px;color:var(--mut);transition:color .3s}"
++ ".fx-tasks>li::before{content:'';flex:none;box-sizing:border-box;width:18px;height:18px;border-radius:50%;border:2px solid var(--line)}"
++ ".fx-tasks>li.on{color:var(--ink);font-weight:600}.fx-tasks>li.on::before{border-color:var(--acc);border-top-color:transparent;animation:fxsp .8s linear infinite}"
++ ".fx-tasks>li.done{color:var(--goodt)}.fx-tasks>li.done::before{content:'✓';display:grid;place-items:center;border:0;background:var(--good);color:#fff;font-size:.66rem;font-weight:800}"
++ ".fx-done{display:flex;align-items:center;gap:14px}.fx-ok{flex:none;display:grid;place-items:center;width:50px;height:50px;border-radius:50%;background:var(--good);color:#fff;font-size:1.5rem;font-weight:800;animation:fxpop .4s ease}"
++ ".fx-pw{display:flex;flex-wrap:wrap;align-items:center;gap:8px}"
++ "@media (prefers-reduced-motion:reduce){.fx-spin,.fx-tasks>li.on::before,.fx-bar.run>i::after,.fx-ok{animation:none}}"
++ ":root[data-motion=off] .fx-spin,:root[data-motion=off] .fx-tasks>li.on::before,:root[data-motion=off] .fx-bar.run>i::after,:root[data-motion=off] .fx-ok{animation:none}"
 + ".fx-regs .li-main .meta{overflow-wrap:anywhere}";
 let cp = null;                     // תצוגה מקדימה של שכפול שממתינה לביצוע
 const COPY_HE = { rules: "כללי העוזר", scheduled: "תזמונים פעילים", strict: "הגדרות בדיקת ההודעות", ads: "פרסומות", event: "אירוע (שלוחה 9)" };
@@ -5441,9 +5472,25 @@ body: h`<p class="mut small">החשבון יוכל להיכנס עם גוגל ו
 }
 
 // ================= קו חדש: מפעל הקווים (בעלים) =================
-function fxStep() { return FX.created ? 3 : FX.check ? 2 : 1; }
+// שלבי האשף: 1 טוקן · 2 פרטים · 3 בנייה (רצה עכשיו) · 4 חיבור שלוחות · 5 הכול הסתיים
+function fxStep() { return FX.created ? (FX.ivrDone ? 5 : 4) : FX.building ? 3 : FX.check ? 2 : 1; }
+const FX_STEPS = [["טוקן ימות", "בדיקת המערכת"], ["פרטי הקו", "שם ומנהל"], ["בנייה", "שרת ואחסון"], ["חיבור שלוחות", "העתקת ext.ini"]];
 function stepsHtml(st) {
-return h`<ol class="steps" aria-label="שלבים">${["טוקן ימות", "פרטי הקו", "הקו נבנה"].map((t, i) => h`<li class="${i + 1 < st ? "done" : i + 1 === st ? "on" : ""}"${i + 1 === st ? raw(' aria-current="step"') : ""}>${t}</li>`)}</ol>`;
+const pct = Math.round(Math.min(st - 1, 4) / 4 * 100);
+return h`<div class="fx-prog"><div class="fx-bar" role="progressbar" aria-label="התקדמות בניית הקו" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+<ol class="fx-st">${FX_STEPS.map(([t, sub], i) => { const n = i + 1, c = n < st ? "done" : n === st ? "on" : ""; return h`<li class="${c}"${n === st ? raw(' aria-current="step"') : ""}><span class="fx-n" aria-hidden="true">${n < st ? "✓" : String(n)}</span><span class="fx-t"><b>${t}</b><small>${sub}</small></span></li>`; })}</ol></div>`;
+}
+// שלבי הבנייה בשרת וזמן משוער (בשניות) לתחילת כל אחד – לתצוגה בזמן ההמתנה בלבד; התוצאה האמיתית מגיעה מהשרת
+const FX_BUILD = [["בדיקת הטוקן והשם", 0], ["העתקת הקוד של קו המקור", 3], ["יצירת אחסון KV", 7], ["העלאת השרת עם המשתנים והסודות", 10], ["תזמון כל דקה", 18], ["הפעלת כתובת workers.dev", 21], ["רישום הקו ברשימה", 25]];
+let fxTimer = 0;
+function fxTick() {
+const b = FX.building; if (!b) return;
+const sec = Math.floor((Date.now() - b.t0) / 1000);
+const el = $("#fx-el"); if (el) el.textContent = sec + " שניות";
+// הפס מתקרב ל-92% ונעצר שם עד שהשרת עונה
+const bar = $("#fx-bbar"); if (bar) bar.style.width = Math.round(92 * (1 - Math.exp(-sec / 14))) + "%";
+let cur = 0; FX_BUILD.forEach(([, t], i) => { if (sec >= t) cur = i; });
+$$("#fx-tasks>li").forEach((li, i) => { li.className = i < cur ? "done" : i === cur ? "on" : ""; });
 }
 const fxCount = () => FX.status && Array.isArray(FX.status.lines) ? FX.status.lines.length : null;
 function newHead() {
@@ -5473,37 +5520,64 @@ put(B, fxBody(status, st));
 if (st === 1) setTimeout(() => { const i = $('#hub-fx input[name="t"]'); if (i && !FX.token) try { i.focus(); } catch {} }, 0);
 }
 // גוף האשף לפי השלב (המרכז והלשונית)
+// מצב החיבור של המפעל ל-Cloudflare: "" – תקין; אחרת באנר שמסביר מה לתקן
+function fxCfBanner(status) {
+const ready = !!(status && status.ready), cf = status && status.cf;
+if (!ready) return h`<div class="banner warn">${ico("alert")}<div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> צריך להגדיר בקו המקור (yemot-ai ← Settings ← Variables and Secrets) את הסוד <code>CF_FACTORY_TOKEN</code> ואת המשתנה <code>CF_ACCOUNT_ID</code>. בינתיים אפשר לבדוק טוקנים של ימות.</div></div>`;
+if (!cf || cf.ok) return "";
+return h`<div class="banner bad">${ico("alert")}<div><b>${cf.msg || "Cloudflare לא מאשר את הטוקן של המפעל"}</b>
+<details class="fx-more"><summary>איך מתקנים</summary><ol class="small">
+<li>ב-Cloudflare: My Profile ← API Tokens ← Create Token ← Custom token.</li>
+<li>הרשאות (Account): Workers Scripts – Edit, Workers KV Storage – Edit, Account Settings – Read. ב-Account Resources לבחור את החשבון של הקווים.</li>
+<li>ב-Workers ← yemot-ai ← Settings ← Variables and Secrets: לעדכן את <code>CF_FACTORY_TOKEN</code> (הטוקן בלבד, בלי Bearer ובלי רווחים).</li>
+<li>ללחוץ על "בדיקה חוזרת".</li></ol></details>
+<div class="btns"><button type="button" class="btn s" data-x="fxRecheck">${ico("refresh")} בדיקה חוזרת</button></div></div></div>`;
+}
+const fxCanBuild = status => !!(status && status.ready && (!status.cf || status.cf.ok));
 function fxBody(status, st) {
 if (status && status.missing && st < 3) return empty({ icon: "alert", title: "מפעל הקווים", text: "לא זמין בשרת של הקו הזה" });
-const ready = !!(status && status.ready);
-const setup = ready || st === 3 ? "" : h`<div class="banner warn">${ico("alert")}<div><b>המפעל עוד לא מחובר ל-Cloudflare.</b> צריך להגדיר בקו המקור (yemot-ai ← Settings ← Variables and Secrets) את הסוד <code>CF_FACTORY_TOKEN</code> (טוקן Cloudflare עם הרשאות Workers Scripts:Edit, Workers KV Storage:Edit, Account Settings:Read) ואת המשתנה <code>CF_ACCOUNT_ID</code>. בינתיים אפשר לבדוק טוקנים.</div></div>`;
+const cfb = st < 3 ? fxCfBanner(status) : "";
 if (st === 1) {
-return h`<div class="stack">${setup}<form class="form" data-xf="hubFxCheck" autocomplete="off">
-<label class="fld req"><span>טוקן של מערכת בימות המשיח</span><input class="inp ltr" name="t" type="password" required autocomplete="off" placeholder="טוקן" value="${FX.token}" spellcheck="false" autocapitalize="off"><small>למשל 0791234567:1234 או טוקן API. הבדיקה רק קוראת מימות (פרטי מערכת ותיקיות), והטוקן לא נשמר בדפדפן.</small></label>
+return h`<div class="stack">${cfb}<form class="form" data-xf="hubFxCheck" autocomplete="off">
+<label class="fld req"><span>טוקן של מערכת בימות המשיח</span><div class="fx-tok"><input class="inp ltr" name="t" type="password" required autocomplete="off" placeholder="0791234567:1234 או טוקן API" value="${FX.token}" spellcheck="false" autocapitalize="off"><button type="button" class="btn" data-x="fxEye" aria-pressed="false" aria-label="הצגת הטוקן">${ico("eye")}</button></div><small>הבדיקה רק קוראת מימות (פרטי מערכת ותיקיות). הטוקן לא נשמר בדפדפן.</small></label>
 <div class="btns"><button type="submit" class="btn p">${ico("check")} בדיקת הטוקן</button></div></form></div>`;
 }
 if (st === 2) {
 if (!FX.slug) FX.slug = fxRandSlug();
-const c = FX.check, ses = c.session && typeof c.session === "object" ? c.session : {};
+const c = FX.check, ses = c.session && typeof c.session === "object" ? c.session : {}, fv = FX.form || {};
+const ok = fxCanBuild(status);
+const sum = [["שם במערכת", ses.name || ses.customerName || ses.organization || ses.contactName], ["מספר", c.linePhone || ses.mainDid || ses.did || ses.username], ["יחידות", ses.units != null && ses.units !== "" ? String(Math.round(+ses.units * 100) / 100 || ses.units) : ""], ["תיקיות", String((c.folders || []).length)]].filter(x => x[1]);
 const kv = Object.keys(ses).filter(k => ses[k] !== null && ses[k] !== undefined && ses[k] !== "").map(k => h`<div><dt>${k}</dt><dd class="ltr">${typeof ses[k] === "object" ? JSON.stringify(ses[k]) : String(ses[k])}</dd></div>`);
-return h`<div class="stack">${setup}<div class="card flat"><dl class="kv">${kv}<div><dt>תיקיות בבסיס</dt><dd class="ltr">${(c.folders || []).join(", ") || "אין"}</dd></div></dl></div>
+return h`<div class="stack">${cfb}
+<div class="banner ok">${ico("check")}<div><b>הטוקן תקין</b> – ימות המשיח אישרו את המערכת.</div></div>
+<dl class="fx-sum">${sum.map(([k, v]) => h`<div><dt>${k}</dt><dd class="ltr">${v}</dd></div>`)}</dl>
+<details class="fx-more"><summary>כל הפרטים מימות</summary><dl class="kv">${kv}<div><dt>תיקיות בבסיס</dt><dd class="ltr">${(c.folders || []).join(", ") || "אין"}</dd></div></dl></details>
+${FX.err ? h`<div class="err"><b>הבנייה נכשלה:</b> ${FX.err}</div>` : ""}
 <form class="form" data-xf="hubFxCreate" autocomplete="off"><div class="grid">
-<label class="fld req"><span>שם הקו</span><input class="inp" name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
+<label class="fld req"><span>שם הקו</span><input class="inp" name="name" required maxlength="40" placeholder="למשל: קו החברים" value="${fv.name || ""}"></label>
 <div class="fld"><span>שם קצר (נבחר אקראית)</span><input type="hidden" name="slug" value="${FX.slug}"><div class="inp ltr" aria-readonly="true">yemot-line-${FX.slug}</div><small>נקבע אוטומטית – משמש לכתובת השרת ולאישור חיבור השלוחות</small></div>
-<label class="fld req"><span>מספר הקו</span><input class="inp ltr" name="linePhone" type="tel" inputmode="tel" value="${c.linePhone || ""}" required pattern="0[0-9]{8,9}"></label>
-<label class="fld"><span>טלפון מנהל הקו</span><input class="inp ltr" name="ownerPhone" type="tel" inputmode="tel" pattern="0[0-9]{8,9}" placeholder="05..."><small>לא חובה – מנהל בפקודות הקוליות</small></label>
+<label class="fld req"><span>מספר הקו</span><input class="inp ltr" name="linePhone" type="tel" inputmode="tel" value="${fv.linePhone || c.linePhone || ""}" required pattern="0[0-9]{8,9}"></label>
+<label class="fld"><span>טלפון מנהל הקו</span><input class="inp ltr" name="ownerPhone" type="tel" inputmode="tel" pattern="0[0-9]{8,9}" placeholder="05..." value="${fv.ownerPhone || ""}"><small>לא חובה – מנהל בפקודות הקוליות</small></label>
 </div>
-<label class="fld"><span>מייל גוגל של מנהל הקו</span><input class="inp ltr" name="ownerEmail" type="email" placeholder="name@gmail.com" autocomplete="off" spellcheck="false" autocapitalize="off"><small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small></label>
+<label class="fld"><span>מייל גוגל של מנהל הקו</span><input class="inp ltr" name="ownerEmail" type="email" placeholder="name@gmail.com" value="${fv.ownerEmail || ""}" autocomplete="off" spellcheck="false" autocapitalize="off"><small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small></label>
 <p class="mut small">ייווצר Worker חדש בשם yemot-line-${FX.slug} עם אחסון משלו, כל ה-AI וכל מפתחות הקול של קו המקור, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</p>
-<div class="btns"><button type="submit" class="btn p"${ready ? "" : raw(" disabled")}>${ico("plus")} בניית הקו</button><button type="button" class="btn" data-x="hubFxBack">חזרה</button></div></form></div>`;
+<div class="btns"><button type="submit" class="btn p"${ok ? "" : raw(" disabled")}>${ico("plus")} בניית הקו</button><button type="button" class="btn" data-x="hubFxBack">חזרה</button></div></form></div>`;
+}
+if (st === 3) {
+const b = FX.building;
+return h`<div class="fx-build" aria-live="polite"><div class="fx-build-h"><span class="fx-spin" aria-hidden="true"></span><div><b>בונה את הקו "${b.name}"…</b><div class="mut small"><span class="ltr">yemot-line-${b.slug}</span> · <span id="fx-el">0 שניות</span></div></div></div>
+<div class="fx-bar run"><i id="fx-bbar" style="width:4%"></i></div>
+<ul class="fx-tasks" id="fx-tasks">${FX_BUILD.map(([t], i) => h`<li class="${i ? "" : "on"}">${t}</li>`)}</ul>
+<p class="mut small">זה לוקח בדרך כלל חצי דקה. אפשר לעבור למסך אחר – הבנייה תמשיך, והתוצאה תחכה כאן.</p></div>`;
 }
 const r = FX.created, l = r.line || {}, slug = l.slug || FX.tokenSlug || "";
-const adm = safeUrl(r.adminUrl), inList = inHub() && !!Line.bySlug(slug);
-return h`<div class="stack"><div class="banner ok">${ico("check")}<div><b>הקו "${l.name || slug}" נבנה.</b> ${r.note || ""}</div></div>
-${(r.steps || []).length ? h`<ol class="list small">${r.steps.map(x => h`<li>✓ ${typeof x === "string" ? x : JSON.stringify(x)}</li>`)}</ol>` : ""}
-<div class="fld"><span>סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</span><div class="secret"><code>${r.adminPass || ""}</code><button type="button" class="btn s" data-x="hubFxCopy">${ico("copy")} העתקה</button></div></div>
+const adm = safeUrl(r.adminUrl), inList = inHub() && !!Line.bySlug(slug), steps = r.steps || [];
+return h`<div class="stack"><div class="fx-done"><span class="fx-ok" aria-hidden="true">✓</span><div><b>הקו "${l.name || slug}" נבנה${FX.ivrDone ? " והשלוחות חוברו" : ""}.</b><div class="mut small">${r.note || ""}</div></div></div>
+${steps.length ? h`<details class="fx-more"><summary>מה נעשה (${steps.length})</summary><ul class="fx-tasks">${steps.map(x => h`<li class="done">${typeof x === "string" ? x : JSON.stringify(x)}</li>`)}</ul></details>` : ""}
+${r.adminPass ? h`<div class="fld"><span>סיסמת דף הניהול של הקו (מוצגת פעם אחת – לשמור עכשיו):</span><div class="secret fx-pw"><code>${r.adminPass}</code><button type="button" class="btn s" data-x="hubFxCopy">${ico("copy")} העתקה</button></div></div>` : ""}
 <div class="row">${adm ? h`<a class="link" href="${adm}" target="_blank" rel="noopener">דף הניהול (workers.dev)</a>` : ""}${slug ? h`<a class="link" href="${PAGES + "line/?l=" + enc(slug)}" target="_blank" rel="noopener">דף הניהול דרך נטפרי</a>` : ""}</div>
-<div class="btns">${inList ? h`<button type="button" class="btn" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug ? h`<button type="button" class="btn p" data-x="hubIvr" data-slug="${slug}">השלב הבא: חיבור השלוחות ←</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
+${FX.ivrDone ? "" : h`<div class="banner info">${ico("info")}<div><b>השלב האחרון: חיבור השלוחות.</b> מעתיקים את קובצי ext.ini מקו המקור למערכת החדשה, עם הכתובת של הקו החדש. החיבור נעשה עם הטוקן של ימות שכבר הוזן – אין צורך להקליד אותו שוב. לפני הכתיבה מוצגת תצוגה מקדימה, ומה שקיים נשמר בגיבוי.</div></div>`}
+<div class="btns">${slug && !FX.ivrDone ? h`<button type="button" class="btn p" data-x="hubIvr" data-slug="${slug}">חיבור השלוחות ←</button>` : ""}${inList ? h`<button type="button" class="btn${FX.ivrDone ? " p" : ""}" data-line="${slug}">${ico("switch")} כניסה לקו</button>` : ""}${slug && FX.ivrDone ? h`<button type="button" class="btn" data-x="hubIvr" data-slug="${slug}">חיבור שלוחות נוספות</button>` : ""}<button type="button" class="btn" data-x="hubFxAgain">${ico("plus")} קו נוסף</button></div></div>`;
 }
 // חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
 async function ivrStart(slug) {
@@ -5533,7 +5607,7 @@ body: h`<p class="mut small">כל קובץ מועתק מקו המקור, אחר�
 ${p.truncated ? h`<div class="banner warn">${ico("alert")}<div><b>זו רק חלק מהשלוחות.</b> בשרת החינמי יש מגבלת פניות לכל בקשה, ולא כל העץ נקרא. אחרי הכתיבה אפשר ללחוץ שוב על "חיבור שלוחות" כדי להמשיך.</div></div>` : ""}
 <form class="form" data-xf="hubIvrApply" autocomplete="off" novalidate>${plan.length ? h`<div class="tw" style="max-height:46vh;overflow:auto"><table class="tbl small hub-ivr"><thead><tr><th><span class="sr-only">בחירה</span></th><th>שלוחה</th><th>מצב</th><th>אחרי ההעתקה</th><th>קיים היום</th></tr></thead><tbody>
 ${plan.map(x => h`<tr><td><input type="checkbox" name="p" value="${x.path}" aria-label="${x.path}"${x.same ? raw(" disabled") : x.unknown ? "" : raw(" checked")}></td><td class="ltr nowrap">${x.path}</td><td>${planState(x)}</td><td><pre class="hub-ini">${x.after || ""}</pre></td><td>${x.before ? h`<pre class="hub-ini">${x.before}</pre>` : DASH}</td></tr>`)}</tbody></table></div>` : empty("אין שלוחות להעתקה")}
-<div class="row"><input class="inp ltr" name="confirm" required placeholder="להקליד את השם הקצר לאישור" aria-label="להקליד את השם הקצר לאישור" autocomplete="off" spellcheck="false" autocapitalize="off" style="max-width:280px"><button type="submit" class="btn p d"${plan.length ? "" : raw(" disabled")}>כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-x="close">סגירה</button></div></form>`,
+<div class="row"><input class="inp ltr" name="confirm" required placeholder="${"לאישור להקליד: " + p.slug}" aria-label="${"לאישור להקליד את השם הקצר " + p.slug}" autocomplete="off" spellcheck="false" autocapitalize="off" style="max-width:280px"><button type="submit" class="btn p d"${plan.length ? "" : raw(" disabled")}>כתיבת השלוחות שנבחרו</button><button type="button" class="btn" data-x="close">סגירה</button></div></form>`,
 });
 }
 
@@ -5619,6 +5693,8 @@ if (!await Dlg.confirm("לכתוב " + paths.length + ' קובצי שלוחות 
 const r = await fxApi({ op: "ivr_apply", slug: p.slug, ymToken: p.token, paths, confirm: conf }, p.line) || {};
 if (FX.plan === p) FX.plan = null;
 if (Modal.isOpen() && $('#mm form[data-xf="hubIvrApply"]')) Modal.close();
+// האשף: הקו שנבנה עכשיו – השלב האחרון הושלם (רק כשהכול נכתב ולא נשארו שלוחות לסבב נוסף)
+if (r.ok && FX.created && FX.tokenSlug === p.slug) FX.ivrDone = true;
 const done = (r.done || []).length, failed = r.failed || [], sk = (r.skipped || []).length;
 toast(r.ok ? "נכתבו " + done + " שלוחות" : "נכתבו " + done + ", נכשלו " + failed.length + (sk ? ", " + sk + ' ממתינות – ללחוץ שוב על "חיבור שלוחות"' : ""), !r.ok);
 if (failed.length) await Dlg.alert("לא נכתבו:\n" + failed.map(x => typeof x === "string" ? x : JSON.stringify(x)).join("\n"));
@@ -5638,28 +5714,51 @@ if (inHub()) await reloadMe(); else reFx(true);
 // מפעל הקווים: ציור מחדש רק אם עדיין באשף (תצוגת "קו חדש" במרכז, או לשונית "קווים"). reload – טעינת המצב מהשרת
 function reFx(reload) {
 if (state.view === "hub" && state.hub === "new") return render("new");
-if (state.view === "line" && state.tab === "lines" && Line.cur) return reload ? show("lines", true) : Tabs.rerender();
+if (state.view === "line" && state.tab === "lines" && Line.cur) return reload ? showTab("lines", true) : Tabs.rerender();
 }
 const reNew = () => reFx(false);
 F("hubFxCheck", async (f, d) => {
 const t = String(d.t || "").trim(), line = fxLine();
 if (!t) { toast("כתבו טוקן", true); return; }
-FX.token = t; FX.tokenSlug = ""; FX.slug = "";
+FX.token = t; FX.tokenSlug = ""; FX.slug = ""; FX.err = ""; FX.form = null; FX.ivrDone = false;
 const r = await fxApi({ op: "check", ymToken: t }, line);
 FX.check = r || {}; FX.created = null; FX.plan = null;
 toast("הטוקן תקין");
 reNew();
 });
-Actions.register("hubFxBack", () => { FX.check = null; FX.plan = null; reNew(); }, { write: false });
+Actions.register("hubFxBack", () => { FX.check = null; FX.plan = null; FX.err = ""; reNew(); }, { write: false });
+// הצגה/הסתרה של הטוקן בשדה
+Actions.register("fxEye", el => {
+const i = el.parentElement && $("input", el.parentElement); if (!i) return;
+const show = i.type === "password"; i.type = show ? "text" : "password";
+el.setAttribute("aria-pressed", show ? "true" : "false"); el.setAttribute("aria-label", show ? "הסתרת הטוקן" : "הצגת הטוקן");
+}, { write: false });
+// בדיקה חוזרת של החיבור ל-Cloudflare (אחרי עדכון הטוקן בקו המקור)
+R("fxRecheck", async () => {
+FX.status = null;
+const st = await fxStatus(true);
+toast(fxCanBuild(st) ? "החיבור ל-Cloudflare תקין" : (st && st.cf && st.cf.msg) || "המפעל עדיין לא מחובר", !fxCanBuild(st));
+reFx(false);
+}, { write: false });
 F("hubFxCreate", async (f, d) => {
 if (f.reportValidity && !f.reportValidity()) return;
 const v = { name: String(d.name || "").trim(), slug: String(d.slug || "").trim().toLowerCase(), linePhone: String(d.linePhone || "").trim(), ownerPhone: String(d.ownerPhone || "").trim(), ownerEmail: String(d.ownerEmail || "").trim().toLowerCase() };
 if (!FX.token) { toast("חסר טוקן – חזרו לשלב הראשון", true); return; }
 const line = fxLine();
 if (!await Dlg.confirm('לבנות קו חדש "' + v.name + '" (' + v.linePhone + ") בשם yemot-line-" + v.slug + "?\nייווצר שרת חדש ב-Cloudflare עם מפתחות ה-AI של קו המקור.", { ok: "בניית הקו" })) return;
-toast("בונה את הקו… זה יכול לקחת חצי דקה");
-const r = await fxApi(Object.assign({ op: "create", ymToken: FX.token }, v), line);
-FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.status = null;
+FX.err = ""; FX.form = v; FX.building = { t0: Date.now(), name: v.name, slug: v.slug };
+clearInterval(fxTimer); fxTimer = setInterval(fxTick, 500);
+reNew();
+let r;
+try { r = await fxApi(Object.assign({ op: "create", ymToken: FX.token }, v), line); }
+catch (e) {
+// הבנייה בוטלה בשרת (מה שנוצר נמחק) – חוזרים לטופס עם ההודעה; שם קצר חדש לניסיון הבא
+FX.building = null; clearInterval(fxTimer); FX.err = (e && e.message) || String(e); FX.slug = "";
+reNew(); throw e;
+}
+FX.building = null; clearInterval(fxTimer);
+FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.form = null; FX.status = null; FX.ivrDone = false;
+toast("הקו נבנה");
 // במרכז: רשימת הקווים מתעדכנת (reloadMe מצייר מחדש רק תצוגת מרכז, ושומר על הקו הפתוח)
 if (inHub() && await reloadMe()) return;
 reFx(true);
@@ -5667,7 +5766,7 @@ reFx(true);
 Actions.register("hubFxCopy", () => copyText((FX.created && FX.created.adminPass) || ""), { write: false });
 Actions.register("hubFxAgain", async () => {
 if (!await Dlg.confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")) return;
-FX.token = ""; FX.tokenSlug = ""; FX.slug = ""; FX.check = null; FX.created = null; FX.plan = null;
+FX.token = ""; FX.tokenSlug = ""; FX.slug = ""; FX.check = null; FX.created = null; FX.plan = null; FX.err = ""; FX.form = null; FX.ivrDone = false;
 reNew();
 }, { write: false });
 // חשבונות
