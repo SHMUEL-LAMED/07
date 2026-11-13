@@ -552,6 +552,35 @@ async function audioStep(env, body, origin, D) {
   return { copied, failed, left, tts: tts.length };
 }
 
+// ---------- שמות החברים: העתקה חד-פעמית מהקווים האחרים ----------
+// לכל מספר שרשום ברשימות הצינתוקים של הקו החדש ויש לו שם בקו אחר (קו המקור, דעת תורה, קווי המפעל) – השם נכתב בקו החדש.
+// רק בחיבור או בלחיצה: שינוי שם אחר כך לא עובר בין הקווים. שם שכבר קיים בקו החדש לא נדרס, ומספרים שלא בקו לא נחשפים
+async function namesStep(env, body, origin, D) {
+  const { reg, line, token } = await lineToken(env, body, D);
+  if (!line.kv) throw new Error("לקו הזה אין אחסון – אי אפשר לכתוב שמות");
+  const phones = new Set();
+  for (const list of ["members", "admins", "general"]) {
+    const r = await ymT(token, "TzintukimListManagement", { action: "getlistEnteres", TzintukimList: list }).catch(() => null);
+    for (const e of (r && r.enteres) || []) { const p = digits(e && e.phone); if (p) phones.add(p); }
+  }
+  if (!phones.size) return { phones: 0, added: 0, names: [] };
+  const pool = {}, take = o => { for (const [p, n] of Object.entries(o || {})) if (n && !pool[p]) pool[p] = String(n).slice(0, 60); };
+  const parse = t => { try { return JSON.parse(t || "{}") || {}; } catch { return {}; } };
+  take(await env.KV.get("names_over", "json").catch(() => null)); take(parse(env.NAMES));
+  const daat = await env.KV.get("portal_kv:yemot-ai-daat").catch(() => null);
+  if (daat) take(parse(await kvGetRemote(env, daat, "names_over").catch(() => null)));
+  for (const l of reg.slice(0, 25)) if (l.slug !== line.slug && l.kv) take(parse(await kvGetRemote(env, l.kv, "names_over").catch(() => null)));
+  const cur = parse(await kvGetRemote(env, line.kv, "names_over").catch(() => null));
+  const added = {};
+  for (const p of phones) if (!cur[p] && pool[p]) added[p] = pool[p];
+  const n = Object.keys(added).length;
+  if (n) {
+    await kvPut(env, line.kv, "names_over", JSON.stringify({ ...cur, ...added }));
+    await D.log(env, `מפעל הקווים: הועתקו ${n} שמות לקו "${line.name}"`).catch(() => {});
+  }
+  return { phones: phones.size, added: n, names: Object.entries(added).map(([p, nm]) => ({ p, n: nm })) };
+}
+
 // ---------- ביטול: החזרת המערכת של הקו למה שהייתה לפני החיבור ----------
 // קווים שחוברו לפני שהיה יומן: משחזרים לפחות את ההגדרות מהגיבויים של חיבור השלוחות
 async function undoFromBackups(env, slug) {
@@ -620,6 +649,7 @@ export async function factory(req, env, body, D, origin) {
   if (op === "structure") return await structureStep(env, body, origin, D);
   if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "restore") return await restoreStep(env, body, origin, D);
+  if (op === "names") return await namesStep(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");

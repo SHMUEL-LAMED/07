@@ -102,3 +102,31 @@ test("הסרה: תיקייה שנוספו בה הודעות אחרי החיבו�
   assert.ok(r.notes.some(n => n.startsWith("/1/1")) || r.notes.some(n => n.startsWith("/1")));
   assert.equal(tree["/AIQueue"], undefined, "תיקייה ריקה נמחקה");
 });
+
+test("סנכרון שמות: רק מספרים שבקו החדש, בלי לדרוס שם קיים", async () => {
+  const remote = { kvn: { names_over: JSON.stringify({ "0501111111": "שם קיים בקו החדש" }) }, kvo: { names_over: JSON.stringify({ "0502222222": "יוסי מקו אחר" }) } };
+  globalThis.fetch = async (input, init) => {
+    const u = new URL(String(input instanceof Request ? input.url : input));
+    const json = o => new Response(JSON.stringify(o));
+    if (u.host === "api.cloudflare.com") {
+      const m = u.pathname.match(/namespaces\/([^/]+)\/values\/(.+)$/), id = m[1], key = decodeURIComponent(m[2]);
+      if ((init && init.method) === "PUT") { (remote[id] = remote[id] || {})[key] = String(init.body); return json({ success: true }); }
+      const v = remote[id] && remote[id][key];
+      return v == null ? new Response("", { status: 404 }) : new Response(v);
+    }
+    const method = u.pathname.split("/").pop();
+    if (method === "GetSession") return json({ responseStatus: "OK", username: "0771111111" });
+    if (method === "TzintukimListManagement") return json({ responseStatus: "OK", enteres: u.searchParams.get("TzintukimList") === "members" ? [{ phone: "0501111111" }, { phone: "0502222222" }, { phone: "0503333333" }] : [] });
+    return json({ responseStatus: "OK" });
+  };
+  const m = new Map([
+    ["factory_lines", JSON.stringify([{ slug: "nn", name: "קו חדש", line: "0771111111", kv: "kvn", url: "https://a.b" }, { slug: "oo", name: "קו אחר", line: "0772222222", kv: "kvo", url: "https://c.d" }])],
+    ["names_over", JSON.stringify({ "0501111111": "שם מקו המקור", "0503333333": "דוד מקו המקור", "0509999999": "לא בקו החדש" })],
+  ]);
+  const E = { CF_FACTORY_TOKEN: "t", CF_ACCOUNT_ID: "acc", KV: { async get(k, t) { const v = m.get(k) ?? null; return v && t === "json" ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); } } };
+  const r = await factory({ method: "POST" }, E, { op: "names", slug: "nn", ymToken: "0771111111:1234" }, { log: async () => {} }, "https://x.y");
+  assert.equal(r.phones, 3);
+  assert.equal(r.added, 2);
+  const out = JSON.parse(remote.kvn.names_over);
+  assert.deepEqual(out, { "0501111111": "שם קיים בקו החדש", "0502222222": "יוסי מקו אחר", "0503333333": "דוד מקו המקור" });
+});
