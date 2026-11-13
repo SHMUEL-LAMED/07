@@ -154,3 +154,16 @@ test("קריינות בשלוחה הראשית: נתיב בלי // כפול", as
   assert.deepEqual(downloads.sort(), ["ivr2:/M1000.wav", "ivr2:/PlayfileMessageCheck-NImportant.wav"]);
   assert.deepEqual(uploads.sort(), ["ivr2:/M1000.wav", "ivr2:/PlayfileMessageCheck-NImportant.wav"]);
 });
+
+test("ניקוי: סריקה מחזירה פרטים, וההעברה לתיקיית המחוקות בלי מחיקה", async () => {
+  const tree = { "/1/2": ["ext.ini", "000.wav", "001.wav", "002.wav"], "/DeletedByAdmin": ["004.wav"] };
+  fakeYemot(tree);
+  const E = env();
+  const tok = { slug: "nn", ymToken: "0771111111:1234" };
+  const sc = await factory(req, E, { op: "vfix_scan", ...tok }, D, "https://x.y");
+  assert.deepEqual(sc.files.map(f => f.name), ["000.wav", "001.wav", "002.wav"]);
+  const r = await factory(req, E, { op: "vfix_apply", ...tok, names: ["001.wav", "002.wav", "../x.wav"] }, D, "https://x.y");
+  assert.deepEqual(r.moved, [{ from: "001.wav", to: "005.wav" }, { from: "002.wav", to: "006.wav" }]);
+  assert.deepEqual(tree["/1/2"].sort(), ["000.wav", "ext.ini"]);
+  assert.deepEqual(tree["/DeletedByAdmin"].sort(), ["004.wav", "005.wav", "006.wav"]);
+});

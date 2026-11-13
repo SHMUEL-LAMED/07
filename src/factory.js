@@ -554,6 +554,46 @@ async function audioStep(env, body, origin, D) {
   return { copied, failed, left, tts: tts.length };
 }
 
+// ---------- ניקוי: קריינות שנכנסה בטעות כהודעה בשלוחת ההודעות הכלליות ----------
+// בגרסה קודמת ההעלאה קיבלה רק את התיקייה, וימות שמרו את קובץ הקריינות כהודעה ממוספרת חדשה. הסריקה מחזירה את ההודעות
+// עם הפרטים (טלפון, תאריך, אורך) כדי שהמנהל יבחר. ההעברה היא לתיקיית המחוקות – לא מחיקה, ואפשר להחזיר
+const VFIX_DIR = "/1/2", VFIX_BIN = "/DeletedByAdmin";
+async function vfixScan(env, body, origin, D) {
+  const { token } = await lineToken(env, body, D);
+  const out = [];
+  for (let from = 0; from < 5000; from += 1000) {
+    const d = await ymT(token, "GetIVR2Dir", from ? { path: dirOf(VFIX_DIR), filesFrom: from } : { path: dirOf(VFIX_DIR) }).catch(() => null);
+    if (!d || !ymOk(d)) { if (!from) throw new Error("לא ניתן לקרוא את שלוחה 1/2 בקו"); break; }
+    const fs = d.files || [];
+    for (const f of fs) { const n = fileName(f); if (/^\d+\.wav$/i.test(n)) out.push({ name: n, phone: String(f.phone || ""), date: String(f.date || f.mtime || ""), duration: +f.duration || 0 }); }
+    if (fs.length < 1000) break;
+  }
+  return { path: VFIX_DIR, files: out };
+}
+async function vfixApply(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const names = [...new Set((Array.isArray(body.names) ? body.names : []).map(String))].filter(n => /^\d+\.wav$/i.test(n));
+  if (!names.length) throw new Error("לא נבחרו קבצים");
+  const bud = budget();
+  let bin = await dirFiles(token, VFIX_BIN, bud);
+  if (!bin.ok) {
+    const r = await ymT(token, "UpdateExtension", { path: dirOf(VFIX_BIN) }).catch(e => ({ message: e.message })); bud.take();
+    if (!ymOk(r)) throw new Error("לא ניתן ליצור את תיקיית המחוקות");
+    await ymT(token, "FileAction", { action: "delete", what: iniPath(VFIX_BIN) }).catch(() => null); bud.take();
+    bin = { ok: true, files: [] };
+  }
+  let next = bin.files.reduce((mx, n) => { const m = n.match(MSG_FILE); return m ? Math.max(mx, +m[1]) : mx; }, -1);
+  const moved = [], failed = [], left = [];
+  for (let i = 0; i < names.length; i++) {
+    if (!bud.take()) { left.push(...names.slice(i)); break; }
+    const n = names[i], to = String(++next).padStart(3, "0") + ".wav";
+    const r = await ymT(token, "FileAction", { action: "move", what: `ivr2:${VFIX_DIR}/${n}`, target: `ivr2:${VFIX_BIN}/${to}` }).catch(e => ({ message: e.message }));
+    if (ymOk(r)) moved.push({ from: n, to }); else { failed.push(`${n}: ${(r && r.message) || "לא הועבר"}`); next--; }
+  }
+  if (moved.length) await D.log(env, `מפעל הקווים: ${moved.length} קבצים הועברו מ-${VFIX_DIR} לתיקיית המחוקות בקו "${line.name}" (ניקוי קריינות שנכנסה כהודעה)`).catch(() => {});
+  return { moved, failed, left };
+}
+
 // ---------- שמות החברים: העתקה חד-פעמית מהקווים האחרים ----------
 // לכל מספר שרשום ברשימות הצינתוקים של הקו החדש ויש לו שם בקו אחר (קו המקור, דעת תורה, קווי המפעל) – השם נכתב בקו החדש.
 // רק בחיבור או בלחיצה: שינוי שם אחר כך לא עובר בין הקווים. שם שכבר קיים בקו החדש לא נדרס, ומספרים שלא בקו לא נחשפים
@@ -652,6 +692,8 @@ export async function factory(req, env, body, D, origin) {
   if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "restore") return await restoreStep(env, body, origin, D);
   if (op === "names") return await namesStep(env, body, origin, D);
+  if (op === "vfix_scan") return await vfixScan(env, body, origin, D);
+  if (op === "vfix_apply") return await vfixApply(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");
