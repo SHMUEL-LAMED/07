@@ -484,6 +484,7 @@ const VOICE_FILE = /^(M\d{4}(-\d+)?|PlayfileMessageCheck[-\w]*)\.(wav|mp3|tts)$/
 // קבצים ממוספרים שהם חלק מהתבנית ולא תוכן (הצליל של הדגלים מועתק לכל מספר שמסומן)
 const TEMPLATE_FILES = { "/FlagTemplate": ["000.wav"] };
 const fileName = f => String((f && (f.name || f.what)) || "").split("/").pop();
+// path – הנתיב המלא של הקובץ (כמו ymUpload ב-worker.js)
 async function ymUploadT(token, path, bytes, name) {
   const fd = new FormData();
   fd.append("token", token); fd.append("path", "ivr2:" + path); fd.append("convertAudio", "1");
@@ -519,18 +520,19 @@ async function audioStep(env, body, origin, D) {
     const voice = src.files.map(fileName).filter(n => VOICE_FILE.test(n) || (TEMPLATE_FILES[path] || []).includes(n));
     let cut = false;
     for (const n of voice.filter(n => !have.has(n.toLowerCase()))) {
+      const fp = (path === "/" ? "" : path) + "/" + n; // בשלוחה הראשית בלי "//" כפול
       if (!bud.take(2)) { cut = true; break; }
       try {
         if (/\.tts$/i.test(n)) {
-          const t = await D.ym(env, "GetTextFile", { what: "ivr2:" + path + "/" + n });
-          const r = await ymT(token, "UploadTextFile", { what: "ivr2:" + path + "/" + n, contents: (t && t.contents) || "" });
-          if (ymOk(r)) copied.push(path + "/" + n); else failed.push(`${path}/${n}: ${(r && r.message) || "שגיאה"}`);
+          const t = await D.ym(env, "GetTextFile", { what: "ivr2:" + fp });
+          const r = await ymT(token, "UploadTextFile", { what: "ivr2:" + fp, contents: (t && t.contents) || "" });
+          if (ymOk(r)) copied.push(fp); else failed.push(`${fp}: ${(r && r.message) || "שגיאה"}`);
         } else {
-          const bytes = await D.ym(env, "DownloadFile", { path: "ivr2:" + path + "/" + n });
-          const r = await ymUploadT(token, path, bytes, n);
-          if (ymOk(r)) copied.push(path + "/" + n); else failed.push(`${path}/${n}: ${(r && r.message) || "שגיאה"}`);
+          const bytes = await D.ym(env, "DownloadFile", { path: "ivr2:" + fp });
+          const r = await ymUploadT(token, fp, bytes, n);
+          if (ymOk(r)) copied.push(fp); else failed.push(`${fp}: ${(r && r.message) || "שגיאה"}`);
         }
-      } catch (e) { failed.push(`${path}/${n}: ${e.message}`); }
+      } catch (e) { failed.push(`${fp}: ${e.message}`); }
     }
     if (cut) { left.push(...paths.slice(i)); break; }
     // אין קריינות בכלל – לא במקור ולא בקו החדש: יוצרים פתיח בקול העוזר (רץ ברקע בשרת של הקו החדש)
