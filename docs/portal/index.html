@@ -5696,12 +5696,34 @@ ${S.warn.length ? h`<details class="fx-more"><summary>לבדוק (${String(S.war
 ${bad && slug ? h`<div class="btns"><button type="button" class="btn s" data-x="hubIvr" data-slug="${slug}">${ico("refresh")} להמשיך מאיפה שנעצר</button></div>` : ""}</div></div>`;
 }
 // חיבור השלוחות: תמיד עם הטוקן של אותו קו (השרת גם בודק את זה)
+// הטוקן של הקו: מהאשף, או שמור בשרת (מוצפן) – אז שולחים ריק והשרת משתמש בשמור. מבקשים רק כשאין. null – בוטל
+async function lineTok(slug, why) {
+if (FX.token && FX.tokenSlug === slug) return FX.token;
+const r = regOf(slug);
+if (r && r.hasTok) return "";
+const t = await Dlg.prompt((why ? why + "\n" : "") + 'הטוקן של המערכת בימות של "' + fxName(slug) + '" – מכניסים פעם אחת, והוא נשמר מוצפן בשרת לפעמים הבאות:', "", { type: "password", ok: "המשך" });
+const v = String(t || "").trim();
+return v || null;
+}
+// קריאה לשרת עם הטוקן; אם השמור לא תקף (או שאין) – מבקשים פעם אחת ומנסים שוב
+async function withTok(slug, why, fn) {
+let t = await lineTok(slug, why); if (t === null) return undefined;
+try { return await fn(t); }
+catch (e) {
+if (!/פעם אחת – אחר כך הוא נשמר/.test((e && e.message) || "")) throw e;
+const r = regOf(slug); if (r) r.hasTok = false;
+t = await lineTok(slug, why); if (t === null) return undefined;
+return fn(t);
+}
+}
 async function ivrStart(slug) {
 // הקו שנבנה עכשיו באשף – ממשיכים שם, עם אותו טוקן
 if (FX.token && FX.tokenSlug === slug && FX.created && fxStep() >= 4) { if (FX.ivr && FX.ivr.done) FX.ivr = null; return fxAutoIvr(); }
 const line = fxLine();
-let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('הטוקן של המערכת בימות של "' + fxName(slug) + '" (לא נשמר):', "", { type: "password" });
-token = String(token || "").trim(); if (!token) return;
+// הטוקן: מהאשף או השמור בשרת. בודקים אותו בפעולה קלה לפני שמתחילים, ומבקשים רק אם צריך
+let token = "";
+const ok = await withTok(slug, "העתקת התבנית לקו.", t => { token = t; return fxApi({ op: "tokcheck", slug, ymToken: t }, line); });
+if (ok === undefined) return;
 // בלחיצה אחת: חלון שמראה את ההתקדמות, והכול רץ עד הסוף (סגירת החלון לא עוצרת)
 const S = ivrState(), draw = () => { const b = $("#fx-run"); if (b) put(b, ivrStateHtml(S, slug)); };
 Modal.open({ title: 'העתקת התבנית ל"' + fxName(slug) + '"', body: h`<div id="fx-run">${ivrStateHtml(S, slug)}</div><div class="btns"><button type="button" class="btn" data-x="close">סגירה</button></div>` });
@@ -5830,10 +5852,10 @@ const isToday = d => { const t = new Date(), dd = String(t.getDate()).padStart(2
   return [`${dd}/${mm}/${y}`, `${y}-${mm}-${dd}`, `${dd}/${mm}/${y.slice(2)}`, `${dd}.${mm}.${y}`].some(x => String(d || "").includes(x)); };
 R("hubVfix", async el => {
 const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
-let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('ניקוי שלוחת ההודעות הכלליות (1/2) של "' + name + '": מציג את ההודעות שם, כדי להעביר לתיקיית המחוקות קבצי קריינות שנכנסו בטעות כהודעות.\\nהטוקן של המערכת בימות (לא נשמר):', "", { type: "password", ok: "סריקה" });
-token = String(token || "").trim(); if (!token) return;
+let token = "";
 toast("קורא את שלוחה 1/2…");
-const r = await fxApi({ op: "vfix_scan", slug, ymToken: token }, line) || {};
+const r = await withTok(slug, 'ניקוי שלוחת ההודעות הכלליות של "' + name + '".', t => { token = t; return fxApi({ op: "vfix_scan", slug, ymToken: t }, line); });
+if (r === undefined) return;
 const files = (r.files || []).map(f => Object.assign(f, { pick: !f.phone && isToday(f.date) })).sort((a, b) => (b.pick - a.pick) || (parseInt(b.name) - parseInt(a.name)));
 if (!files.length) { toast("אין הודעות בשלוחה 1/2"); return; }
 VF = { slug, token, line, name };
@@ -5865,9 +5887,8 @@ if (failed.length) await Dlg.alert("לא הועברו:\\n" + failed.join("\\n"))
 // סנכרון שמות חד-פעמי: מספרים בקו הזה שיש להם שם בקווים אחרים
 R("hubNames", async el => {
 const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
-let token = FX.token && FX.tokenSlug === slug ? FX.token : await Dlg.prompt('סנכרון שמות ל"' + name + '": המספרים שרשומים בקו הזה וכבר יש להם שם בקווים האחרים יקבלו את השם שלהם. שינוי שם אחר כך לא יעבור בין הקווים.\nהטוקן של המערכת בימות (לא נשמר):', "", { type: "password", ok: "סנכרון" });
-token = String(token || "").trim(); if (!token) return;
-const r = await fxApi({ op: "names", slug, ymToken: token }, line) || {};
+const r = await withTok(slug, 'סנכרון שמות ל"' + name + '".', t => fxApi({ op: "names", slug, ymToken: t }, line));
+if (r === undefined) return;
 if (!r.phones) { toast("אין מספרים ברשימות הצינתוקים של הקו הזה"); return; }
 if (!r.added) { toast("כל " + r.phones + " המספרים כבר עם שם, או שאין להם שם בקווים האחרים"); return; }
 toast("הועתקו " + r.added + " שמות");
@@ -5876,9 +5897,12 @@ await Dlg.alert("הועתקו " + r.added + " שמות לקו \"" + name + "\":\
 // הסרת קו: קודם מחזירים את המערכת שלו בימות למה שהייתה לפני החיבור (לפי יומן הפעולות), ורק אחר כך מוחקים מהרשימה
 R("hubForget", async el => {
 const slug = el.dataset.slug, line = fxLine(), name = fxName(slug);
-const token = await Dlg.prompt('הסרת "' + name + '".\nכדי להחזיר את המערכת בימות למה שהייתה לפני החיבור (הגדרות, תיקיות והודעות שהועברו), צריך את הטוקן שלה – הוא לא נשמר.\nבלי טוקן: הקו רק יוסר מהרשימה, והמערכת תישאר כמו שהיא עכשיו.', "", { type: "password", ok: "המשך" });
+// הטוקן שמור בשרת (או מהאשף) – מחזירים את המערכת בלי לשאול. אחרת מבקשים; בלי טוקן – רק הסרה מהרשימה
+const saved = (FX.token && FX.tokenSlug === slug) || !!(regOf(slug) || {}).hasTok;
+let token = saved ? (FX.token && FX.tokenSlug === slug ? FX.token : "") : await Dlg.prompt('הסרת "' + name + '".\nכדי להחזיר את המערכת בימות למה שהייתה לפני החיבור (הגדרות, תיקיות והודעות שהועברו), צריך את הטוקן שלה.\nבלי טוקן: הקו רק יוסר מהרשימה, והמערכת תישאר כמו שהיא עכשיו.', "", { type: "password", ok: "המשך" });
 if (token === null) return;
-if (String(token).trim()) {
+if (saved && !await Dlg.confirm('להסיר את "' + name + '"? קודם המערכת שלו בימות תחזור למה שהייתה לפני החיבור.', { danger: true, ok: "החזרה והסרה" })) return;
+if (saved || String(token).trim()) {
 const S = { done: 0, left: 0, notes: [], end: false, err: "" };
 const draw = () => { const b = $("#fx-run"); if (b) put(b, S.end
 ? h`<div class="banner ${S.err || S.notes.length ? "warn" : "ok"}">${ico(S.err || S.notes.length ? "alert" : "check")}<div><b>${S.err ? "ההחזרה נעצרה" : "המערכת הוחזרה למה שהייתה לפני החיבור"}</b> – בוטלו ${String(S.done)} פעולות.${S.err ? h`<div>${S.err}</div>` : ""}${S.notes.length ? h`<details class="fx-more" open><summary>לבדוק (${String(S.notes.length)})</summary><ul class="small">${S.notes.map(n => h`<li>${n}</li>`)}</ul></details>` : ""}</div></div>`
@@ -5887,7 +5911,7 @@ Modal.open({ title: 'החזרת המערכת של "' + name + '"', body: h`<div 
 draw();
 try {
 for (let i = 0; i < 40; i++) {
-const r = await fxApi({ op: "restore", slug, ymToken: String(token).trim() }, line) || {};
+const r = (String(token).trim() ? await fxApi({ op: "restore", slug, ymToken: String(token).trim() }, line) : await withTok(slug, "החזרת המערכת לפני ההסרה.", t => { token = t; return fxApi({ op: "restore", slug, ymToken: t }, line); })) || {};
 S.done += +r.done || 0; S.left = +r.left || 0; S.notes.push(...(r.notes || []));
 draw();
 if (!S.left || !r.done) break;
@@ -5897,7 +5921,7 @@ if (S.left) S.err = "נשארו " + S.left + " פעולות שלא בוטלו �
 S.end = true; draw();
 if (S.err) { toast("ההחזרה נעצרה – הקו לא הוסר מהרשימה", true); return; }
 }
-if (!await Dlg.confirm('להסיר את "' + name + '" מהרשימה? (השרת שלו לא נמחק, ואפשר להוסיף אותו שוב)', { danger: true, ok: "הסרה" })) return;
+if (!saved && !await Dlg.confirm('להסיר את "' + name + '" מהרשימה? (השרת שלו לא נמחק, ואפשר להוסיף אותו שוב)', { danger: true, ok: "הסרה" })) return;
 await fxApi({ op: "forget", slug, confirm: slug }, line);
 if (FX.plan && FX.plan.slug === slug) FX.plan = null;
 FX.status = null;
