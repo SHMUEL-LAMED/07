@@ -5044,7 +5044,12 @@ let cssDone = false;
 // נתונים מכל הקווים (60 שניות)
 const cache = { rows: null, at: 0, key: "", p: null };
 // מפעל הקווים: בזיכרון בלבד – טוקני ימות לא נשמרים לעולם
-const FX = { token: "", tokenSlug: "", check: null, created: null, plan: null, status: null };
+const FX = { token: "", tokenSlug: "", slug: "", check: null, created: null, plan: null, status: null };
+// שם קצר אקראי לקו חדש: אות ועוד 7 אותיות/ספרות (מתאים לבדיקה בשרת – 3–20 תווים)
+function fxRandSlug() {
+const abc = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(7));
+return "l" + Array.from(b, x => abc[x % abc.length]).join("");
+}
 let lt = null;                     // נתוני תצוגת הקווים האחרונה {rows, banner, reg}
 // CSS של המרכז ושל לשונית "קווים" (גם בשדה css של הלשונית)
 const HUB_CSS = ".hub-cmp{display:grid;gap:16px}.hub-cmp-l{display:grid;gap:6px;min-width:0}.hub-cmp-l .row{justify-content:space-between}"
@@ -5478,17 +5483,18 @@ return h`<div class="stack">${setup}<form class="form" data-xf="hubFxCheck" auto
 <div class="btns"><button type="submit" class="btn p">${ico("check")} בדיקת הטוקן</button></div></form></div>`;
 }
 if (st === 2) {
+if (!FX.slug) FX.slug = fxRandSlug();
 const c = FX.check, ses = c.session && typeof c.session === "object" ? c.session : {};
 const kv = Object.keys(ses).filter(k => ses[k] !== null && ses[k] !== undefined && ses[k] !== "").map(k => h`<div><dt>${k}</dt><dd class="ltr">${typeof ses[k] === "object" ? JSON.stringify(ses[k]) : String(ses[k])}</dd></div>`);
 return h`<div class="stack">${setup}<div class="card flat"><dl class="kv">${kv}<div><dt>תיקיות בבסיס</dt><dd class="ltr">${(c.folders || []).join(", ") || "אין"}</dd></div></dl></div>
 <form class="form" data-xf="hubFxCreate" autocomplete="off"><div class="grid">
 <label class="fld req"><span>שם הקו</span><input class="inp" name="name" required maxlength="40" placeholder="למשל: קו החברים"></label>
-<label class="fld req"><span>שם קצר באנגלית</span><input class="inp ltr" name="slug" required pattern="[a-z0-9](?:[a-z0-9]|-){1,18}[a-z0-9]" placeholder="chaverim" autocomplete="off" autocapitalize="off" spellcheck="false"><small>לכתובת: yemot-line-… (3–20 אותיות באנגלית קטנות, ספרות ומקף)</small></label>
+<div class="fld"><span>שם קצר (נבחר אקראית)</span><input type="hidden" name="slug" value="${FX.slug}"><div class="inp ltr" aria-readonly="true">yemot-line-${FX.slug}</div><small>נקבע אוטומטית – משמש לכתובת השרת ולאישור חיבור השלוחות</small></div>
 <label class="fld req"><span>מספר הקו</span><input class="inp ltr" name="linePhone" type="tel" inputmode="tel" value="${c.linePhone || ""}" required pattern="0[0-9]{8,9}"></label>
 <label class="fld"><span>טלפון מנהל הקו</span><input class="inp ltr" name="ownerPhone" type="tel" inputmode="tel" pattern="0[0-9]{8,9}" placeholder="05..."><small>לא חובה – מנהל בפקודות הקוליות</small></label>
 </div>
 <label class="fld"><span>מייל גוגל של מנהל הקו</span><input class="inp ltr" name="ownerEmail" type="email" placeholder="name@gmail.com" autocomplete="off" spellcheck="false" autocapitalize="off"><small>לא חובה – יקבל גישה לקו הזה בלבד, ויוכל להוסיף מנהלים בעצמו</small></label>
-<p class="mut small">ייווצר Worker חדש בשם yemot-line-&lt;שם קצר&gt; עם אחסון משלו, כל ה-AI וכל מפתחות הקול של קו המקור, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</p>
+<p class="mut small">ייווצר Worker חדש בשם yemot-line-${FX.slug} עם אחסון משלו, כל ה-AI וכל מפתחות הקול של קו המקור, ודף ניהול משלו. הקו נוצר <b>במצב בדיקה</b> – צינתוקים רק למנהלים.</p>
 <div class="btns"><button type="submit" class="btn p"${ready ? "" : raw(" disabled")}>${ico("plus")} בניית הקו</button><button type="button" class="btn" data-x="hubFxBack">חזרה</button></div></form></div>`;
 }
 const r = FX.created, l = r.line || {}, slug = l.slug || FX.tokenSlug || "";
@@ -5638,7 +5644,7 @@ const reNew = () => reFx(false);
 F("hubFxCheck", async (f, d) => {
 const t = String(d.t || "").trim(), line = fxLine();
 if (!t) { toast("כתבו טוקן", true); return; }
-FX.token = t; FX.tokenSlug = "";
+FX.token = t; FX.tokenSlug = ""; FX.slug = "";
 const r = await fxApi({ op: "check", ymToken: t }, line);
 FX.check = r || {}; FX.created = null; FX.plan = null;
 toast("הטוקן תקין");
@@ -5653,7 +5659,7 @@ const line = fxLine();
 if (!await Dlg.confirm('לבנות קו חדש "' + v.name + '" (' + v.linePhone + ") בשם yemot-line-" + v.slug + "?\nייווצר שרת חדש ב-Cloudflare עם מפתחות ה-AI של קו המקור.", { ok: "בניית הקו" })) return;
 toast("בונה את הקו… זה יכול לקחת חצי דקה");
 const r = await fxApi(Object.assign({ op: "create", ymToken: FX.token }, v), line);
-FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.status = null;
+FX.created = r || {}; FX.tokenSlug = (r && r.line && r.line.slug) || v.slug; FX.slug = ""; FX.status = null;
 // במרכז: רשימת הקווים מתעדכנת (reloadMe מצייר מחדש רק תצוגת מרכז, ושומר על הקו הפתוח)
 if (inHub() && await reloadMe()) return;
 reFx(true);
@@ -5661,7 +5667,7 @@ reFx(true);
 Actions.register("hubFxCopy", () => copyText((FX.created && FX.created.adminPass) || ""), { write: false });
 Actions.register("hubFxAgain", async () => {
 if (!await Dlg.confirm("לעבור לקו נוסף? הסיסמה של הקו הזה לא תוצג שוב.")) return;
-FX.token = ""; FX.tokenSlug = ""; FX.check = null; FX.created = null; FX.plan = null;
+FX.token = ""; FX.tokenSlug = ""; FX.slug = ""; FX.check = null; FX.created = null; FX.plan = null;
 reNew();
 }, { write: false });
 // חשבונות
