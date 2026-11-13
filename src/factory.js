@@ -263,7 +263,7 @@ const dirOf = path => "ivr2:" + path;
 // start: מאיפה להמשיך את הסריקה (תור שנשמר בסבב הקודם). שומרים פנייה לכל קובץ שנמצא, כדי שיהיה תקציב להשוות אותו ליעד.
 // next: מה שנשאר לסרוק; deep: תיקיות עמוקות מ-MAX_DEPTH שלא נסרקו
 async function templateTree(env, D, bud, start) {
-  const out = [], queue = Array.isArray(start) && start.length ? start.slice() : [["/", 0]], seen = new Set(), deep = [];
+  const out = [], dirs = [], queue = Array.isArray(start) && start.length ? start.slice() : [["/", 0]], seen = new Set(), deep = [];
   let cut = false;
   while (queue.length && out.length < MAX_DIRS) {
     if (bud.left < 2 + out.length || !bud.take(2)) break; // התקציב נגמר – ממשיכים בסבב הבא מ-next
@@ -274,15 +274,17 @@ async function templateTree(env, D, bud, start) {
     const ini = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
     if (!ini.ok) cut = true;
     else if (ini.text.trim()) out.push({ path, contents: ini.text });
+    else if (path !== "/") dirs.push(path); // תיקייה בלי הגדרות (למשל תיקיית אחסון) – נוצרת גם בקו החדש, ריקה
     for (const s of d.dirs || []) {
       const n = String(s.name || s.what || "").replace(/^ivr2:/, "").split("/").filter(Boolean).pop();
-      if (!n || /^(personalMessages|Log|ApiLog|Sounds?|\.)/i.test(n)) continue;
+      // תיקיות אישיות (Phone – לפי מספרי טלפון) ויומנים לא נסרקים: הם תוכן, לא תבנית
+      if (!n || /^(personalMessages|Log|ApiLog|Sounds?|Phone|\.)/i.test(n)) continue;
       const sub = (path === "/" ? "" : path) + "/" + n;
       if (depth >= MAX_DEPTH) deep.push(sub); else queue.push([sub, depth + 1]);
     }
   }
   // תיקיות עמוקות לא נחשבות "רק חלק": לחיצה נוספת לא תסרוק אותן (הן מסומנות כאזהרה בשורה של התיקייה שמעליהן)
-  return { files: out, truncated: cut || queue.length > 0, next: queue, deep };
+  return { files: out, dirs, truncated: cut || queue.length > 0, next: queue, deep };
 }
 // המשך סריקת העץ בין לחיצות על "חיבור שלוחות": start – מאיפה הסבב הנוכחי התחיל, next – מאיפה הסבב הבא יתחיל.
 // מתקדמים רק אחרי כתיבה שלמה (או כשאין בסבב מה לכתוב), כדי שלחיצה חוזרת אחרי "ממתינות" תציג את אותן שלוחות
@@ -318,7 +320,7 @@ async function ivrPlan(env, body, origin, D) {
   const bud = budget();
   const cur0 = body.restart === true ? { start: null, next: [] } : await planCursor(env, line.slug);
   const start = cursorOk(body.from) && body.from.length ? body.from : cur0.start;
-  const { files, truncated: treeCut, next, deep } = await templateTree(env, D, bud, start);
+  const { files, dirs, truncated: treeCut, next, deep } = await templateTree(env, D, bud, start);
   const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
   const flagPhones = [D.LINE_PHONE, D.OWNER].filter(Boolean);
   const plan = [];
@@ -341,7 +343,7 @@ async function ivrPlan(env, body, origin, D) {
   // אין בסבב הזה מה לכתוב – מתקדמים מיד לסבב הבא (ובסוף העץ חוזרים להתחלה); אחרת מתקדמים רק אחרי הכתיבה
   if (plan.every(p => p.same)) await savePlanCursor(env, line.slug, next, []);
   else await savePlanCursor(env, line.slug, start, next);
-  return { slug: line.slug, url: line.url, count: plan.length, truncated, plan, next, deep, resumed: !!(start && start.length) };
+  return { slug: line.slug, url: line.url, count: plan.length, truncated, plan, dirs, next, deep, resumed: !!(start && start.length) };
 }
 // כתיבה: רק לשלוחות שנבחרו. קוראים מחדש את המקור ואת היעד של כל אחת (בלי לסרוק את כל העץ),
 // לא כותבים על קובץ שלא הצלחנו לקרוא, ושומרים גיבוי של מה שהיה לפני כל כתיבה
@@ -356,18 +358,20 @@ async function ivrApply(env, body, origin, D) {
   const from = { host: new URL(origin).host, runKey: env.RUN_KEY || "" }, to = { host: new URL(line.url).host, runKey: line.runKey };
   const bud = budget(), ready = [], failed = bad.map(p => `${p}: שם תיקייה לא נתמך – לא נכתב`), skipped = [];
   for (const path of want) {
-    if (!bud.take(3)) { skipped.push(path); continue; }
+    if (!bud.take(4)) { skipped.push(path); continue; }
     const src = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
     if (!src.ok || !src.text.trim()) { failed.push(`${path}: לא נקרא מקו המקור`); continue; }
     const after = rewriteIni(src.text, from, to);
     const cur = await readIni(() => ymT(token, "GetTextFile", { what: iniPath(path) }), () => bud.take() ? ymT(token, "GetIVR2Dir", { path: dirOf(path) }) : null);
     if (!cur.ok) { failed.push(`${path}: לא ניתן לקרוא את הקיים – לא נכתב`); continue; }
-    if (cur.text.trim() !== after.trim()) ready.push({ path, after, before: cur.text });
+    if (cur.text.trim() !== after.trim()) ready.push({ path, after, before: cur.text, fresh: !cur.text.trim() });
   }
   const backup = { at: Date.now(), files: ready.map(p => ({ path: p.path, before: p.before })) };
   if (ready.length) await env.KV.put(`factory_backup:${line.slug}:${backup.at}`, JSON.stringify(backup), { expirationTtl: 90 * 86400 });
   const done = [];
   for (const p of ready) {
+    // שלוחה חדשה: קודם יוצרים את התיקייה (כתיבת ext.ini לתיקייה שלא קיימת עלולה להיכשל)
+    if (p.fresh && p.path !== "/") await ymT(token, "UpdateExtension", { path: dirOf(p.path) }).catch(() => null);
     const r = await ymT(token, "UploadTextFile", { what: iniPath(p.path), contents: p.after }).catch(e => ({ message: e.message }));
     if (ymOk(r)) done.push(p.path); else failed.push(`${p.path}: ${r && r.message || "שגיאה"}`);
   }
@@ -378,9 +382,92 @@ async function ivrApply(env, body, origin, D) {
   return { ok: !failed.length && !skipped.length, done, failed, skipped, backup: ready.length ? backup.at : null };
 }
 
+// ---------- שמירת הודעות שכבר היו בקו החדש ----------
+// לפני שהתבנית נכתבת, שלוחה 1 הופכת לתפריט (1/1 חשובות, 1/2 כל ההודעות). הודעות שהיו בה ישירות היו נעלמות מהשמיעה,
+// ולכן מעבירים אותן לסוף 1/2 לפי הסדר (כל הקבצים של אותו מספר יחד – wav, txt...). שום קובץ לא נמחק
+const MSG_FILE = /^(\d+)\.([\w-]+)$/;
+async function dirFiles(token, path, bud) {
+  const all = []; let ok = false;
+  for (let from = 0; from < 10000; from += 1000) {
+    if (!bud.take()) return { ok, files: all, cut: true };
+    const d = await ymT(token, "GetIVR2Dir", from ? { path: dirOf(path), filesFrom: from } : { path: dirOf(path) }).catch(() => null);
+    if (!d || !ymOk(d)) return { ok, files: all };
+    ok = true;
+    const f = (d.files || []).map(fileName);
+    all.push(...f);
+    if (f.length < 1000) break;
+  }
+  return { ok, files: all };
+}
+async function preserveStep(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const FROM = "/1", TO = "/1/2", bud = budget();
+  const src = await dirFiles(token, FROM, bud);
+  if (!src.ok) return { moved: 0, left: 0, failed: [] }; // אין שלוחה 1 – אין מה להעביר
+  const groups = new Map();
+  for (const n of src.files) { const m = n.match(MSG_FILE); if (m) (groups.get(m[1]) || groups.set(m[1], []).get(m[1])).push(n); }
+  const nums = [...groups.keys()].sort((a, b) => +a - +b);
+  if (!nums.length) return { moved: 0, left: 0, failed: [] };
+  let dst = await dirFiles(token, TO, bud);
+  if (dst.cut) return { moved: 0, left: nums.length, failed: [] };
+  if (!dst.ok) {
+    const r = await ymT(token, "UpdateExtension", { path: dirOf(TO) }).catch(e => ({ message: e.message })); bud.take();
+    if (!ymOk(r)) return { moved: 0, left: nums.length, failed: [`${TO}: לא נוצרה – ההודעות נשארו בשלוחה 1`] };
+    await ymT(token, "FileAction", { action: "delete", what: iniPath(TO) }).catch(() => null); bud.take();
+    dst = { ok: true, files: [] };
+  }
+  let next = dst.files.reduce((mx, n) => { const m = n.match(MSG_FILE); return m ? Math.max(mx, +m[1]) : mx; }, -1);
+  const moved = [], failed = [];
+  for (const num of nums) {
+    const fs = groups.get(num);
+    if (!bud.take(fs.length)) break;
+    const to = String(++next).padStart(3, "0");
+    let ok = true;
+    for (const n of fs) {
+      const ext = n.slice(n.indexOf(".") + 1);
+      const r = await ymT(token, "FileAction", { action: "move", what: `ivr2:${FROM}/${n}`, target: `ivr2:${TO}/${to}.${ext}` }).catch(e => ({ message: e.message }));
+      if (!ymOk(r)) { ok = false; failed.push(`${FROM}/${n}: ${(r && r.message) || "לא הועבר"}`); }
+    }
+    if (ok) moved.push(num);
+  }
+  const left = nums.length - moved.length - new Set(failed.map(f => (f.match(/\/(\d+)\./) || [])[1])).size;
+  if (moved.length) await D.log(env, `מפעל הקווים: ${moved.length} הודעות שהיו בשלוחה 1 בקו "${line.name}" הועברו ל-${TO}`).catch(() => {});
+  return { moved: moved.length, left: Math.max(0, left), failed };
+}
+
+// ---------- תיקיות שהשרת של הקו צריך (גם בלי הגדרות) ----------
+// מהקוד של worker.js: חלוקת שלוחה 1 (1/1 חשובות, 1/2 כל ההודעות), תורי הבדיקה, ממתינות, מחוקות, בקשות הצטרפות,
+// הקלטות שם, הודעות אישיות, דגלים והקול של העוזר. בלעדיהן הקו החדש לא יעבוד כמו קו המקור
+const REQUIRED_DIRS = ["/0", "/1", "/1/1", "/1/2", "/2", "/3", "/4", "/5", "/7", "/8", "/8/voice", "/9",
+  "/AIQueue", "/AIQueueGeneral", "/PendingApproval", "/PendingProblem", "/PendingGeneral", "/PendingError", "/PendingDemoted",
+  "/DeletedByAdmin", "/JoinRequests", "/JoinRequestsDone", "/EnterIDRecord", "/personalMessages", "/personalMessages/Phone", "/FlagTemplate"];
+async function structureStep(env, body, origin, D) {
+  const { line, token } = await lineToken(env, body, D);
+  const okPath = p => /^\/[\w\/.\- ֐-׿]+$/.test(p) && !p.includes("..") && !p.includes("//");
+  const asked = (Array.isArray(body.paths) ? body.paths : []).map(String);
+  const paths = [...new Set([...(body.required ? REQUIRED_DIRS : []), ...asked])].filter(okPath)
+    .sort((a, b) => a.split("/").length - b.split("/").length).slice(0, 300); // הורים לפני ילדים
+  const bud = budget(), made = [], failed = [], left = [];
+  for (let i = 0; i < paths.length; i++) {
+    const path = paths[i];
+    if (!bud.take(3)) { left.push(...paths.slice(i)); break; }
+    const d = await ymT(token, "GetIVR2Dir", { path: dirOf(path) }).catch(() => null);
+    if (d && ymOk(d)) continue; // כבר קיימת
+    const r = await ymT(token, "UpdateExtension", { path: dirOf(path) }).catch(e => ({ message: e.message }));
+    if (!ymOk(r)) { failed.push(`${path}: ${(r && r.message) || "לא נוצרה"}`); continue; }
+    // תיקייה בלי הגדרות במקור – גם בקו החדש בלי ext.ini (אחרת היא נשמעת כשלוחה)
+    await ymT(token, "FileAction", { action: "delete", what: iniPath(path) }).catch(() => null);
+    made.push(path);
+  }
+  if (made.length) await D.log(env, `מפעל הקווים: נוצרו ${made.length} תיקיות בקו "${line.name}"`).catch(() => {});
+  return { made, failed, left };
+}
+
 // ---------- קריינות: העתקת קבצי הפתיח של השלוחות + יצירה בקול העוזר למה שאין לו קריינות ----------
 // קבצי פתיח וקריינות של שלוחה (M1000.wav וכד'). קבצים ממוספרים (000.wav...) הם תוכן – הודעות, השמעות – ולא מועתקים
-const VOICE_FILE = /^M\d{4}\.(wav|mp3|tts)$/i;
+const VOICE_FILE = /^(M\d{4}(-\d+)?|PlayfileMessageCheck[-\w]*)\.(wav|mp3|tts)$/i;
+// קבצים ממוספרים שהם חלק מהתבנית ולא תוכן (הצליל של הדגלים מועתק לכל מספר שמסומן)
+const TEMPLATE_FILES = { "/FlagTemplate": ["000.wav"] };
 const fileName = f => String((f && (f.name || f.what)) || "").split("/").pop();
 async function ymUploadT(token, path, bytes, name) {
   const fd = new FormData();
@@ -414,7 +501,7 @@ async function audioStep(env, body, origin, D) {
     ]);
     if (!src || !Array.isArray(src.files)) { failed.push(`${path}: לא נקרא מקו המקור`); continue; }
     const have = new Set(((dst && dst.files) || []).map(f => fileName(f).toLowerCase()));
-    const voice = src.files.map(fileName).filter(n => VOICE_FILE.test(n));
+    const voice = src.files.map(fileName).filter(n => VOICE_FILE.test(n) || (TEMPLATE_FILES[path] || []).includes(n));
     let cut = false;
     for (const n of voice.filter(n => !have.has(n.toLowerCase()))) {
       if (!bud.take(2)) { cut = true; break; }
@@ -460,6 +547,8 @@ export async function factory(req, env, body, D, origin) {
   if (op === "ivr_plan") return await ivrPlan(env, body, origin, D);
   if (op === "ivr_apply") return await ivrApply(env, body, origin, D);
   if (op === "audio") return await audioStep(env, body, origin, D);
+  if (op === "structure") return await structureStep(env, body, origin, D);
+  if (op === "preserve") return await preserveStep(env, body, origin, D);
   if (op === "suspend" || op === "resume") {
     const l = (await loadReg(env)).find(x => x.slug === body.slug);
     if (op === "suspend" && (!l || String(body.confirm || "") !== l.slug)) throw new Error("להשהיית הקו יש להקליד את השם הקצר");
