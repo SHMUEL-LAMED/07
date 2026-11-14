@@ -1,1 +1,0 @@
-import {requireChatGPTUser} from './chatgpt-auth';import MailApp from './mail-app';export const dynamic='force-dynamic';export default async function Page(){const u=await requireChatGPTUser('/');return <MailApp name={u.displayName}/>;}
