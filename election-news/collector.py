@@ -114,8 +114,13 @@ def relevant(title):
 def collectible(title):
     return isinstance(title,str) and len(clean(title))>=4
 
+# Same modesty filter as worker.mjs (isAppropriate); the worker refuses these titles with 422 content_not_allowed.
+INAPPROPRIATE=re.compile(r'(?<![\u05D0-\u05EA])[ובהלמשכ]{0,2}(?:(?:מין|מיני|מינית|מיניים|מיניות|עירום|אונס|בגידה|רומן)(?![\u05D0-\u05EA])|אינטימ|הטרד[הות]|תקיפ[הת]\s*מינית?(?![\u05D0-\u05EA])|מעשה\s*מגונה|פדופיל|פורנו)')
+def appropriate(title):
+    return not INAPPROPRIATE.search(str(title or ''))
+
 def collection_failed(count,reports):
-    ignored={'stale_or_missing_publication_date','not_election_article','not_public_or_old'}
+    ignored={'stale_or_missing_publication_date','not_election_article','not_public_or_old','content_not_allowed'}
     return count==0 and any(x.get('status')=='blocked' and x.get('error') not in ignored for x in reports)
 
 def fair_candidates(candidates):
@@ -495,6 +500,7 @@ def main():
             if url in seen or (source(url)=='reshet' and url in uploaded):continue
             try:
                 title,media=article(url)
+                if not appropriate(title):reports.append({'url':url,'status':'blocked','error':'content_not_allowed'});print('skipped',source(url),'content_not_allowed',canonical(url),flush=True);continue
                 if not media:reports.append({'url':url,'status':'no_media'});continue
                 for index,clip in enumerate(media):
                     key=url+('#media='+str(index) if index else '')
@@ -516,8 +522,9 @@ def main():
                         if result.get('existing'):print('existing',source(url),result.get('file'),round(duration),flush=True)
                         else:count+=1;print('uploaded',source(url),result.get('file'),round(duration),flush=True)
                     except Exception as error:
-                        reports.append({'url':key,'status':'blocked','error':error_code(error)})
-                        print('clip_failed',source(url),error_code(error),canonical(url),index,flush=True)
+                        code='content_not_allowed' if isinstance(error,urllib.error.HTTPError) and error.code==422 else error_code(error)
+                        reports.append({'url':key,'status':'blocked','error':code})
+                        print('clip_failed',source(url),code,canonical(url),index,flush=True)
             except Exception as e:
                 failures[source(url)]=failures.get(source(url),0)+1
                 reports.append({'url':url,'status':'blocked','error':error_code(e)});print('article_failed',source(url),error_code(e),canonical(url),flush=True)
