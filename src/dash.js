@@ -350,7 +350,8 @@ const isPhone = p => /^0\d{8,9}$/.test(p);
 
 async function api(req, env, ctx, u, name, D, auth = {}) {
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-  const nm = D.names(env), who = p => nm[p] || p || "לא ידוע";
+  // nm – החברים בלבד (רשימות וספירות); nmAll – כולל המספרים הנוספים של חברים (זיהוי שם לפי מספר)
+  const nmAll = D.names(env), nm = D.memberNames ? D.memberNames(env) : nmAll, who = p => nmAll[p] || p || "לא ידוע";
   const admin = D.OWNER, VIA = "דף הניהול", now = Date.now();
   // יומן פעולות: כל POST נרשם עם מי שביצע אותו (מייל, מפתח API או סיסמה)
   if (req.method === "POST" && name !== "ai") ctx.waitUntil(audit(env, auth, name, body).catch(() => {}));
@@ -366,7 +367,7 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
       ]);
       const muted = Object.entries(watch).filter(([, w]) => w && w.hold && (!w.until || w.until > now)).map(([p, w]) => ({ p, n: who(p), until: w.until ? D.ilAt(w.until).slice(0, 16) : "" }));
       return json({
-        now: D.nowIL(), names: nm, online: online.map(c => ({ ...c, n: nm[c.p] || "" })),
+        now: D.nowIL(), names: nmAll, online: online.map(c => ({ ...c, n: nmAll[c.p] || "" })),
         pending: D.PENDING_ORDER.map((k, i) => ({ k, name: D.REVIEW[k].name, n: counts[i] })), joins,
         event: { title: ev.title, desc: ev.desc, count: Object.keys(rsvp).length, total: Object.keys(nm).length },
         jobs: jobs.filter(j => !j.done).sort((a, b) => (a.at < b.at ? -1 : 1)).slice(0, 8).map(j => ({ ...j, who: j.phone ? who(j.phone) : "" })),
@@ -377,7 +378,7 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
     }
     case "online": {
       const { calls } = await D.onlineNow(env);
-      return json({ now: D.nowIL(), online: calls.map(c => ({ ...c, n: nm[c.p] || "" })) });
+      return json({ now: D.nowIL(), online: calls.map(c => ({ ...c, n: nmAll[c.p] || "" })) });
     }
     case "hangup": {
       const id = String(body.id || "").trim(); if (!id) return json({ error: "לשיחה הזו אין מזהה, אי אפשר לנתק אותה מכאן" }, 400);
@@ -395,9 +396,9 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
     case "pending": {
       const kinds = [...D.PENDING_ORDER, "join"];
       const [lists, jmap, demap, archive] = await Promise.all([Promise.all(kinds.map(k => D.pendingFiles(env, D.REVIEW[k].folder).catch(() => []))), D.kvGet(env, "joinmap", {}), D.kvGet(env, "demap", {}), D.kvGet(env, "archive", {})]);
-      return json({ names: nm, lists: kinds.map((k, i) => ({ k, name: D.REVIEW[k].name, folder: D.REVIEW[k].folder, files: lists[i].map(f => {
+      return json({ names: nmAll, lists: kinds.map((k, i) => ({ k, name: D.REVIEW[k].name, folder: D.REVIEW[k].folder, files: lists[i].map(f => {
         const p = f.phone || jmap[f.name] || "", copy = k === "demoted" ? demap[f.name] : "";
-        return { name: f.name, p, n: p ? nm[p] || "" : "", date: f.date || f.mtime || "", dur: +f.duration || 0, size: +f.size || 0, t: copy && archive[copy] ? archive[copy].t : "" };
+        return { name: f.name, p, n: p ? nmAll[p] || "" : "", date: f.date || f.mtime || "", dur: +f.duration || 0, size: +f.size || 0, t: copy && archive[copy] ? archive[copy].t : "" };
       }) })) });
     }
     case "review": {
@@ -426,8 +427,8 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
       const [all, imp, archive] = await Promise.all([D.allFiles(env, D.ALL), D.ym(env, "GetIVR2Dir", { path: "ivr2:" + D.IMPORTANT }).catch(() => ({})), D.kvGet(env, "archive", {})]);
       const impSizes = new Set((imp.files || []).filter(f => /^\d+\.wav$/.test(f.name)).map(f => f.size));
       const files = (all.files || []).filter(f => /^\d+\.wav$/.test(f.name)).sort((a, b) => parseInt(b.name) - parseInt(a.name));
-      return json({ total: files.length, names: nm, list: files.slice(0, n).map(f => { const a = archive[f.name] || {}, p = f.phone || a.p || "";
-        return { id: f.name.replace(".wav", ""), p, n: nm[p] || a.n || "", date: f.date || f.mtime || a.d || "", dur: +f.duration || 0, size: +f.size || 0, t: a.t || "", imp: impSizes.has(f.size) }; }) });
+      return json({ total: files.length, names: nmAll, list: files.slice(0, n).map(f => { const a = archive[f.name] || {}, p = f.phone || a.p || "";
+        return { id: f.name.replace(".wav", ""), p, n: nmAll[p] || a.n || "", date: f.date || f.mtime || a.d || "", dur: +f.duration || 0, size: +f.size || 0, t: a.t || "", imp: impSizes.has(f.size) }; }) });
     }
     case "act": { // פעולת ניהול – אותו קוד כמו הפקודות הקוליות דרך העוזר, כולל undo
       const a = body.a || {};
@@ -446,9 +447,9 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
       const mstat = Object.fromEntries(mem.map(e => [e.phone, e.active])), codes = Object.fromEntries(people.map(p => [p.p, p.c]));
       const phones = [...new Set([...Object.keys(nm), ...mem.map(e => e.phone), ...people.map(p => p.p)])];
       const rows = phones.map(p => { const w = watch[p], mutedOn = w && w.hold && (!w.until || w.until > now);
-        return { p, n: nm[p] || "", code: codes[p] || "", tz: mstat[p] === true ? "on" : mstat[p] === false ? "off" : "none", general: general.includes(p), admin: admins.includes(p) || p === D.OWNER, rsvp: !!rsvp[p], muted: mutedOn ? (w.until ? D.ilAt(w.until).slice(0, 16) : "ללא הגבלה") : "", last: calls.last[p] || "", calls: calls.per[p] || 0, blocked: blocked.includes(p) }; });
+        return { p, n: nmAll[p] || "", code: codes[p] || "", tz: mstat[p] === true ? "on" : mstat[p] === false ? "off" : "none", general: general.includes(p), admin: admins.includes(p) || p === D.OWNER, rsvp: !!rsvp[p], muted: mutedOn ? (w.until ? D.ilAt(w.until).slice(0, 16) : "ללא הגבלה") : "", last: calls.last[p] || "", calls: calls.per[p] || 0, blocked: blocked.includes(p) }; });
       rows.sort((a, b) => (a.n || "תתת").localeCompare(b.n || "תתת", "he"));
-      return json({ names: nm, owner: D.OWNER, rows, blocked: blocked.map(p => ({ p, n: nm[p] || "" })), approved: Object.entries(approved).map(([p, x]) => ({ p, n: nm[p] || "", t: x.t, by: who(x.by) })), joins: joins.map(f => ({ name: f.name, p: f.phone || jmap[f.name] || "", date: f.date || f.mtime || "" })) });
+      return json({ names: nmAll, owner: D.OWNER, rows, blocked: blocked.map(p => ({ p, n: nmAll[p] || "" })), approved: Object.entries(approved).map(([p, x]) => ({ p, n: nmAll[p] || "", t: x.t, by: who(x.by) })), joins: joins.map(f => ({ name: f.name, p: f.phone || jmap[f.name] || "", date: f.date || f.mtime || "" })) });
     }
     case "block": {
       const p = String(body.phone || "").replace(/\D/g, ""); if (!isPhone(p)) return json({ error: "מספר לא תקין" }, 400);
@@ -459,8 +460,8 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
     }
     case "schedule": {
       const [jobs, ev, rsvp] = await Promise.all([D.kvGet(env, "scheduled", []), D.curEvent(env), D.rsvpLoad(env).catch(() => ({}))]);
-      return json({ names: nm, now: D.nowIL(), jobs: jobs.slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map((j, i) => ({ ...j, i, who: j.phone ? who(j.phone) : "", byName: j.by ? who(j.by) : "" })), event: ev,
-        rsvp: Object.entries(rsvp).map(([p, x]) => ({ p, n: x.n, ts: x.ts })).sort((a, b) => (a.ts < b.ts ? -1 : 1)), notReg: Object.keys(nm).filter(p => !rsvp[p]).map(p => ({ p, n: nm[p] })) });
+      return json({ names: nmAll, now: D.nowIL(), jobs: jobs.slice().sort((a, b) => (a.at < b.at ? 1 : -1)).map((j, i) => ({ ...j, i, who: j.phone ? who(j.phone) : "", byName: j.by ? who(j.by) : "" })), event: ev,
+        rsvp: Object.entries(rsvp).map(([p, x]) => ({ p, n: x.n, ts: x.ts })).sort((a, b) => (a.ts < b.ts ? -1 : 1)), notReg: Object.keys(nm).filter(p => !rsvp[p]).map(p => ({ p, n: nmAll[p] })) });
     }
     case "unsched": {
       const jobs = await D.kvGet(env, "scheduled", []);
@@ -472,7 +473,7 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
     }
     case "assistant": {
       const [conv, rules, retort, undo, strict] = await Promise.all([D.kvGet(env, "convlog", []), D.kvGet(env, "rules", []), D.kvGet(env, "retort", []), D.kvGet(env, "undo", []), D.kvGet(env, "strict", [])]);
-      return json({ names: nm, conv: conv.slice(-400).reverse().map(e => ({ d: e.d, p: e.p, n: who(e.p), q: e.q, a: e.a })), rules, retort: retort.map(p => ({ p, n: who(p) })), strict: strict.map(p => ({ p, n: who(p) })), undo: undo.slice().reverse() });
+      return json({ names: nmAll, conv: conv.slice(-400).reverse().map(e => ({ d: e.d, p: e.p, n: who(e.p), q: e.q, a: e.a })), rules, retort: retort.map(p => ({ p, n: who(p) })), strict: strict.map(p => ({ p, n: who(p) })), undo: undo.slice().reverse() });
     }
     case "stats": {
       const [lg, imp, archive, deferred, holy, profiles, conv] = await Promise.all([callLog(env, D, 2), D.ym(env, "GetIVR2Dir", { path: "ivr2:" + D.IMPORTANT }).catch(() => ({})), D.kvGet(env, "archive", {}), D.kvGet(env, "deferred_tz", []), D.isHoly(env).catch(() => false), D.kvGet(env, "profiles", {}), D.kvGet(env, "convlog", [])]);
@@ -488,8 +489,8 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
       return json({ today: days[29], days, calls: days.map(d => lg.byDay[d] || 0), callers: days.map(d => lg.callers[d] || 0), msgs: days.map(d => msgsByDay[d] || 0), conv: days.map(d => convByDay[d] || 0), byHour: lg.byHour,
         perMember: Object.entries(lg.per).map(([p, n]) => ({ p, n: who(p), calls: n })).sort((a, b) => b.calls - a.calls).slice(0, 20),
         byFolder: Object.entries(byFolder).map(([l, n]) => ({ l, n })).sort((a, b) => b.n - a.n).slice(0, 12),
-        lastImp, heard: heard.map(p => ({ p, n: who(p) })), notHeard: lastImp ? Object.keys(nm).filter(p => !heard.includes(p)).map(p => ({ p, n: nm[p] })) : [],
-        quiet: Object.keys(nm).filter(p => !lg.last[p] || lg.last[p] < weekAgo).map(p => ({ p, n: nm[p], last: lg.last[p] || "" })),
+        lastImp, heard: heard.map(p => ({ p, n: who(p) })), notHeard: lastImp ? Object.keys(nm).filter(p => !heard.includes(p)).map(p => ({ p, n: nmAll[p] })) : [],
+        quiet: Object.keys(nm).filter(p => !lg.last[p] || lg.last[p] < weekAgo).map(p => ({ p, n: nmAll[p], last: lg.last[p] || "" })),
         holy, deferred, system: { archive: Object.keys(archive).length, transcribed: Object.values(archive).filter(a => a.t).length, profiles: Object.keys(profiles).length, conv: conv.length, months: lg.months, totalCalls: lg.total } });
     }
     case "log": {
@@ -498,7 +499,7 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
       return json({ lines });
     }
   }
-  return api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, now);
+  return api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, now, nmAll);
 }
 
 // ============================================================================
@@ -506,7 +507,7 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
 // תזמון מתקדם, שבת וחג, סיכום שבועי, גיבוי, אירוע, פרסומות, קודים, דוחות, ניטור, שיתוף לצפייה.
 // כל פעולה עוברת דרך אותם מנגנונים כמו הפקודות הקוליות (doAdmin / pushUndo / log).
 // ============================================================================
-const BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "archive", "facts", "profiles", "dashnotes", "joinmap", "demap"];
+const BACKUP_KEYS = ["people", "names_over", "aliases", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "archive", "facts", "profiles", "dashnotes", "joinmap", "demap"];
 const b64dec = s => Uint8Array.from(atob(String(s || "").replace(/^data:[^,]*,/, "")), c => c.charCodeAt(0));
 // תא שמתחיל ב-= + - @ היה מתפרש באקסל כנוסחה – מקדימים לו גרש (מספרים וטלפונים נשארים כמו שהם)
 const csvCell = v => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?[\d\s().,:-]*$/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -614,8 +615,8 @@ function aiCheck(x, D, nm) { // מחזיר פעולה נקייה, או null אם
   }
   return null;
 }
-const POST_ONLY = new Set(["share", "transcript", "pm_delete", "tts", "send_pm", "tz_phones", "members_import", "lists", "codes", "batch", "upload", "restore", "purge", "zip", "schedule2", "deferred", "event", "restore_backup", "ai"]);
-async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, now) {
+const POST_ONLY = new Set(["share", "transcript", "pm_delete", "tts", "send_pm", "tz_phones", "members_import", "lists", "codes", "aliases", "batch", "upload", "restore", "purge", "zip", "schedule2", "deferred", "event", "restore_backup", "ai"]);
+async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, now, nmAll = nm) {
   const q = k => String(u.searchParams.get(k) || "");
   if (POST_ONLY.has(name) && req.method !== "POST") return json({ error: "שיטה לא מורשית" }, 405);
   const ok = (extra = {}) => json({ ok: true, ...extra });
@@ -627,10 +628,10 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const [jobs, rules, online, holy, ar, logR, blocked] = await Promise.all([
         D.kvGet(env, "scheduled", []), D.kvGet(env, "rules", []), D.onlineNow(env).then(x => x.calls).catch(() => []), D.isHoly(env).catch(() => false),
         D.kvGet(env, "archive", {}), D.ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" }).catch(() => ({})), D.kvGet(env, "blocked", [])]);
-      const recent = Object.entries(ar).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).slice(0, 25).map(([k, a]) => ({ id: k.replace(".wav", ""), d: a.d, n: a.n || nm[a.p] || "", t: String(a.t || "").slice(0, 220) }));
-      const ctxData = { now: D.nowIL(), holy, members: Object.entries(nm).map(([p, n]) => ({ n, p })), online: online.map(c => ({ n: nm[c.p] || "", p: c.p, w: c.w })),
+      const recent = Object.entries(ar).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).slice(0, 25).map(([k, a]) => ({ id: k.replace(".wav", ""), d: a.d, n: a.n || nmAll[a.p] || "", t: String(a.t || "").slice(0, 220) }));
+      const ctxData = { now: D.nowIL(), holy, members: Object.entries(nm).map(([p, n]) => ({ n, p })), online: online.map(c => ({ n: nmAll[c.p] || "", p: c.p, w: c.w })),
         scheduled: jobs.filter(j => !j.done).map(j => ({ id: j.id, at: j.at, type: j.type, text: String(j.text || "").slice(0, 120), phone: j.phone || "", every: j.every || "" })),
-        rules: rules.map((r, i) => ({ n: i + 1, r })), blocked: blocked.map(p => nm[p] || p), recentMessages: recent,
+        rules: rules.map((r, i) => ({ n: i + 1, r })), blocked: blocked.map(p => nmAll[p] || p), recentMessages: recent,
         recentLog: ((logR && logR.contents) || "").split("\n").filter(Boolean).slice(0, 25) };
       // אותו ידע שיש לעוזר בקו: ההודעות והתמלולים הרלוונטיים לשאלה, והמידע שהעוזר מקבל כשמנהל מתקשר
       const line = await D.loadLine(env).catch(() => null);
@@ -638,7 +639,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       let r;
       try { r = await D.aiText(env, { system: DASH_AI_SYSTEM + (lineCtx ? "\n\nההודעות בקו (אותו ידע שיש לעוזר הקולי):\n" + lineCtx : "") + (adminCtx ? "\n\nמידע לניהול:\n" + adminCtx : ""), contents: [...hist, { role: "user", parts: [{ text: "מצב הקו:\n" + JSON.stringify(ctxData).slice(0, 20000) + "\n\nבקשת המנהל: " + ask }] }], deadline: 26000, timeout: 20000 }); }
       catch (e) { return json({ error: "העוזר לא זמין כרגע: " + String(e.message || e).slice(0, 200) }, 503); }
-      const raw = Array.isArray(r && r.actions) ? r.actions : [], actions = raw.map(x => aiCheck(x, D, nm)).filter(Boolean).slice(0, 12);
+      const raw = Array.isArray(r && r.actions) ? r.actions : [], actions = raw.map(x => aiCheck(x, D, nmAll)).filter(Boolean).slice(0, 12);
       const answer = String((r && (r.answer || r.text)) || "").trim().slice(0, 3000) || (actions.length ? "הנה מה שאני מציע לבצע:" : "לא הבנתי, אפשר לנסח אחרת?");
       const hlog = await D.kvGet(env, "dashai", []); hlog.push({ d: D.nowIL(), q: ask.slice(0, 300), a: answer.slice(0, 300), n: actions.length }); await env.KV.put("dashai", JSON.stringify(hlog.slice(-100)));
       return json({ answer, actions, dropped: raw.length - actions.length });
@@ -687,7 +688,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       bases: { worker: u.origin + "/admin/api/", netfree_bridge: fl ? "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree-lines/" + fl[1] + "/" : "https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/admin-netfree/" },
       scopes: { read: "GET לכל נתיבי הקריאה", write: "POST לכל פעולות הניהול של הדף", yemot: "POST yemot – קבצים ונתונים בימות (רשימה סגורה)" },
       read: ["overview", "online", "pending", "messages?n=200", "members", "member?p=<טלפון>", "schedule", "assistant", "stats", "log", "trash", "weekly", "holy", "pulse", "calls?day=YYYY-MM-DD", "report?m=YYYY-MM", "convstats", "heard", "health", "ads", "notes", "whoami", "alerts", "audit?by=<מי>", "autobackups", "polls", "audio?p=<נתיב>", "download?p=<נתיב>"],
-      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "alerts {op:clear}", "autobackups {op:restore,day}", "polls {op:create|close|send|delete}", "ads"],
+      write: ["act {a:{type,...}}", "review", "tzintuk {list}", "tz_phones {phones}", "hangup {id}", "schedule2", "unsched {id}", "block", "lists", "event", "tts {text}", "send_pm", "upload", "batch", "restore", "purge", "ai {q}", "notes", "transcript", "codes", "aliases {phone,extra,on}", "alerts {op:clear}", "autobackups {op:restore,day}", "polls {op:create|close|send|delete}", "ads"],
       yemot: { route: "POST yemot", body: { method: "GetIVR2Dir", params: { path: "ivr2:1" } }, allowed: YM_ALLOWED, note: "DownloadFile מחזיר base64. TzintukimListManagement – קריאה בלבד" },
       safety: "מפתח לא יכול לנהל מפתחות, חשבונות מורשים או קישורי צפייה. כל פעולת POST נרשמת ביומן.",
       });
@@ -740,22 +741,24 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     // ---------- חברים ----------
     case "member": {
       const p = q("p").replace(/\D/g, ""); if (!isPhone(p)) return json({ error: "מספר לא תקין" }, 400);
-      const [archive, conv, profiles, mem, facts, people, watch, blocked, retort, strict, ads, lg, pmDir, pmOld, approved, rsvp, notes, general, admins, members] = await Promise.all([
+      const [archive, conv, profiles, mem, facts, people, watch, blocked, retort, strict, ads, lg, pmDir, pmOld, approved, rsvp, notes, general, admins, members, aliases] = await Promise.all([
         D.kvGet(env, "archive", {}), D.kvGet(env, "convlog", []), D.kvGet(env, "profiles", {}), D.kvGet(env, "mem:" + p, null), D.kvGet(env, "facts", {}), D.peopleList(env),
         D.kvGet(env, "watch", {}), D.kvGet(env, "blocked", []), D.kvGet(env, "retort", []), D.kvGet(env, "strict", []), D.kvGet(env, "ads", {}), callLog(env, D, 2).catch(() => ({ last: {}, per: {}, ents: [] })),
         D.ym(env, "GetIVR2Dir", { path: "ivr2:" + D.PM(p) }).catch(() => ({})), D.ym(env, "GetIVR2Dir", { path: "ivr2:" + D.PM(p) + "/Old" }).catch(() => ({})),
-        D.kvGet(env, "approved", {}), D.rsvpLoad(env).catch(() => ({})), D.kvGet(env, "dashnotes", { msg: {}, member: {} }), D.listPhones(env, "general").catch(() => []), D.listPhones(env, "admins").catch(() => []), membersList(env, D),
+        D.kvGet(env, "approved", {}), D.rsvpLoad(env).catch(() => ({})), D.kvGet(env, "dashnotes", { msg: {}, member: {} }), D.listPhones(env, "general").catch(() => []), D.listPhones(env, "admins").catch(() => []), membersList(env, D), D.kvGet(env, "aliases", {}),
       ]);
       const person = people.find(x => x.p === p) || null, w = watch[p], mstat = members.find(e => e.phone === p);
-      const msgs = Object.entries(archive).filter(([, a]) => a && a.p === p).map(([k, a]) => ({ id: k.replace(".wav", ""), d: a.d, t: a.t || "", s: a.s })).sort((a, b) => parseInt(b.id) - parseInt(a.id));
+      // מספרים מקושרים: בכרטיס של החבר – כל המספרים שלו; בכרטיס של מספר נוסף – הפניה לחבר
+      const alt = person ? Object.keys(aliases).filter(k => aliases[k] === p) : [], mainOf = aliases[p] && people.some(y => y.p === aliases[p]) ? aliases[p] : "", mine = new Set([p, ...alt]);
+      const msgs = Object.entries(archive).filter(([, a]) => a && mine.has(a.p)).map(([k, a]) => ({ id: k.replace(".wav", ""), d: a.d, t: a.t || "", s: a.s })).sort((a, b) => parseInt(b.id) - parseInt(a.id));
       const pmFiles = d => (d.files || []).filter(f => /^\d+\.(wav|tts)$/.test(f.name)).map(f => ({ name: f.name, date: f.date || f.mtime || "", dur: +f.duration || 0 }));
-      const calls = lg.ents.filter(e => e.p === p).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 60).map(e => ({ t: e.t, x: e.x, f: e.f, l: speakerFolder(D, e.f) }));
+      const calls = lg.ents.filter(e => mine.has(e.p)).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 60).map(e => ({ t: e.t, x: e.x, f: e.f, l: speakerFolder(D, e.f), p: e.p }));
       return json({
-        p, n: nm[p] || "", person, admin: admins.includes(p) || p === D.OWNER, general: general.includes(p), tz: mstat ? (mstat.active ? "on" : "off") : "none",
+        p, n: nmAll[p] || "", person, alt, mainOf, admin: admins.includes(p) || p === D.OWNER, general: general.includes(p), tz: mstat ? (mstat.active ? "on" : "off") : "none",
         muted: w && w.hold && (!w.until || w.until > now) ? (w.until ? D.ilAt(w.until).slice(0, 16) : "ללא הגבלה") : "", blocked: blocked.includes(p), retort: retort.includes(p), strict: strict.includes(p),
         rsvp: rsvp[p] || null, approved: approved[p] || null, ads: ads[p] || [], note: (notes.member || {})[p] || null,
-        msgs: msgs.slice(0, 100), msgTotal: msgs.length, conv: conv.filter(c => c.p === p).slice(-60).reverse(), profile: profiles[p] || Object.values(profiles).find(x => x && (x.phones || []).includes(p)) || null, memory: mem, talk: ((facts || {}).talk || {})[p] || "",
-        calls, callsMonth: new Set(lg.ents.filter(e => e.p === p && e.t.startsWith(D.nowIL().slice(0, 7))).map(e => e.id)).size, last: lg.last[p] || "", pm: pmFiles(pmDir), pmOld: pmFiles(pmOld).slice(-20), now: D.nowIL(),
+        msgs: msgs.slice(0, 100), msgTotal: msgs.length, conv: conv.filter(c => mine.has(c.p)).slice(-60).reverse(), profile: profiles[p] || Object.values(profiles).find(x => x && (x.phones || []).includes(p)) || null, memory: mem, talk: ((facts || {}).talk || {})[p] || "",
+        calls, callsMonth: new Set(lg.ents.filter(e => mine.has(e.p) && e.t.startsWith(D.nowIL().slice(0, 7))).map(e => e.id)).size, last: [p, ...alt].map(x => lg.last[x] || "").sort().pop() || "", pm: pmFiles(pmDir), pmOld: pmFiles(pmOld).slice(-20), now: D.nowIL(),
       });
     }
     case "pm_delete": { // מחיקת הודעה מהתיבה האישית של חבר
@@ -799,9 +802,9 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     case "members_csv": {
       const [people, mem, admins, rsvp, lg] = await Promise.all([D.peopleList(env), membersList(env, D), D.listPhones(env, "admins").catch(() => []), D.rsvpLoad(env).catch(() => ({})), callLog(env, D, 1).catch(() => ({ last: {}, per: {} }))]);
       const mstat = Object.fromEntries(mem.map(e => [e.phone, e.active])), codes = Object.fromEntries(people.map(p => [p.p, p.c]));
-      const phones = [...new Set([...Object.keys(nm), ...mem.map(e => e.phone), ...people.map(p => p.p)])].sort((a, b) => (nm[a] || "תתת").localeCompare(nm[b] || "תתת", "he"));
+      const phones = [...new Set([...Object.keys(nm), ...mem.map(e => e.phone), ...people.map(p => p.p)])].sort((a, b) => (nmAll[a] || "תתת").localeCompare(nmAll[b] || "תתת", "he"));
       const rows = [["שם", "טלפון", "קוד", "צינתוקים", "מנהל", "נרשם לאירוע", "שיחות החודש", "כניסה אחרונה"]];
-      for (const p of phones) rows.push([nm[p] || "", p, codes[p] || "", mstat[p] === true ? "פעיל" : mstat[p] === false ? "חסם" : "לא ברשימה", admins.includes(p) || p === D.OWNER ? "כן" : "", rsvp[p] ? "כן" : "", lg.per[p] || 0, lg.last[p] || ""]);
+      for (const p of phones) rows.push([nmAll[p] || "", p, codes[p] || "", mstat[p] === true ? "פעיל" : mstat[p] === false ? "חסם" : "לא ברשימה", admins.includes(p) || p === D.OWNER ? "כן" : "", rsvp[p] ? "כן" : "", lg.per[p] || 0, lg.last[p] || ""]);
       return csvResp(rows, `members-${D.nowIL().slice(0, 10)}.csv`);
     }
     case "members_import": { // שורות {p, n}: חדש – מצטרף (כמו הוספה ידנית), קיים עם שם אחר – שינוי שם
@@ -827,6 +830,27 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       await D.log(env, `מנהל ${who(admin)} ${body.on ? "הוסיף" : "הסיר"} מ${VIA} את ${who(p)} ${body.on ? "ל" : "מ"}רשימת ${list === "retort" ? "התגובה העוקצנית" : "הפיקוח המוגבר"}`);
       return ok({ list: next });
     }
+    case "aliases": { // מספר נוסף של חבר: מקבל את השם שלו, והכרטיס מאחד את ההודעות והשיחות של כל המספרים
+      const p = String(body.phone || "").replace(/\D/g, ""), x = String(body.extra || "").replace(/\D/g, "");
+      if (!isPhone(p) || !isPhone(x) || p === x) return json({ error: "מספר לא תקין" }, 400);
+      const people = await D.peopleList(env), me = people.find(y => y.p === p); if (!me) return json({ error: "החבר לא ברשימה" }, 404);
+      const al = await D.kvGet(env, "aliases", {});
+      if (body.on) {
+        if (x === D.LINE_PHONE) return json({ error: "זה המספר של הקו" }, 400);
+        if (al[p]) return json({ error: "המספר הזה עצמו מקושר לחבר אחר" }, 409);
+        if (people.some(y => y.p === x)) return json({ error: "המספר " + x + " הוא חבר נפרד (" + who(x) + "). צריך להסיר אותו מהקבוצה קודם" }, 409);
+        if (al[x] && al[x] !== p) return json({ error: "המספר כבר מקושר ל" + who(al[x]) }, 409);
+        if (Object.values(al).includes(x)) return json({ error: "למספר הזה יש מספרים מקושרים משלו" }, 409);
+        if (Object.values(al).filter(m => m === p).length >= 5) return json({ error: "אפשר עד 5 מספרים נוספים לחבר" }, 400);
+        al[x] = p;
+      } else {
+        if (al[x] !== p) return json({ error: "המספר לא מקושר לחבר הזה" }, 404);
+        delete al[x];
+      }
+      await env.KV.put("aliases", JSON.stringify(al)); await D.saveNames(env, people);
+      await D.log(env, `מנהל ${who(admin)} ${body.on ? "קישר" : "ניתק"} מ${VIA} את המספר ${x} ${body.on ? "ל" : "מ"}${me.n} (${p})`);
+      return ok({ extra: Object.keys(al).filter(k => al[k] === p) });
+    }
     case "codes": { // קוד זיהוי לתפריט ההודעות האישיות
       const p = String(body.phone || "").replace(/\D/g, ""), code = String(body.code || "").replace(/\D/g, "").padStart(2, "0").slice(-2);
       if (!isPhone(p) || !/^\d{2}$/.test(code)) return json({ error: "קוד צריך להיות שתי ספרות" }, 400);
@@ -845,7 +869,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         return ok({ ads });
       }
       const ads = await D.kvGet(env, "ads", {});
-      return json({ names: nm, ads: Object.entries(ads).map(([p, list]) => ({ p, n: who(p), list })), yossi: (await env.KV.get("yossiad")) !== "off" });
+      return json({ names: nmAll, ads: Object.entries(ads).map(([p, list]) => ({ p, n: who(p), list })), yossi: (await env.KV.get("yossiad")) !== "off" });
     }
 
     // ---------- הודעות ----------
@@ -875,7 +899,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
         const num = String(await D.nextFileNum(env, D.ALL)).padStart(3, "0"); await D.ymUpload(env, `${D.ALL}/${num}.wav`, bytes);
         const ops = [{ mv: [`${D.ALL}/${num}.wav`, `/DeletedByAdmin/up-${num}.wav`] }];
         const from = String(body.phone || "").replace(/\D/g, ""), ar = await D.kvGet(env, "archive", {});
-        ar[num + ".wav"] = { p: isPhone(from) ? from : "", n: nm[from] || "", d: D.nowIL().replace(/^(\d{4})-(\d{2})-(\d{2}) /, "$3/$2/$1 "), t: note, s: note ? "g" : "a", up: true }; await env.KV.put("archive", JSON.stringify(ar));
+        ar[num + ".wav"] = { p: isPhone(from) ? from : "", n: nmAll[from] || "", d: D.nowIL().replace(/^(\d{4})-(\d{2})-(\d{2}) /, "$3/$2/$1 "), t: note, s: note ? "g" : "a", up: true }; await env.KV.put("archive", JSON.stringify(ar));
         await D.pushUndo(env, `העלאת הודעה ${num} מהדפדפן`, ops);
         // חשובה: אותו מסלול כמו "העברה לחשובות" (העתקה לחשובות, צינתוק לכולם, undo). רגילה: צינתוק לרשימת הרגילות
         let msg = "";
@@ -937,7 +961,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     case "export_transcripts": {
       const ar = await D.kvGet(env, "archive", {}), notes = (await D.kvGet(env, "dashnotes", { msg: {} })).msg || {};
       const rows = [["מספר", "תאריך", "שם", "טלפון", "סוג תמלול", "תמלול", "הערת מנהל"]];
-      for (const [k, a] of Object.entries(ar).sort((x, y) => parseInt(y[0]) - parseInt(x[0]))) rows.push([k.replace(".wav", ""), a.d || "", a.n || nm[a.p] || "", a.p || "", a.s === "g" ? "מלא" : a.s === "a" ? "אוטומטי" : "", a.t || "", (notes[k.replace(".wav", "")] || {}).t || ""]);
+      for (const [k, a] of Object.entries(ar).sort((x, y) => parseInt(y[0]) - parseInt(x[0]))) rows.push([k.replace(".wav", ""), a.d || "", a.n || nmAll[a.p] || "", a.p || "", a.s === "g" ? "מלא" : a.s === "a" ? "אוטומטי" : "", a.t || "", (notes[k.replace(".wav", "")] || {}).t || ""]);
       return csvResp(rows, `transcripts-${D.nowIL().slice(0, 10)}.csv`);
     }
 
@@ -1007,7 +1031,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       if (body.op === "rsvp_add" || body.op === "rsvp_remove") {
         const p = String(body.phone || "").replace(/\D/g, ""); if (!isPhone(p)) return json({ error: "מספר לא תקין" }, 400);
         const list = await D.rsvpLoad(env);
-        if (body.op === "rsvp_add") list[p] = { n: String(body.name || nm[p] || p).trim().slice(0, 40), ts: D.nowIL().slice(0, 16) }; else delete list[p];
+        if (body.op === "rsvp_add") list[p] = { n: String(body.name || nmAll[p] || p).trim().slice(0, 40), ts: D.nowIL().slice(0, 16) }; else delete list[p];
         await D.rsvpSave(env, list);
         await D.log(env, `מנהל ${who(admin)} ${body.op === "rsvp_add" ? "רשם" : "הסיר"} מ${VIA} את ${who(p)} ${body.op === "rsvp_add" ? "ל" : "מ"}${cur.title}`);
         return ok({ count: Object.keys(list).length });
@@ -1022,19 +1046,19 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
     }
     case "rsvp_csv": {
       const [ev, list] = await Promise.all([D.curEvent(env), D.rsvpLoad(env)]);
-      const rows = [["שם", "טלפון", "נרשם"], ...Object.entries(list).sort((a, b) => (a[1].ts > b[1].ts ? 1 : -1)).map(([p, x]) => [x.n, p, x.ts]), [], ["לא נרשמו"], ...Object.keys(nm).filter(p => !list[p]).map(p => [nm[p], p, ""])];
+      const rows = [["שם", "טלפון", "נרשם"], ...Object.entries(list).sort((a, b) => (a[1].ts > b[1].ts ? 1 : -1)).map(([p, x]) => [x.n, p, x.ts]), [], ["לא נרשמו"], ...Object.keys(nm).filter(p => !list[p]).map(p => [nmAll[p], p, ""])];
       return csvResp(rows, `event-rsvp-${D.nowIL().slice(0, 10)}.csv`);
     }
 
     // ---------- זמן אמת, דוחות, ניתוח, ניטור ----------
     case "pulse": { // דופק קל לפולינג: מי בקו, כמה ממתינות, מספר ההודעה האחרונה
       const [online, counts, joins, last] = await Promise.all([D.onlineNow(env).then(x => x.calls).catch(() => []), Promise.all(D.PENDING_ORDER.map(k => D.pendingFiles(env, D.REVIEW[k].folder).then(f => f.length).catch(() => 0))), D.pendingFiles(env, D.REVIEW.join.folder).then(f => f.length).catch(() => 0), D.nextFileNum(env, D.ALL).catch(() => 0)]);
-      return json({ now: D.nowIL(), online: online.map(c => ({ ...c, n: nm[c.p] || "" })), pending: counts.reduce((a, b) => a + b, 0), joins, lastMsg: Math.max(0, last - 1) });
+      return json({ now: D.nowIL(), online: online.map(c => ({ ...c, n: nmAll[c.p] || "" })), pending: counts.reduce((a, b) => a + b, 0), joins, lastMsg: Math.max(0, last - 1) });
     }
     case "calls": { // ציר זמן של שיחות ביום מסוים
       const day = /^\d{4}-\d{2}-\d{2}$/.test(q("day")) ? q("day") : D.nowIL().slice(0, 10);
       const lg = await callLog(env, D, 1, [day.slice(0, 7)]).catch(() => ({ ents: [] }));
-      const ents = lg.ents.filter(e => e.t.startsWith(day)).sort((a, b) => (a.t < b.t ? -1 : 1)).map(e => ({ p: e.p, n: nm[e.p] || "", t: e.t.slice(11, 16), x: e.x.slice(0, 5), f: e.f, l: speakerFolder(D, e.f) }));
+      const ents = lg.ents.filter(e => e.t.startsWith(day)).sort((a, b) => (a.t < b.t ? -1 : 1)).map(e => ({ p: e.p, n: nmAll[e.p] || "", t: e.t.slice(11, 16), x: e.x.slice(0, 5), f: e.f, l: speakerFolder(D, e.f) }));
       return json({ day, ents, callers: new Set(ents.map(e => e.p)).size });
     }
     case "report": { // דוח חודשי (עם השוואה לחודש הקודם)
@@ -1047,7 +1071,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const impN = (imp.files || []).filter(f => /^\d+\.wav$/.test(f.name) && inMonth(f.mtime || f.date, m)).length;
       const days = Object.keys(cur.byDay).sort(), byWeekday = Array(7).fill(0); for (const d of days) byWeekday[new Date(d + "T00:00:00Z").getUTCDay()] += cur.byDay[d];
       const callers = new Set(Object.keys(cur.per)).size, callersPrev = new Set(Object.keys(prev.per)).size;
-      const active = Object.keys(nm).filter(p => cur.per[p]).length, silent = Object.keys(nm).filter(p => !cur.per[p]).map(p => ({ p, n: nm[p] }));
+      const active = Object.keys(nm).filter(p => cur.per[p]).length, silent = Object.keys(nm).filter(p => !cur.per[p]).map(p => ({ p, n: nmAll[p] }));
       return json({ month: m, prev: prevKey, calls: cur.total, callsPrev: prev.total, callers, callersPrev, msgs, msgsPrev, imp: impN, conv: convN, convPrev, members: Object.keys(nm).length, active, silent,
         byDay: days.map(d => ({ d, n: cur.byDay[d] })), byHour: cur.byHour, byWeekday, top: Object.entries(cur.per).map(([p, n]) => ({ p, n: who(p), calls: n })).sort((a, b) => b.calls - a.calls).slice(0, 15),
         byFolder: Object.entries(cur.byFolder).reduce((acc, [f, n]) => { const l = speakerFolder(D, f); acc[l] = (acc[l] || 0) + n; return acc; }, {}), now: D.nowIL() });
@@ -1085,7 +1109,7 @@ async function api2(req, env, ctx, u, name, D, auth, body, nm, who, admin, VIA, 
       const files = (imp.files || []).filter(f => /^\d+\.wav$/.test(f.name)).map(f => ({ f: f.name, t: D.sortable(f.mtime || f.date), size: +f.size || 0 })).sort((a, b) => (a.t < b.t ? 1 : -1)).slice(0, 12);
       const bySize = {}; for (const [k, a] of Object.entries(archive)) if (a && a.t) bySize[k] = a;
       const all = Object.keys(nm);
-      return json({ list: files.map(x => { const heard = [...new Set(lg.imp11.filter(e => e.t >= x.t).map(e => e.p))]; return { f: x.f, t: x.t, heard: heard.map(p => ({ p, n: who(p) })), not: all.filter(p => !heard.includes(p)).map(p => ({ p, n: nm[p] })) }; }), total: all.length });
+      return json({ list: files.map(x => { const heard = [...new Set(lg.imp11.filter(e => e.t >= x.t).map(e => e.p))]; return { f: x.f, t: x.t, heard: heard.map(p => ({ p, n: who(p) })), not: all.filter(p => !heard.includes(p)).map(p => ({ p, n: nmAll[p] })) }; }), total: all.length });
     }
 
     // ---------- התראות תקלה, יומן פעולות, גיבויים אוטומטיים, סקרים ----------

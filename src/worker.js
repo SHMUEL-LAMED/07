@@ -7,7 +7,7 @@ const P = { problem: "/PendingProblem", general: "/PendingGeneral", demoted: "/P
 const FLAG_TEMPLATE = "/FlagTemplate/000.wav";
 const FLAG_TARGET = { NImportant: "1/1", NPromoted: "1/1", NRegular: "1/2" };
 const MODELS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.8-flash"];
-let used = 0, NAMES_CACHE = {}; // מונה פניות החוצה (לשרת החינמי יש מגבלה של 50 לכל הרצה)
+let used = 0, NAMES_CACHE = {}, ALIASES = {}; // מונה פניות החוצה (לשרת החינמי יש מגבלה של 50 לכל הרצה)
 
 async function ym(env, method, params = {}) {
   // שמירת שבת וחג: צינתוק בזמן קודש לא נשלח, אלא נשמר ויוצא במוצאי שבת או חג
@@ -74,7 +74,7 @@ async function tzRetryRun(env) {
   await env.KV.put("tz_retry", JSON.stringify(left.slice(-30)));
 }
 // ---------- גיבוי יומי של ה-KV (אותם מפתחות כמו בגיבוי הידני בדף הניהול), 7 ימים אחרונים ----------
-const AUTO_BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "facts", "dashnotes", "joinmap", "demap", "polls"];
+const AUTO_BACKUP_KEYS = ["people", "names_over", "aliases", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "facts", "dashnotes", "joinmap", "demap", "polls"];
 async function dailyBackup(env) {
   const day = nowIL().slice(0, 10);
   if ((await env.KV.get("autobak_last")) === day) return;
@@ -1108,7 +1108,12 @@ async function checkNow(env, phone, kind) {
 const names0 = env => { try { return JSON.parse(env.NAMES || "{}"); } catch { return {}; } };
 // השמות מהגדרות השרת, ועליהם שינויים שנעשו דרך העוזר (שם חדש, חבר שהצטרף)
 const names = env => Object.keys(NAMES_CACHE).length ? NAMES_CACHE : names0(env);
-async function loadNames(env) { NAMES_CACHE = { ...names0(env), ...(env.KV ? await kvGet(env, "names_over", {}) : {}) }; }
+async function loadNames(env) {
+  const [over, al] = env.KV ? await Promise.all([kvGet(env, "names_over", {}), kvGet(env, "aliases", {})]) : [{}, {}];
+  NAMES_CACHE = { ...names0(env), ...over }; ALIASES = al;
+}
+// החברים עצמם, בלי המספרים הנוספים שלהם (לרשימות, ספירות וסטטיסטיקה)
+const memberNames = env => { const nm = names(env), out = {}; for (const p of Object.keys(nm)) if (!(ALIASES[p] && nm[ALIASES[p]])) out[p] = nm[p]; return out; };
 async function kvGet(env, k, d) { try { return (await env.KV.get(k, "json")) || d; } catch { return d; } }
 // Whisper לא מבין טוב את ההקלטות הטלפוניות בעברית, לכן הארכיון מתומלל רק ב-Gemini.
 // בלילה (01:00-07:00) משתמשים במה שנשאר מהמכסה היומית, שממילא מתאפסת בעשר בבוקר
@@ -2156,11 +2161,16 @@ record_no_save_if_time_little=2
 record_cancel_goto=/0
 record_end_goto=/0
 `;
+// מספרים נוספים של חבר (KV "aliases": מספר נוסף → המספר הראשי) מקבלים את השם שלו
 async function saveNames(env, people) {
   await env.KV.put("people", JSON.stringify(people));
   const over = {}; for (const p of people) over[p.p] = p.n;
+  // מספר נוסף שהפך לחבר בעצמו – הקישור נמחק. קישור של חבר שהוסר נשמר (לביטול ההסרה) אבל לא חל
+  const al0 = await kvGet(env, "aliases", {}), al = {};
+  for (const [x, m] of Object.entries(al0)) if (!over[x]) { al[x] = m; if (over[m]) over[x] = over[m]; }
+  if (Object.keys(al).length !== Object.keys(al0).length) await env.KV.put("aliases", JSON.stringify(al));
   await env.KV.put("names_over", JSON.stringify(over));
-  NAMES_CACHE = { ...NAMES_CACHE, ...over };
+  NAMES_CACHE = { ...names0(env), ...over }; ALIASES = al;
 }
 
 // ---------- משימות רקע (כל ריצה קבועה מבצעת כמה צעדים) ----------
@@ -2261,10 +2271,11 @@ async function lineStats(env) {
   }
   const who = p => nm[p] || p;
   const todayPh = [...new Set(Object.values(calls))];
-  const quiet = Object.keys(nm).filter(p => !last[p] || last[p] < weekAgo).map(who);
+  const mem = Object.keys(nm).filter(p => !(ALIASES[p] && nm[ALIASES[p]])), lastOf = p => Object.keys(ALIASES).filter(x => ALIASES[x] === p).reduce((t, x) => (last[x] || "") > t ? last[x] : t, last[p] || "");
+  const quiet = mem.filter(p => !lastOf(p) || lastOf(p) < weekAgo).map(who);
   let text = `סטטיסטיקה מהיומנים של ימות (החודש): היום היו ${Object.keys(calls).length} שיחות מ-${todayPh.length} מתקשרים: ${todayPh.map(who).join(", ") || "אף אחד"}. היום דיברו עם העוזר: ${[...bot].map(who).join(", ") || "אף אחד"}. חברים שלא נכנסו לקו בשבוע האחרון: ${quiet.join(", ") || "אין"}.`;
   if (lastImp) text += ` ההודעה החשובה האחרונה (${lastImp.f}, ${lastImp.t}) נשמעה בשלוחת ההודעות החשובות על ידי: ${Object.keys(heard).map(who).join(", ") || "אף אחד עדיין"}.`;
-  text += " כניסה אחרונה של כל חבר: " + Object.keys(nm).map(p => `${who(p)} ${last[p] ? last[p].slice(5, 16) : "לא נכנס החודש"}`).join(", ") + ".";
+  text += " כניסה אחרונה של כל חבר: " + mem.map(p => `${who(p)} ${lastOf(p) ? lastOf(p).slice(5, 16) : "לא נכנס החודש"}`).join(", ") + ".";
   await env.KV.put("stats", JSON.stringify({ t: Date.now(), text }));
   return text;
 }
@@ -2787,7 +2798,7 @@ async function pollMenu(env, u, ctx) {
 }
 const reply = t => new Response(t, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 // מה שדף הניהול (src/dash.js) צריך מהקוד הזה
-const DASH = { alert, pollActive, AUTO_BACKUP_KEYS, ym, kvGet, names, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
+const DASH = { alert, pollActive, AUTO_BACKUP_KEYS, ym, kvGet, names, memberNames, log, nowIL, ilAt, sortable, isHoly, holyPeriods, onlineNow, listPhones, tzintuk, doAdmin, ADMIN_ACTS, describeAct, pendingFiles, REVIEW, PENDING_ORDER, applyReview, rsvpLoad, curEvent, peopleList, allFiles, nextFileNum, OWNER, LINE_PHONE, ALL, IMPORTANT, P, PM, WHERE,
   // לניהול המתקדם בדף הניהול (ספטמבר 2026): העלאות, קול, תזמונים, גיבוי, אירוע
   ymUpload, pcmToWav, to8k, pcmTrim, ttsLong, nextName, ensureDir, bgAdd, weeklySummary, rsvpSave, saveNames, peopleRegenSteps, postVoice, notify, processFlags, importantNotify, event9Menu, ini9Steps, withKvLock, releaseDeferred, pushUndo, wavSamples, DEFAULT_EVENT, VOICE_DIR, aiText, loadLine, retrieveContext, adminText };
 // קו שנוצר במפעל הקווים: מספר הקו ובעל הקו מגיעים מהמשתנים. בלי משתנים – ערכי שימחס כמו תמיד
