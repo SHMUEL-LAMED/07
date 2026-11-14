@@ -1,0 +1,27 @@
+name: פריסת חדשות שלוחה 1 (election-news-ivr)
+on:
+  push:
+    branches: [fix/news-content-filter]
+    paths: ['scripts/deploy-election-news.py', 'election-news/*.mjs']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: election-news-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s election-news -p 'test_*.py'
+      - run: node --test election-news/*.test.mjs
+      - run: for f in election-news/*.mjs; do node --check "$f"; done
+      - name: Deploy and verify
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python scripts/deploy-election-news.py
