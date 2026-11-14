@@ -1,4 +1,10 @@
+// Modesty filter (was live-only). Hebrew-aware word edges: a prefix letter (ו/ה/ב/ל/מ/ש/כ) is allowed
+// before a term, but a term inside another word is not, so "הימין" or "מינימום" or "רומניה" pass.
+const INAPPROPRIATE_FILTER=/(?<![א-ת])[ובהלמשכ]{0,2}(?:(?:מין|מיני|מינית|מיניים|מיניות|עירום|אונס|בגידה|רומן)(?![א-ת])|אינטימ|הטרד[הות]|תקיפ[הת]\s*מינית?(?![א-ת])|מעשה\s*מגונה|פדופיל|פורנו)/;
+export function isAppropriate(text){return !INAPPROPRIATE_FILTER.test(String(text||''));}
+
 export function isPoliticalPoll(title){
+ if(!isAppropriate(title))return false;
  const exit=/מדגם הבחירות|תוצאות המדגם|מדגמי הערוצים|מדגם.*(?:חדשות|ערוץ|כאן)|exit.?poll/i.test(String(title||''));
  if(exit)return Date.now()>=Date.parse('2026-10-27T22:00:00+02:00');
  const t=String(title||'');
@@ -57,7 +63,7 @@ const SOURCES = [
  {id:'c14',name:'ערוץ 14',url:'https://www.c14.co.il/',host:'c14.co.il',article:/\/article\/\d+/},
  {id:'i24',name:'i24NEWS',url:'https://www.i24news.tv/he/news/israel-elections-2026',host:'i24news.tv',article:/\/he\/news\/.+artc-/}
 ];
-export const relevant = text => /סקר|מנדטים|בחירות|אחוז החסימה|קמפיין|פריימריז/.test(text) && /מנדטים|בחירות|כנסת|אחוז החסימה|פריימריז|נתניהו|בנט|איזנקוט|לפיד|ליכוד|מפלג/.test(text) && !/בחירות (בארה[״"]ב|בארצות הברית|בצרפת|בבריטניה)/.test(text);
+export const relevant = text => isAppropriate(text) && /סקר|מנדטים|בחירות|אחוז החסימה|קמפיין|פריימריז/.test(text) && /מנדטים|בחירות|כנסת|אחוז החסימה|פריימריז|נתניהו|בנט|איזנקוט|לפיד|ליכוד|מפלג/.test(text) && !/בחירות (בארה[״"]ב|בארצות הברית|בצרפת|בבריטניה)/.test(text);
 export function freshPublication(date,now=Date.now()){const value=publicationMillis(date);return Number.isFinite(value)&&value<=now+600000&&now-value<=7*86400000;}
 export function recordingName(date,files,previous){
  if(previous&&files.some(f=>f.name===previous&&Number(f.duration)>0))return previous;
@@ -206,7 +212,7 @@ async function scanI24(env){
  for(const category of [483,487]){
   const items=await(await get('https://api.i24news.tv/v2/he/contents?'+new URLSearchParams({category:String(category),page:'1',limit:'10',countable:'1',inSlider:'0',sort:'-sortDate'}))).json();
   if(!Array.isArray(items))throw Error('invalid_i24_feed');
-  for(const item of items){if(!freshPublication(item.publishedAt))continue;try{const u=new URL(item.frontendUrl);if(u.hostname==='www.i24news.tv'&&u.pathname.startsWith('/he/news/'))candidates.set(u.href,item.title||'כתבת בחירות');}catch{}}
+  for(const item of items){if(!freshPublication(item.publishedAt)||!isAppropriate(item.title))continue;try{const u=new URL(item.frontendUrl);if(u.hostname==='www.i24news.tv'&&u.pathname.startsWith('/he/news/'))candidates.set(u.href,item.title||'כתבת בחירות');}catch{}}
  }
  const writes=[...candidates].map(([url,title])=>env.DB.prepare("INSERT OR IGNORE INTO items(url,source,title,status,created_at) VALUES(?,'i24',?,'queued',?)").bind(url,title.slice(0,500),Date.now()));if(writes.length)await env.DB.batch(writes);
  await env.DB.prepare('INSERT INTO sources(id,last_ok,error) VALUES(?,?,NULL) ON CONFLICT(id) DO UPDATE SET last_ok=excluded.last_ok,error=NULL').bind('i24',Date.now()).run();return candidates.size;
@@ -242,6 +248,7 @@ export async function processItem(env,item){
   }
   if(!freshPublication(date))throw Error('stale_or_missing_publication_date');
   title=cleanSpokenTitle(title);
+  if(!isAppropriate(title)){await env.DB.prepare("UPDATE items SET status='blocked',error='inappropriate_content' WHERE id=?").bind(item.id).run();return;}
   if(!media.length)throw Error('needs_source_adapter');
   const clipIndex=Number(new URL(item.url).hash.match(/^#media=(\d+)$/)?.[1]||0);if(clipIndex>=media.length)throw Error('missing_clip');
   const downloaded=await downloadMedia(media[clipIndex]);const audio=downloaded.blob;
@@ -319,6 +326,7 @@ async function collectorRoute(request,env,path){
  }
  if(path==='/collector/ingest'&&request.method==='POST'){
   let meta;try{meta=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(request.headers.get('X-Article-Meta')||''),c=>c.charCodeAt(0))));}catch{return Response.json({error:'invalid_metadata'},{status:400});}
+  if(!isAppropriate(meta.title))return Response.json({error:'content_not_allowed'},{status:422});
   const source=sourceFor(meta.url);if(!source||typeof meta.title!=='string'||meta.title.length>500)return Response.json({error:'invalid_source'},{status:400});
   if(!freshPublication(meta.publishedAt))return Response.json({error:'stale_or_missing_publication_date'},{status:400});
   const delivery=await activeDeliveryHealth(env);
