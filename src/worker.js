@@ -97,7 +97,10 @@ async function move(env, src, folder, action = "move") {
   return name;
 }
 async function log(env, line) {
-  const cur = await ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" });
+  const read = () => ym(env, "GetTextFile", { what: "ivr2:/AILog.txt" });
+  let cur = await read();
+  // קריאה שנכשלה היא לא בהכרח יומן ריק: מנסים שוב לפני שכותבים, כדי שתקלה רגעית לא תמחק את כל היומן
+  if (!cur || (cur.responseStatus !== "OK" && typeof cur.contents !== "string")) cur = await read();
   await ym(env, "UploadTextFile", { what: "ivr2:/AILog.txt", contents: (`[${nowIL()}] ${line}\n` + ((cur && cur.contents) || "")).slice(0, 60000) });
 }
 async function listPhones(env, list) {
@@ -274,7 +277,7 @@ async function aaiSTT(env, wav, maxWait = 12000) {
   if (!env.AAI_KEY) throw new Error("no aai");
   const id = await aaiSubmit(env, wav), t0 = Date.now();
   while (Date.now() - t0 < maxWait) {
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, Date.now() - t0 < 4000 ? 500 : 2000)); // אחרי 4 שניות דוגמים לאט יותר, כדי לא לשרוף את מכסת הפניות של הריצה
     const g = await aaiGet(env, id);
     if (g.status === "completed") return (g.text || "").trim();
     if (g.status === "error") throw new Error("aai " + g.error);
@@ -383,11 +386,15 @@ async function membersFor(env, list) {
 async function processFlags(env, budget = 44) {
   const s = await loadState(env);
   const done = [];
-  while (s.jobs.length && used < budget) {
+  let failed = 0;
+  while (s.jobs.length && used < budget && failed < 3) {
     const [phone, flag] = s.jobs.shift();
+    if (!(s.active[phone] || {})[flag]) {
+      const r = await ym(env, "FileAction", { action: "copy", what: "ivr2:" + FLAG_TEMPLATE, target: `ivr2:/${flag}/Phone/${phone}/000.wav` });
+      // העתקה שנכשלה לא נרשמת כדגל פעיל: המשימה לא נכנסת ל-done, ולכן נשארת בתור שבקובץ ותנוסה שוב בריצה הבאה
+      if (!r || r.responseStatus !== "OK") { failed++; continue; }
+    }
     s.active[phone] = s.active[phone] || {};
-    if (!s.active[phone][flag])
-      await ym(env, "FileAction", { action: "copy", what: "ivr2:" + FLAG_TEMPLATE, target: `ivr2:/${flag}/Phone/${phone}/000.wav` });
     s.active[phone][flag] = nowIL(); done.push([phone, flag, s.active[phone][flag]]);
   }
   if (!done.length) return;
@@ -585,7 +592,15 @@ async function postCheck(env, allName) {
 async function nextFileNum(env, folder) {
   let max = -1;
   for (let from = 0; from < 10000; from += 1000) {
-    const d = await ym(env, "GetIVR2Dir", { path: "ivr2:" + folder, filesFrom: from, filesLimit: 1000 });
+    const read = () => ym(env, "GetIVR2Dir", { path: "ivr2:" + folder, filesFrom: from, filesLimit: 1000 });
+    const bad = x => !x || (x.responseStatus !== "OK" && !Array.isArray(x.files));
+    let d = await read();
+    if (bad(d)) d = await read(); // תקלה רגעית: ניסיון נוסף לפני שמחליטים
+    if (bad(d)) {
+      // בדף הראשון זו כנראה תיקייה שעוד לא קיימת (ההעלאה יוצרת אותה): מתחילים מ-0. בדף המשך זו תקלה, ועוצרים כדי לא לדרוס קובץ קיים
+      if (from === 0) return 0;
+      throw new Error("קריאת התיקייה " + folder + " נכשלה: " + ((d && d.message) || "אין תשובה"));
+    }
     const fs = d.files || []; for (const f of fs) if (/^\d+\./.test(f.name)) max = Math.max(max, parseInt(f.name, 10));
     if (fs.length < 1000) break;
   }
@@ -597,6 +612,10 @@ async function runScheduled(env) {
   if (!due.length) return;
   if (await env.KV.get("schedlock")) return;
   await env.KV.put("schedlock", "1", { expirationTtl: 120 });
+  try { await runDue(env, jobs, due, now); }
+  finally { await env.KV.delete("schedlock").catch(() => {}); } // בלי זה תזמון של הדקה הבאה היה מחכה עד שהמנעול פג
+}
+async function runDue(env, jobs, due, now) {
   for (const j of due) { j.done = now; }
   await env.KV.put("scheduled", JSON.stringify(jobs));
   for (const j of due) {
@@ -1264,7 +1283,7 @@ function editDist(a, b) {
 // האם מילה מהשאלה היא (כנראה) חלק מהשם, גם עם תחילית (ל, ש, מ, ה, ו, ב, כ) ושגיאות קטנות
 function nameLike(word, part) {
   if (part.length < 3) return false;
-  const cands = [word, word.replace(/^[ובלמשהכ]{1,2}/, "")].filter(w => w.length >= 3);
+  const cands = [word, word.replace(/^[ובלמשהכ]/, ""), word.replace(/^[ובלמשהכ]{2}/, "")].filter(w => w.length >= 3);
   for (const w of cands) {
     if (w === part || (part.length >= 4 && w.includes(part))) return true;
     const a = soundKey(w), b = soundKey(part);
@@ -1442,7 +1461,7 @@ function whoText0(env, phone, line) {
 // ---------- מידע מהאינטרנט: חדשות (Google News), מסלולים (OpenStreetMap), וחיפוש כללי ----------
 const UA = { "User-Agent": "yemot-line-bot/1.0" };
 const getText = (u, ms = 6000) => fetch(u, { headers: UA, signal: AbortSignal.timeout(ms) }).then(r => r.ok ? r.text() : "").catch(() => "");
-const unxml = s => String(s || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;|&gt;/g, "").replace(/<[^>]+>/g, "").trim();
+const unxml = s => String(s || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]+>/g, "").replace(/[<>]/g, "").trim();
 // פריטים מ-RSS: כותרת, תיאור, קישור ותאריך
 function rssItems(x) {
   return [...String(x || "").matchAll(/<item[\s>][\s\S]*?<\/item>/g)].map(m => {
@@ -1893,7 +1912,9 @@ async function chat(env, u, ctx, persona = "tzibtzer") {
       await env.KV.put("post:" + callId + ":" + n, JSON.stringify({ text: post, important: !!res.important }), { expirationTtl: 1800 });
       confirm = `הנוסח שיעלה ${res.important ? "כהודעה חשובה" : "כהודעה רגילה"}: ${post}. לפרסום הקישו 1. לביטול הקישו 2`;
     }
-    const pre = full ? `id_list_message=${said}${plays}&` : "";
+    // גם כשמחכים לאישור (בלי תשובה מוקראת) ההשמעות שהתבקשו יוצאות – למשל שם המבקש להצטרף לפני האישור
+    const items = (said + plays).replace(/^\./, "");
+    const pre = items ? `id_list_message=${items}&` : "";
     return `${pre}read=${await speak(env, ctx, confirm, { budget: 7000, voice: V })}=C${n},no,1,1,10,No,no,no,,1.2`;
   }
   // אפשר לדלג על התשובה בהקשה על מקש: התשובה מושמעת בתוך קלט הקשה עם המתנה קצרה
@@ -1990,7 +2011,9 @@ async function worldText(env, loc) {
   }
   // תוצאה חלקית (שירות שלא ענה) נשמרת רק לשתי דקות, כדי שלא תיתקע לשעה שלמה
   const full = heb && heb.hebrew && zm && zm.times && cal && cal.items && wx && wx.daily;
-  await env.KV.put(key, t, { expirationTtl: full ? 3600 : 120 });
+  // אם השקיעה חלה בשעה הזו ועוד לא עברה, המטמון נשמר רק עד השקיעה – כדי שהתאריך העברי יתחלף בזמן
+  const hs = sun ? hhmm(sun) : "", toSun = hs.slice(0, 2) === now.slice(11, 13) && now.slice(11, 16) < hs ? Math.max(60, (+hs.slice(3) - +now.slice(14, 16)) * 60) : 3600;
+  await env.KV.put(key, t, { expirationTtl: full ? toSun : 120 });
   return t;
 }
 
@@ -2171,7 +2194,7 @@ async function runBg(env) {
   const t0 = Date.now();
   // מונה הפניות של הריצה הזו. המונה הכללי used משותף לבקשות שרצות במקביל ומתאפס בהן,
   // ולכן סופרים כאן בנפרד (איפוס באמצע נספר כאילו כל מה שנספר מאז הוא שלנו), כדי לא לעבור את מגבלת ה-50
-  let mine = 0, seen = used;
+  let mine = used, seen = used; // מתחילים ממה שהריצה כבר צרכה (למשל cron שבדק הודעות לפני כן), אחרת עוברים את המגבלה
   const tick = () => { mine += used >= seen ? used - seen : used; seen = used; return mine; };
   try {
     while (q.length && tick() < 38 && Date.now() - t0 < 20000) {

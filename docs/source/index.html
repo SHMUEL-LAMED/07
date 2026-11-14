@@ -1335,7 +1335,8 @@ document.body.appendChild(a); a.click(); a.remove();
 setTimeout(() => URL.revokeObjectURL(u), 5000);
 }
 function csvBlob(rows) {
-const cell = c => '"' + String(c === null || c === undefined ? "" : c).replace(/"/g, '""') + '"';
+// תא שמתחיל ב-= + - @ היה מתפרש באקסל כנוסחה – מקדימים לו גרש (מספרים וטלפונים נשארים כמו שהם)
+const cell = c => { let s = String(c === null || c === undefined ? "" : c); if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?[\d\s().,:-]*$/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
 return new Blob(["\ufeff" + (rows || []).map(r => (r || []).map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
 }
 // מריץ fn על מנות ברצף; מחזיר את תוצאות כל המנות
@@ -4858,7 +4859,8 @@ case "tz_phones":
 if (!await ok()) return false;
 if (!same()) return false;
 r = await api("tz_phones", { phones: a.phones || [] });
-toast(r && r.deferred ? "יישלח במוצאי שבת/חג" : "נשלח ל-" + ((r && r.count) || 0));
+if (r && !r.deferred && !r.test && r.sent === false) { toast("ימות לא אישרו את שליחת הצינתוק", true); return false; }
+toast(r && r.deferred ? "יישלח במוצאי שבת/חג" : r && r.test ? "מצב בדיקה: הצינתוק יוצא רק למנהלים שבין הנבחרים" : "נשלח ל-" + ((r && r.count) || 0));
 break;
 case "pm": {
 toast("יוצר את הקול…");
@@ -5130,7 +5132,7 @@ if (Auth.googleOk()) return u + "#g=" + Auth.google;
 return u;
 }
 // הקו שמולו עובד המפעל: בלשונית "קווים" – הקו הנוכחי; במרכז – קו המקור
-const fxLine = () => state.view === "line" && Line.cur ? Line.cur : SOURCE();
+const fxLine = () => !inHub() && state.view === "line" && Line.cur ? Line.cur : SOURCE();
 // איפה המשתמש עכשיו (לבדיקה אחרי המתנה ארוכה)
 const where = () => state.view + ":" + (state.view === "hub" ? state.hub : (Line.cur ? Line.cur.slug : "") + "/" + state.tab);
 // במרכז, 401 מקו לא מוצג בשום מקום אחר (needLine מטפל רק בקו הפתוח) – הודעה וחידוש גוגל
@@ -5407,6 +5409,7 @@ function needGoogle(msg) {
 if (!LEG().every(l => Auth.lineReady(l))) { Auth.renewGoogle(); throw new Error(msg || "יש לחדש את החיבור לגוגל ולנסות שוב"); }
 }
 async function saveAccess(email, slugs) {
+if (clientOf(email).blocked) throw new Error("החשבון מושהה. יש להחזיר לו את הגישה לפני שמשנים את הקווים שלו");
 needGoogle();
 const pre = await legacyState(email);
 await portalApi("access", { email, approved: true });
@@ -5605,7 +5608,8 @@ const r = await fxApi({ op: "preserve", slug, ymToken: token }, line) || {};
 if (!alive()) return;
 S.kept += +r.moved || 0;
 (r.failed || []).forEach(f => S.failed.push(typeof f === "string" ? f : JSON.stringify(f)));
-if (!r.left || !r.moved) break;
+if (!r.left) break;
+if (!r.moved || i === 29) { S.failed.push("נשארו " + r.left + " הודעות בשלוחה 1 שעוד לא הועברו"); break; }
 }
 if (S.failed.length) throw new Error("לא כל ההודעות שהיו בשלוחה 1 הועברו, ולכן ההעתקה נעצרה כדי לא לפגוע בהן");
 S.phase = "ivr"; S.round = 0;
@@ -5628,6 +5632,7 @@ S.written += (r.done || []).length;
 }
 const more = (r && (r.skipped || []).length) || (Array.isArray(p.next) && p.next.length);
 if (!more) break;
+if (i === 14) S.failed.push("לא כל השלוחות של התבנית נסרקו – כדאי להריץ את ההעתקה שוב");
 }
 // תיקיות שהשרת של הקו צריך (חלוקת שלוחה 1, תורים, ממתינות...) ותיקיות בלי הגדרות מהמקור – נוצרות ריקות
 S.phase = "dirs"; S.round = 0;
@@ -5652,7 +5657,7 @@ if (!alive()) return;
 S.audio += (r.copied || []).length; S.tts += +r.tts || 0;
 (r.failed || []).forEach(f => S.failed.push(typeof f === "string" ? f : JSON.stringify(f)));
 const left = r.left || [];
-if (left.length >= todo.length) break; // אין התקדמות – לא נתקעים בלולאה
+if (left.length >= todo.length && !(r.copied || []).length) break; // אין התקדמות (גם לא הועתק דבר) – לא נתקעים בלולאה
 todo = left;
 }
 // שמות החברים: מספרים שכבר רשומים בקווים אחרים מקבלים את השם שלהם (פעם אחת – שינוי אחר כך לא מסונכרן)
@@ -5899,7 +5904,9 @@ Modal.open({ title: 'החזרת המערכת של "' + name + '"', body: h`<div 
 draw();
 try {
 for (let i = 0; i < 40; i++) {
-const r = (String(token).trim() ? await fxApi({ op: "restore", slug, ymToken: String(token).trim() }, line) : await withTok(slug, "החזרת המערכת לפני ההסרה.", t => { token = t; return fxApi({ op: "restore", slug, ymToken: t }, line); })) || {};
+const rr = String(token).trim() ? await fxApi({ op: "restore", slug, ymToken: String(token).trim() }, line) : await withTok(slug, "החזרת המערכת לפני ההסרה.", t => { token = t; return fxApi({ op: "restore", slug, ymToken: t }, line); });
+if (rr === undefined) throw new Error("בלי הטוקן אי אפשר להחזיר את המערכת – הקו לא הוסר");
+const r = rr || {};
 S.done += +r.done || 0; S.left = +r.left || 0; S.notes.push(...(r.notes || []));
 draw();
 if (!S.left || !r.done) break;
@@ -7217,7 +7224,7 @@ fr.onload = () => res(String(fr.result || ""));
 fr.onerror = () => rej(new Error("לא ניתן לקרוא את הקובץ"));
 fr.readAsText(file);
 });
-const HEAD = /^(שם|name|טלפון|phone)$/i;
+const HEAD = /^(שם|name|טלפון|phone|קוד|צינתוקים|מנהל|נרשם לאירוע|שיחות החודש|כניסה אחרונה|פעיל|חסם|לא ברשימה|כן)$/i;
 const parseRows = text => {
 const out = [], seen = {};
 String(text).replace(/^﻿/, "").split(/\r?\n/).forEach(line => {
@@ -8688,11 +8695,12 @@ return { blocked: (e && e.message) || "x", errors: [], bg: [], cronAgo: null, la
 const renderHealth = hd => {
 const bg = arr(hd.bg), errors = arr(hd.errors);
 const hasCron = hd.cronAgo !== null && hd.cronAgo !== undefined;
-const cronV = hasCron ? "רצה עכשיו" : hd.lastJob ? fmtD(hd.lastJob) : "—";
+const cronLate = hasCron && hd.cronAgo > 300;
+const cronV = cronLate ? "לא רצה " + Math.round(hd.cronAgo / 60) + " דק׳" : hasCron ? "רצה עכשיו" : hd.lastJob ? fmtD(hd.lastJob) : "—";
 return h`<div class="stack">
 ${hd.blocked ? h`<div class="banner warn" role="status">${ico("alert")}<span>נתוני בריאות המערכת לא הגיעו לדפדפן. הנתונים יצאו מהשרת תקין, ונראה שנטפרי חוסם את התשובה הזו, כנראה בגלל התוכן שלה (שורות מהיומן וטקסטים בתור). שאר הלשונית עובד.</span></div>` : ""}
 <div class="tiles">
-${tile(cronV, hasCron ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", "sm good")}
+${tile(cronV, hasCron ? "ריצה קבועה (cron)" : "תזמון אחרון שיצא", cronLate ? "sm warn" : "sm good")}
 ${tile(bg.length, "משימות רקע בתור", bg.length > 20 ? "warn" : "")}
 ${tile(hd.pendingError || 0, "הודעות שלא נבדקו", hd.pendingError ? "warn" : "good")}
 ${tile(hd.deferred || 0, "צינתוקים שמחכים")}

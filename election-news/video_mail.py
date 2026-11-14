@@ -23,10 +23,13 @@ def analyze_frames(endpoint, frames):
     try:
         return c.worker(endpoint, '/news-video/blur-frames', json.dumps({'frames':frames}).encode(), {'Content-Type':'application/json'})
     except urllib.error.HTTPError as error:
-        try:
-            reason = json.loads(error.read(1024)).get('error', 'analysis_service_error')
-        except (ValueError, TypeError):
-            reason = 'analysis_service_error'
+        # c.worker already consumed the response body and kept the server's reason on the error.
+        reason = getattr(error, 'detail', '')
+        if not reason:
+            try:
+                reason = json.loads(error.read(1024)).get('error', 'analysis_service_error')
+            except (ValueError, TypeError, AttributeError):
+                reason = 'analysis_service_error'
         raise ValueError('blur_analysis_failed: ' + str(reason)[:180]) from None
 
 
