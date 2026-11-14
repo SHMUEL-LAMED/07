@@ -466,7 +466,7 @@ async function handleFile(env, f, kind) {
     const wav = await ym(env, "DownloadFile", { path: "ivr2:" + src });
     if (wav.length < 1000) throw new Error("הקובץ לא נמצא");
     v = await classify(env, wav);
-    if (typeof v.important !== "boolean" && typeof v.problem !== "boolean") throw new Error("תשובה לא תקינה מהבינה המלאכותית");
+    if (typeof v.important !== "boolean" || typeof v.problem !== "boolean") throw new Error("תשובה לא תקינה מהבינה המלאכותית");
     // אם בזמן הבדיקה ההודעה כבר טופלה במקום אחר, לא נוגעים בה
     if (!(await queueFiles(env, kind)).some(x => x.name === f.name)) return "כבר טופלה";
   }
@@ -1327,10 +1327,11 @@ function verifyQuotes(answer, corpus) {
   let removed = 0;
   const text = String(answer || "");
   // מירכאות בתוך מילה (רש"י, חז"ל) הן קיצור ולא ציטוט: מחליפים אותן בתו ניטרלי באותו אורך, כדי שהמיקומים לא יזוזו
-  const masked = text.replace(/([א-ת])["״]([א-ת])/g, "$1\u0001$2");
+  // מירכאה אחרי אות שימוש בודדת שאחריה מילה (ש"אמר...) היא פתיחת ציטוט ולא קיצור, ולכן לא מוסתרת
+  const masked = text.replace(/([א-ת])["״]([א-ת])(?![א-ת])|([א-ת]{2})["״]([א-ת])/g, "$1$3\u0001$2$4");
   // ציטוטים נבדקים על כל התשובה לפני החלוקה למשפטים, כך שגם ציטוט שנמשך על פני שני משפטים נבדק.
   // «...» נבדק מ-2 מילים, ומירכאות רגילות מ-3 מילים
-  const bad = [];
+  const bad = [], pairs = [...masked.matchAll(/«[^»]+»/g)].map(m => [m.index, m.index + m[0].length]);
   const check = (re, min) => { for (const m of masked.matchAll(re)) {
     const q = normHe(m[1].replace(/\u0001/g, '"')).trim();
     if (q.split(" ").length >= min && !corpus.includes(q)) bad.push([m.index, m.index + m[0].length]);
@@ -1342,7 +1343,8 @@ function verifyQuotes(answer, corpus) {
   for (const sent of masked.split(/(?<=[.!?])\s+/)) {
     const start = masked.indexOf(sent, pos), end = start + sent.length; pos = end;
     // מירכאה או « » שנשארו בלי זוג במשפט – סימן לציטוט שבור; משפט כזה נחשב לא מאומת
-    const lone = (sent.match(/[«»]/g) || []).length % 2 === 1;
+    // « » שייכים לזוג שלם (גם כזה שנמשך על שני משפטים) לא נחשבים בודדים
+    const lone = [...sent.matchAll(/[«»]/g)].filter(m => !pairs.some(([a, b]) => start + m.index >= a && start + m.index < b)).length % 2 === 1;
     if (bad.some(([a, b]) => a < end && b > start) || lone) { removed++; continue; }
     kept.push(text.slice(start, end));
   }

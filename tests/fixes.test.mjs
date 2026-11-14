@@ -39,3 +39,13 @@ test("unxml: HTML מקודד בתיאור RSS לא משאיר שאריות של 
   assert.equal(unxml("&lt;p&gt;hello&lt;/p&gt;"), "hello");
   assert.equal(unxml("<![CDATA[a &amp; b]]>"), "a & b");
 });
+test("verifyQuotes: ציטוט אחרי אות שימוש נבדק, קיצורים נשארים, וציטוט מאומת על שני משפטים לא נמחק", () => {
+  const { normHe, verifyQuotes } = extract("src/worker.js", ["normHe", "verifyQuotes"]);
+  const corpus = normHe("שלום לכולם. מה נשמע היום אצלכם");
+  assert.equal(verifyQuotes('הוא אמר ש"המצאה גמורה לחלוטין" אתמול. סוף.', corpus).removed, 1);
+  assert.equal(verifyQuotes('הוא אמר ש"שלום לכולם מה נשמע" אתמול. סוף.', corpus).removed, 0);
+  assert.equal(verifyQuotes('כך כתב רש"י על הפסוק. וגם חז"ל אמרו כך.', corpus).removed, 0);
+  assert.equal(verifyQuotes("הוא אמר «שלום לכולם. מה נשמע» וזהו. משפט שני.", corpus).removed, 0);
+  assert.equal(verifyQuotes("הוא אמר «דבר שלא נאמר מעולם» וזהו. משפט שני.", corpus).removed, 1);
+  assert.equal(verifyQuotes("הוא אמר «שלום לכולם וזהו. משפט שני.", corpus).removed, 1);
+});

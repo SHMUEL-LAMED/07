@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent / 'election-news'
 MODULES = ['collector-auth.mjs', 'poll-folder.mjs', 'source-feed.mjs', 'worker.mjs']
 # Live worker.mjs reviewed on 2026-11-14 (live-only modesty filter); also accept the repo version for re-runs.
 EXPECTED_LIVE = {'e9afb0e6661959e6b2326078180f926f0dbe779d69c4b2d4e17f1f3006471ea4',
+                 '9c3b7c45c282a0a9bd7e3743bab271b15a17aa332eb2b9828251713932641542',  # the version deployed from main on 2026-11-14 (PR 87)
                  hashlib.sha256((ROOT / 'worker.mjs').read_bytes()).hexdigest()}
 
 def call(path='', data=None, content_type=None):
