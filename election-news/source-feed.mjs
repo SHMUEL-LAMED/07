@@ -3,7 +3,9 @@ export function publicationMillis(raw){
  let value=raw.trim();
  if(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/.test(value)){
   value=value.replace(' ','T');const probe=new Date(value+'Z');if(!Number.isFinite(probe.getTime()))return NaN;
-  const zone=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Jerusalem',timeZoneName:'longOffset'}).formatToParts(probe).find(p=>p.type==='timeZoneName').value.replace('GMT','');value+=zone||'Z';
+  // The offset is taken at the real instant: the first guess reads the wall time as UTC, which is off by an hour near a DST change.
+  const offset=at=>new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Jerusalem',timeZoneName:'longOffset'}).formatToParts(at).find(p=>p.type==='timeZoneName').value.replace('GMT','')||'Z';
+  let zone=offset(probe);const first=Date.parse(value+zone);if(Number.isFinite(first))zone=offset(new Date(first));value+=zone;
  }
  return Date.parse(value);
 }

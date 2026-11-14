@@ -78,3 +78,15 @@ test("portal assign: לא משנה תפקיד שמנהל הקו קבע, ובבי
   assert.equal((await t.call("assign", { email: "v@x.com", lines: [] })).ok, true);
   assert.deepEqual(JSON.parse(t.stores.kvb.get("dash_emails")), [{ e: "v@x.com", role: "viewer" }]);
 });
+
+test("portal access: אישור (approved) לא מבטל השהיה – רק blocked:false מחזיר גישה", async () => {
+  const t = setup({ dash_emails: JSON.stringify([]) });
+  await t.KV.put("portal_approved:c@x.com", "1");
+  assert.equal((await t.call("access", { email: "c@x.com", blocked: true })).ok, true);
+  assert.equal(await t.KV.get("portal_blocked:c@x.com"), "1");
+  assert.equal((await t.call("access", { email: "c@x.com", approved: true })).ok, true);
+  assert.equal(await t.KV.get("portal_blocked:c@x.com"), "1");
+  assert.equal(t.stores.kvb.get("portal_blocked:c@x.com"), "1");
+  assert.equal((await t.call("access", { email: "c@x.com", blocked: false })).ok, true);
+  assert.equal(await t.KV.get("portal_blocked:c@x.com"), null);
+});

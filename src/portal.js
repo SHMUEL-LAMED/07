@@ -211,10 +211,12 @@ export async function portal(req, env, verifyGoogle) {
       await revokeClientSessions(env, email);
     }
     if (body.approved === true) {
+      // אישור לא מבטל השהיה: חשבון מושהה חוזר רק בבקשה מפורשת (blocked:false)
       await env.KV.put("portal_approved:" + email, "1");
-      await env.KV.delete("portal_blocked:" + email);
-      try { await syncClientBlock(env, lines, email, false); }
-      catch (e) { return reply({ error: String(e.message || "החשבון אושר, אך לא ניתן לעדכן את הגישה בקווים") }, 502); }
+      if (!await env.KV.get("portal_blocked:" + email)) {
+        try { await syncClientBlock(env, lines, email, false); }
+        catch (e) { return reply({ error: String(e.message || "החשבון אושר, אך לא ניתן לעדכן את הגישה בקווים") }, 502); }
+      }
     }
     if (body.blocked === false) {
       // השיוכים חוזרים רק לחשבון מאושר, אבל החסימה בקווים עצמם מוסרת תמיד (אחרת היא נשארת שם בלי שאפשר לראות אותה)

@@ -508,7 +508,8 @@ async function api(req, env, ctx, u, name, D, auth = {}) {
 // ============================================================================
 const BACKUP_KEYS = ["people", "names_over", "rules", "scheduled", "blocked", "watch", "retort", "strict", "ads", "event", "approved", "archive", "facts", "profiles", "dashnotes", "joinmap", "demap"];
 const b64dec = s => Uint8Array.from(atob(String(s || "").replace(/^data:[^,]*,/, "")), c => c.charCodeAt(0));
-const csvCell = v => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// תא שמתחיל ב-= + - @ היה מתפרש באקסל כנוסחה – מקדימים לו גרש (מספרים וטלפונים נשארים כמו שהם)
+const csvCell = v => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?[\d\s().,:-]*$/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 const csvResp = (rows, name) => new Response("﻿" + rows.map(r => r.map(csvCell).join(",")).join("\r\n"), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`, "Cache-Control": "no-store" } });
 const fileResp = (bytes, name, type = "application/octet-stream") => new Response(bytes, { headers: { "Content-Type": type, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`, "Cache-Control": "no-store" } });
 const MSG_FOLDERS = D => [...Object.values(D.REVIEW).map(r => r.folder), D.ALL, D.IMPORTANT, "/DeletedByAdmin"];

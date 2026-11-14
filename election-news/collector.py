@@ -312,7 +312,7 @@ def discover():
             data=reshet_data('https://13tv.co.il'+path);reshet_ok=True
             for item in walk(data.get('Content',{})):
                 if item.get('link') and item.get('title') and recent(item.get('publishDate')):
-                    link=urllib.parse.urljoin('https://13tv.co.il',item['link']);add(link,item['title']+' '+item.get('secondaryTitle',''))
+                    link=urllib.parse.urljoin('https://13tv.co.il',item['link']);add(link,str(item['title'])+' '+str(item.get('secondaryTitle') or ''))
                     if source(link)=='reshet' and canonical(link) in candidates:RESHET_ITEMS[canonical(link)]=item
         except Exception as e:print('source_failed','reshet',error_code(e),flush=True)
     if not reshet_ok:
@@ -477,7 +477,9 @@ def worker(endpoint,path,body=None,headers=None):
     try:return json.loads(fetch(endpoint+path,{'Authorization':'Bearer '+auth,**(headers or {})},body,timeout=100))
     except urllib.error.HTTPError as error:
         # Name the route and the server's reason; without them a failed run cannot be diagnosed.
-        print('worker_request_failed','/'.join(path.split('/')[:3]),error.code,worker_error_detail(error),flush=True)
+        # The body can be read only once: keep the reason on the error for callers that branch on it.
+        detail=worker_error_detail(error);error.detail=detail
+        print('worker_request_failed','/'.join(path.split('/')[:3]),error.code,detail,flush=True)
         raise
 
 def main():

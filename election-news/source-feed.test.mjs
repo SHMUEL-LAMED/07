@@ -13,3 +13,4 @@ test('feed ingestion excludes private hosts, credentials, old entries, bad IDs a
 });
 import {publicationMillis} from './source-feed.mjs';
 test('timezone-free publisher dates are interpreted in Israel rather than as newly uploaded dates',()=>{assert.equal(publicationMillis('2026-10-16 23:13:57'),Date.parse('2026-10-16T23:13:57+03:00'));assert.equal(Number.isNaN(publicationMillis(null)),true);});
+test('timezone-free dates near a DST change use the offset of the real instant',()=>{assert.equal(publicationMillis('2026-10-25T00:30:00'),Date.parse('2026-10-25T00:30:00+03:00'));assert.equal(publicationMillis('2026-03-27T01:30:00'),Date.parse('2026-03-27T01:30:00+02:00'));assert.equal(publicationMillis('2026-01-01 12:00'),Date.parse('2026-01-01T12:00:00+02:00'));});

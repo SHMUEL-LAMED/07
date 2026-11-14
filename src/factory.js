@@ -272,16 +272,17 @@ const dirOf = path => "ivr2:" + path;
 // start: מאיפה להמשיך את הסריקה (תור שנשמר בסבב הקודם). שומרים פנייה לכל קובץ שנמצא, כדי שיהיה תקציב להשוות אותו ליעד.
 // next: מה שנשאר לסרוק; deep: תיקיות עמוקות מ-MAX_DEPTH שלא נסרקו
 async function templateTree(env, D, bud, start) {
-  const out = [], dirs = [], queue = Array.isArray(start) && start.length ? start.slice() : [["/", 0]], seen = new Set(), deep = [];
+  const out = [], dirs = [], queue = Array.isArray(start) && start.length ? start.slice() : [["/", 0]], seen = new Set(), deep = [], retry = [];
   let cut = false;
   while (queue.length && out.length < MAX_DIRS) {
     if (bud.left < 2 + out.length || !bud.take(2)) break; // התקציב נגמר – ממשיכים בסבב הבא מ-next
     const [path, depth] = queue.shift();
     if (seen.has(path)) continue; seen.add(path);
     const d = await D.ym(env, "GetIVR2Dir", { path: "ivr2:" + path }).catch(() => null);
-    if (!d || !Array.isArray(d.dirs) && !ymOk(d)) { cut = true; continue; } // לא ידוע מה יש מתחת – לא להעמיד פנים שהעץ שלם
+    // לא ידוע מה יש מתחת – לא להעמיד פנים שהעץ שלם, והתיקייה חוזרת לסבב הבא (אחרת כל מה שמתחתיה לא היה מועתק)
+    if (!d || !Array.isArray(d.dirs) && !ymOk(d)) { cut = true; retry.push([path, depth]); continue; }
     const ini = await readIni(() => D.ym(env, "GetTextFile", { what: iniPath(path) }));
-    if (!ini.ok) cut = true;
+    if (!ini.ok) { cut = true; retry.push([path, depth]); }
     else if (ini.text.trim()) out.push({ path, contents: ini.text });
     else if (path !== "/") dirs.push(path); // תיקייה בלי הגדרות (למשל תיקיית אחסון) – נוצרת גם בקו החדש, ריקה
     for (const s of d.dirs || []) {
@@ -293,7 +294,7 @@ async function templateTree(env, D, bud, start) {
     }
   }
   // תיקיות עמוקות לא נחשבות "רק חלק": לחיצה נוספת לא תסרוק אותן (הן מסומנות כאזהרה בשורה של התיקייה שמעליהן)
-  return { files: out, dirs, truncated: cut || queue.length > 0, next: queue, deep };
+  return { files: out, dirs, truncated: cut || queue.length > 0, next: [...retry, ...queue], deep };
 }
 // המשך סריקת העץ בין לחיצות על "חיבור שלוחות": start – מאיפה הסבב הנוכחי התחיל, next – מאיפה הסבב הבא יתחיל.
 // מתקדמים רק אחרי כתיבה שלמה (או כשאין בסבב מה לכתוב), כדי שלחיצה חוזרת אחרי "ממתינות" תציג את אותן שלוחות
@@ -429,7 +430,9 @@ async function dirFiles(token, path, bud) {
   for (let from = 0; from < 10000; from += 1000) {
     if (!bud.take()) return { ok, files: all, cut: true };
     const d = await ymT(token, "GetIVR2Dir", from ? { path: dirOf(path), filesFrom: from } : { path: dirOf(path) }).catch(() => null);
-    if (!d || !ymOk(d)) return { ok, files: all };
+    // פנייה שנכשלה (או דף המשך שנכשל) אינה "התיקייה לא קיימת": מסמנים cut כדי שלא יפעלו על רשימה חסרה
+    if (!d || (from && !ymOk(d))) return { ok, files: all, cut: true };
+    if (!ymOk(d)) return { ok, files: all };
     ok = true;
     const f = (d.files || []).map(fileName);
     all.push(...f);
@@ -441,6 +444,7 @@ async function preserveStep(env, body, origin, D) {
   const { line, token } = await lineToken(env, body, D);
   const FROM = "/1", TO = "/1/2", bud = budget();
   const src = await dirFiles(token, FROM, bud);
+  if (src.cut) return { moved: 0, left: 1, failed: [`${FROM}: לא נקראה – לא הועבר דבר`] };
   if (!src.ok) return { moved: 0, left: 0, failed: [] }; // אין שלוחה 1 – אין מה להעביר
   const groups = new Map();
   for (const n of src.files) { const m = n.match(MSG_FILE); if (m) (groups.get(m[1]) || groups.set(m[1], []).get(m[1])).push(n); }
@@ -494,6 +498,7 @@ async function structureStep(env, body, origin, D) {
     if (!bud.take(3)) { left.push(...paths.slice(i)); break; }
     const d = await ymT(token, "GetIVR2Dir", { path: dirOf(path) }).catch(() => null);
     if (d && ymOk(d)) continue; // כבר קיימת
+    if (!d) { failed.push(`${path}: לא ניתן לבדוק אם קיימת – לא נוצרה`); continue; } // פנייה שנכשלה אינה "לא קיימת" (אחרת ext.ini קיים היה נמחק)
     const r = await ymT(token, "UpdateExtension", { path: dirOf(path) }).catch(e => ({ message: e.message }));
     if (!ymOk(r)) { failed.push(`${path}: ${(r && r.message) || "לא נוצרה"}`); continue; }
     // תיקייה בלי הגדרות במקור – גם בקו החדש בלי ext.ini (אחרת היא נשמעת כשלוחה)
@@ -573,8 +578,12 @@ async function audioStep(env, body, origin, D) {
   await journal(env, line.slug, [...copied.map(path => ({ t: "file", path })),
     ...tts.flatMap(t => ["wav", "tts"].map(e => ({ t: "file", path: `${t.path}/M1000.${e}` })))]);
   if (tts.length && line.kv) {
-    const cur = JSON.parse(await kvGetRemote(env, line.kv, "bgjobs").catch(() => null) || "[]");
-    const fresh = tts.filter(t => !cur.some(c => c && c.k === "tts" && c.path === t.path && c.name === t.name));
+    // קריאה שנכשלה אינה תור ריק: לא כותבים, כדי לא לדרוס משימות שכבר מחכות בקו החדש
+    const raw = await kvGetRemote(env, line.kv, "bgjobs").catch(() => undefined);
+    let cur = null;
+    if (raw !== undefined) { try { const j = JSON.parse(raw || "[]"); if (Array.isArray(j)) cur = j; } catch {} }
+    if (!cur) failed.push("תור הרקע של הקו החדש לא נקרא – הפתיחים בקול העוזר לא נוספו לתור");
+    const fresh = !cur ? [] : tts.filter(t => !cur.some(c => c && c.k === "tts" && c.path === t.path && c.name === t.name));
     if (fresh.length) await kvPut(env, line.kv, "bgjobs", JSON.stringify([...cur, ...fresh]));
   }
   if (copied.length || tts.length) await D.log(env, `מפעל הקווים: קריינות לקו "${line.name}" – הועתקו ${copied.length}, נוצרים בקול העוזר ${tts.length}`).catch(() => {});
@@ -643,7 +652,7 @@ async function namesStep(env, body, origin, D) {
   const daat = await env.KV.get("portal_kv:yemot-ai-daat").catch(() => null);
   if (daat) take(parse(await kvGetRemote(env, daat, "names_over").catch(() => null)));
   for (const l of reg.slice(0, 25)) if (l.slug !== line.slug && l.kv) take(parse(await kvGetRemote(env, l.kv, "names_over").catch(() => null)));
-  const cur = parse(await kvGetRemote(env, line.kv, "names_over").catch(() => null));
+  const cur = parse(await kvGetRemote(env, line.kv, "names_over")); // 404 מחזיר null; שגיאה אחרת עוצרת בלי לדרוס שמות קיימים
   const added = {};
   for (const p of phones) if (!cur[p] && pool[p]) added[p] = pool[p];
   const n = Object.keys(added).length;
