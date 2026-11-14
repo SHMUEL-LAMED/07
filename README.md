@@ -27,3 +27,8 @@ wrangler deploy
 - סודות רק ב-Worker Secrets של Cloudflare, לעולם לא בקוד או בהיסטוריית Git.
 - הקלטות, תמלולים ונתוני מתקשרים נשמרים מחוץ לריפו.
 - שינויים בהתנהגות ה-AI של הקו דורשים אישור מנהל לפני פריסה.
+
+## מאגרים קשורים
+- [`election-news`](https://github.com/SHMUEL-LAMED/election-news) – חדשות שלוחה 1 (קו 0794949476) וגשר הווידאו במייל. הועבר מכאן בנובמבר 2026.
+- [`mail-plus`](https://github.com/SHMUEL-LAMED/mail-plus) – מייל פלוס, https://shmuel-lamed.github.io/mail-plus/. הועבר מכאן בנובמבר 2026.
+- [`Email-management-line`](https://github.com/SHMUEL-LAMED/Email-management-line) – קו המייל והצ'אט (`yemot-mail`).
