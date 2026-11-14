@@ -770,6 +770,10 @@ a.line-card:hover,button.line-card:hover,.line-card[data-go]:hover,.line-card[da
 .mm-h>div,.mm-h h2,.mh>div,.mh h2{min-width:0}
 .mm-h h2,.mh h2,#mm-title{margin:0;font:800 1.32rem/1.25 var(--sans);letter-spacing:-.01em;overflow-wrap:anywhere}
 #mm-title small{margin-inline-start:6px;color:var(--mut);font-size:.8rem;font-weight:500}
+.mm-name{padding:0;border:0;background:none;color:inherit;font:inherit;text-align:start;cursor:pointer;border-radius:6px}
+.mm-name:hover{color:var(--acc)}.mm-name:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.mm-ed{font-size:.75em;color:var(--mut);font-weight:400}.mm-name:hover .mm-ed{color:var(--acc)}
+.mc-alt{margin-top:6px;align-items:center;gap:6px}.mc-num{display:inline-flex;align-items:center;gap:0}
 .mm-h small,.mh small{display:block;margin-top:4px;color:var(--mut);font-size:.85rem}
 .mm-h>.xbtn,.mm-h>[data-ui=mm-x],.mh>.xbtn,.mh>[data-ui=mm-x],.mm-h>button:last-child{margin-inline-start:auto}
 .mm-b>*+*{margin-top:14px}
@@ -7066,6 +7070,23 @@ const r = await api("act", { a });
 toast((r && r.r) || "בוצע", BAD.test(String((r && r.r) || "")));
 await after(el, line);
 });
+// מספר נוסף לחבר: מקבל את השם שלו, והכרטיס מאחד את ההודעות והשיחות
+Actions.register("members.alias", async el => {
+const p = pOf(el), on = el.dataset.on === "1", line = Line.cur;
+let x = el.dataset.extra || "";
+if (on) {
+const v = await Dlg.prompt("מספר טלפון נוסף של " + nm(p) + ".\nהמספר יזוהה בקו בשם שלו, וההודעות והשיחות ממנו יופיעו בכרטיס הזה.", "", { inputmode: "tel" });
+if (!same(line)) return;
+x = String(v || "").replace(/\D/g, "");
+if (!x) return;
+if (!/^0\d{8,9}$/.test(x)) throw new Error("מספר לא תקין");
+} else if (!await Dlg.confirm("לנתק את המספר " + fmtLine(x) + " מ" + nm(p) + "? הוא יחזור להיות מספר לא מוכר") || !same(line)) return;
+await api("aliases", { phone: p, extra: x, on });
+if (!same(line)) return;
+if (on) state.names[x] = nm(p); else delete state.names[x];
+toast(on ? "המספר נוסף" : "המספר נותק");
+await after(el, line);
+});
 Actions.register("members.mute", async el => {
 const p = pOf(el), line = Line.cur;
 const v = await Dlg.prompt("לכמה שעות להשתיק? (ההודעות שלו יחכו לאישור)", "24", { inputmode: "numeric" });
@@ -7308,7 +7329,11 @@ const pills = h`${d.admin ? pill("מנהל", "acc") : ""}${d.tz === "on" ? pill(
 const facts = [];
 if (d.approved && d.approved.t) facts.push("אושר " + fmtD(d.approved.t) + (d.approved.by ? " על ידי " + nm(d.approved.by) : ""));
 if (d.rsvp && d.rsvp.ts) facts.push("נרשם לאירוע " + fmtDT(d.rsvp.ts));
-const top = h`<div class="mc-top"><span class="av l" aria-hidden="true">${initial(n)}</span><div class="grow"><div class="row mcard-pills">${pills}</div>${facts.length ? h`<div class="small mut">${facts.join(" · ")}</div>` : ""}</div><div class="btns"><button type="button" class="btn s g" data-copy="${p}" title="העתקת המספר">${ico("copy")} ${fmtLine(p)}</button><button type="button" class="btn s g" data-x="members.toMsgs" data-p="${p}">${ico("msgs")} ההודעות שלו</button></div></div>`;
+// מספרים נוספים של אותו חבר (או: המספר הזה הוא מספר נוסף של חבר אחר)
+const alt = arr(d.alt), numChip = x => h`<span class="mc-num"><button type="button" class="btn s g" data-card="${x}" title="הכרטיס של המספר הזה">${fmtLine(x)}</button>${state.ro ? "" : h`<button type="button" class="btn s g icon w-only" data-x="members.alias" data-p="${p}" data-extra="${x}" data-on="0" title="ניתוק המספר מהחבר" aria-label="${"ניתוק " + fmtLine(x)}">${ico("x")}</button>`}</span>`;
+const nums = d.mainOf ? h`<div class="small mc-alt">מספר נוסף של <button type="button" class="btn s g" data-card="${d.mainOf}">${state.names[d.mainOf] || fmtLine(d.mainOf)}</button></div>`
+: person ? h`<div class="row small mc-alt"><span class="mut">מספרים נוספים:</span>${alt.length ? alt.map(numChip) : h`<span class="mut">אין</span>`}${state.ro ? "" : h`<button type="button" class="btn s w-only" data-x="members.alias" data-p="${p}" data-on="1">${ico("plus")} מספר נוסף</button>`}</div>` : "";
+const top = h`<div class="mc-top"><span class="av l" aria-hidden="true">${initial(n)}</span><div class="grow"><div class="row mcard-pills">${pills}</div>${facts.length ? h`<div class="small mut">${facts.join(" · ")}</div>` : ""}${nums}</div><div class="btns"><button type="button" class="btn s g" data-copy="${p}" title="העתקת המספר">${ico("copy")} ${fmtLine(p)}</button><button type="button" class="btn s g" data-x="members.toMsgs" data-p="${p}">${ico("msgs")} ההודעות שלו</button></div></div>`;
 const b = (x, label, attrs, cls) => h`<button type="button" class="btn s${cls ? " " + cls : ""}" data-x="${x}" data-p="${p}"${raw(attrs || "")}>${label}</button>`;
 const acts = h`<div class="btns w-only mc-acts">
 ${nameBtn(p, n, "g")}
@@ -7329,7 +7354,7 @@ const notes = h`<div class="card"><div class="card-h"><h2>הערת מנהל</h2>
 const prof = d.profile || null, mem = arr(d.memory && d.memory.notes), quotes = arr(prof && prof.quotes);
 const ai = h`<div class="card"><div class="card-h"><h2>מה ה-AI יודע עליו</h2></div>${prof && (prof.style || quotes.length) ? h`${prof.style ? h`<h3 class="sec-t">סגנון</h3><p>${prof.style}</p>` : ""}${quotes.length ? h`<h3 class="sec-t">משפטים אופייניים</h3><ul>${quotes.map(x => h`<li>${x}</li>`)}</ul>` : ""}` : empty("עוד אין פרופיל")}
 ${mem.length ? h`<h3 class="sec-t">זיכרון העוזר</h3><ul>${mem.map(x => h`<li>${noteTxt(x)}</li>`)}</ul>` : ""}${d.talk ? h`<h3 class="sec-t">על מה הוא מדבר</h3><p>${d.talk}</p>` : ""}</div>`;
-const tl = h`<div class="card"><div class="card-h"><h2>שיחות אחרונות לקו</h2>${calls.length ? h`<small>${Math.min(30, calls.length)} אחרונות</small>` : ""}</div>${calls.length ? h`<ol class="tl mcard-tl">${calls.slice(0, 30).map(c => h`<li><time>${fmtD(c.t)}</time><span>${c.l || c.f || ""}</span><span class="mut small num ltr">${c.x ? "עד " + String(c.x).slice(0, 5) : ""}</span></li>`)}</ol>` : empty("אין שיחות בחודשיים האחרונים")}</div>`;
+const tl = h`<div class="card"><div class="card-h"><h2>שיחות אחרונות לקו</h2>${calls.length ? h`<small>${Math.min(30, calls.length)} אחרונות</small>` : ""}</div>${calls.length ? h`<ol class="tl mcard-tl">${calls.slice(0, 30).map(c => h`<li><time>${fmtD(c.t)}</time><span>${c.l || c.f || ""}</span><span class="mut small num ltr">${c.p && c.p !== p ? fmtLine(c.p) + " " : ""}${c.x ? "עד " + String(c.x).slice(0, 5) : ""}</span></li>`)}</ol>` : empty("אין שיחות בחודשיים האחרונים")}</div>`;
 const msgsC = h`<div class="card"><div class="card-h"><h2>ההודעות שלו</h2><small>${+d.msgTotal || msgs.length}</small></div>${msgs.length ? msgs.slice(0, 40).map(m => h`<div class="msg"><div class="head">${pill(m.id)} <span class="mut small num ltr">${fmtD(m.d)}</span> ${playBtn("/1/2/" + m.id + ".wav", "▶")}</div>${transcript(m.t)}</div>`) : empty("אין הודעות בארכיון")}</div>`;
 const convC = h`<div class="card"><div class="card-h"><h2>שיחות עם העוזר</h2><small>${conv.length}</small></div>${conv.length ? h`<div class="conv">${conv.slice(0, 40).map(c => h`<div class="m"><div class="mut small num ltr">${fmtD(c.d)}</div><div class="q">${c.q}</div><div class="a">${c.a}</div></div>`)}</div>` : empty("אין שיחות")}</div>`;
 return h`<div class="mcard stack">${top}${acts}${tiles}<div class="cols">${voice}${box}${notes}</div><div class="cols">${ai}${tl}</div>${msgsC}${convC}</div>`;
@@ -7344,6 +7369,13 @@ if (btn) btn.textContent = "🔊 יצירת קול ושמיעה";
 if (pv) pv.innerHTML = "";
 }));
 }
+// הכותרת: לחיצה על השם פותחת שינוי שם (מספר נוסף – את השם של החבר שאליו הוא שייך; מספר לא מוכר – הוספה לקבוצה)
+function cardTitle(d, p) {
+const n = d.n || "", sm = h` <small class="num ltr">${fmtLine(p)}</small>`;
+if (state.ro) return h`${n || "מספר לא מוכר"}${sm}`;
+const tp = d.mainOf || p, tn = d.mainOf ? (state.names[d.mainOf] || n) : n;
+return h`<button type="button" class="mm-name" data-x="members.rename" data-p="${tp}" data-name="${tn}" title="${tn ? "שינוי שם" : "הוספה לקבוצה בשם"}">${n || "מספר לא מוכר"} <span class="mm-ed" aria-hidden="true">✎</span></button>${sm}`;
+}
 // טעינת הכרטיס (פתיחה חדשה או רענון במקום)
 async function loadCard(p) {
 const hd = cur && cur.hd;
@@ -7356,7 +7388,7 @@ if (Modal.current() !== hd || !cur || cur.seq !== my) return;
 state.card = d;
 if (d && d.n) state.names[p] = d.n;
 const t = $("#mm-title");
-if (t) t.innerHTML = String(h`${(d && d.n) || "מספר לא מוכר"} <small class="num ltr">${fmtLine(p)}</small>`);
+if (t) t.innerHTML = String(cardTitle(d || {}, p));
 hd.set(memberHtml(Object.assign({}, d || {}, { p })));
 bindTts(hd.body);
 try { [hd.el, hd.body].filter(Boolean).forEach((el, i) => { el.scrollTop = sc[i] || 0; }); } catch {}
