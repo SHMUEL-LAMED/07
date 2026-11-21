@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'">
+<title>אישור חיבור ל־GitHub</title>
+<style>body{font:1rem system-ui;margin:4rem auto;max-width:36rem;padding:0 1rem} button{font:inherit;padding:.6rem 1rem;margin-inline-end:.5rem}</style>
+<h1>אישור חיבור ל־GitHub</h1>
+<p>המשך רק אם ביקשת לחבר את החשבון שלך ל־ChatGPT. החיבור יוכל לקרוא ולעדכן את המאגרים שאישרת ב־GitHub.</p>
+<p id="message">יש להתחיל את החיבור מתוך ChatGPT.</p>
+<button id="allow" hidden>להמשיך ל־GitHub</button><button id="deny" hidden>לבטל</button>
+<script>
+const handle = location.hash.slice(1);
+history.replaceState(null, '', location.pathname);
+if (self === top && /^[A-Za-z0-9_-]{43}$/.test(handle)) {
+  document.getElementById('message').hidden = true;
+  for (const decision of ['allow', 'deny']) {
+    const button = document.getElementById(decision);
+    button.hidden = false;
+    button.onclick = () => {
+      const url = new URL('https://ydcfafijktzasrkkxyux.supabase.co/functions/v1/shmuel-github-mcp-bridge/decision');
+      url.search = new URLSearchParams({handle, decision});
+      location.replace(url);
+    };
+  }
+}
+</script>
+</html>
